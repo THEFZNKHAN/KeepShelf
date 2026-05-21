@@ -212,29 +212,30 @@ Every saved item becomes one line. These are real examples of the format KeepShe
 ### Movies
 
 ```
-Thor: Ragnarok (2017) | 2h 10m | IMDb 7.9
+The Shawshank Redemption (1994) | 2h 22m | IMDb 9.3
+Inception (2010) | 2h 28m | IMDb 8.8
 Avengers: Infinity War (2018) | 2h 29m | IMDb 8.4
 ```
 
 ### Series
 
 ```
-The Twilight Zone (2019) | S02 | IMDb 6.1
-Euphoria (2019) | S03 | IMDb 8.2
+Dark (2017) | S03 | IMDb 8.7
+Daredevil (2015) | S03 | IMDb 8.6
 ```
 
 ### Books (Goodreads / BookFilter)
 
 ```
-The Alchemist (Paulo Coelho) | 1988 | GR 3.92
+The Kite Runner (Khaled Hosseini) | 2003 | GR 4.36
 The Alchemist (Paulo Coelho) | 1988 | BF 3.78
 ```
 
 ### Books (Google, no rating available)
 
 ```
-The Alchemist (Paulo Coelho) | 1988
 A Song of Ice and Fire (George R. R. Martin)
+A Game of Thrones (George R. R. Martin) | 1996
 ```
 
 Use **Copy all** in the popup to export your entire shelf as plain text.
