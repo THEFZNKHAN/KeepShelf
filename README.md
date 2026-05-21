@@ -27,6 +27,17 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img width="200" height="300" alt="Home Page" src="https://github.com/user-attachments/assets/db1ec11d-92e5-4ec3-9a53-c576b38fee79" />
+  <img width="200" height="300" alt="Empty Home Page" src="https://github.com/user-attachments/assets/eeae2dcc-2b1d-4f50-8fb6-f4afc2500816" />
+  <img width="200" height="300" alt="Filter Page" src="https://github.com/user-attachments/assets/d48b9250-10d5-40ff-aeee-f74e5d690f87" />
+  <img width="200" height="300" alt="Setting Page" src="https://github.com/user-attachments/assets/6e43b1f7-e20a-4797-9a4a-3e4f9658aec0" />
+</p>
+
+---
+
 ## At a glance
 
 | | |
