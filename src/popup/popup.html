@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=400, initial-scale=1.0" />
+    <title>KeepShelf</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div id="app-view" class="view">
+      <header class="top-bar">
+        <div class="brand">
+          <span class="material-symbols-outlined brand-icon">bookmark</span>
+          <h1>KeepShelf</h1>
+        </div>
+        <div class="top-bar-actions">
+          <span id="count" class="count-badge">0 saved</span>
+          <button
+            type="button"
+            id="open-settings"
+            class="icon-btn"
+            aria-label="Settings"
+            title="Settings"
+          >
+            <span class="material-symbols-outlined">settings</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <div class="filters" id="filters">
+          <button type="button" class="filter active" data-filter="all">All</button>
+          <button type="button" class="filter" data-filter="movie">Movies</button>
+          <button type="button" class="filter" data-filter="series">Series</button>
+          <button type="button" class="filter" data-filter="anime">Anime</button>
+          <button type="button" class="filter" data-filter="book">Books</button>
+        </div>
+
+        <div class="action-row">
+          <div class="action-group">
+            <button type="button" id="copy-all" class="btn btn-primary">
+              <span class="material-symbols-outlined btn-icon">content_copy</span>
+              Copy all
+            </button>
+            <button type="button" id="copy-selected" class="btn btn-outline">
+              Copy selected
+            </button>
+          </div>
+          <div class="action-group icon-actions">
+            <button
+              type="button"
+              id="clear-all"
+              class="icon-btn"
+              aria-label="Clear all"
+              title="Clear all"
+            >
+              <span class="material-symbols-outlined">clear_all</span>
+            </button>
+            <button
+              type="button"
+              id="delete-selected"
+              class="icon-btn icon-btn-danger"
+              aria-label="Delete selected"
+              title="Delete selected"
+            >
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="status" class="toast" hidden>
+          <div class="toast-content">
+            <span class="material-symbols-outlined toast-icon">check_circle</span>
+            <span id="status-text"></span>
+          </div>
+          <button type="button" id="status-close" class="toast-close" aria-label="Dismiss">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      </div>
+
+      <main id="main" class="main">
+        <ul id="list" class="list"></ul>
+
+        <div id="empty" class="empty-state" hidden>
+          <div class="empty-bg" aria-hidden="true">
+            <span class="material-symbols-outlined">auto_awesome</span>
+          </div>
+          <div class="empty-content">
+            <div class="empty-icon-wrap">
+              <span class="material-symbols-outlined">search</span>
+            </div>
+            <h2>Nothing saved yet</h2>
+            <p>
+              Search on Google, open Goodreads or BookFilter, visit IMDb or Series Graph, then tap
+              the blue <strong>bookmark</strong> button on the page.
+            </p>
+            <div class="source-hints">
+              <div class="source-chip">
+                <span class="material-symbols-outlined">travel_explore</span>
+                Google Search
+              </div>
+              <div class="source-chip">
+                <span class="material-symbols-outlined">menu_book</span>
+                Goodreads
+              </div>
+              <div class="source-chip">
+                <span class="material-symbols-outlined">filter_alt</span>
+                BookFilter
+              </div>
+              <div class="source-chip">
+                <span class="material-symbols-outlined">star</span>
+                IMDb
+              </div>
+              <div class="source-chip">
+                <span class="material-symbols-outlined">movie</span>
+                Series Graph
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="filter-empty" class="filter-empty" hidden>
+          <p>No items for this filter.</p>
+        </div>
+      </main>
+
+      <footer id="empty-footer" class="empty-footer" hidden>
+        <p>Waiting for activity…</p>
+      </footer>
+    </div>
+
+    <div id="settings-view" class="view settings-view" hidden>
+      <header class="top-bar">
+        <button type="button" id="close-settings" class="icon-btn" aria-label="Back">
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <h1 class="settings-title">Settings</h1>
+        <span class="top-bar-spacer"></span>
+      </header>
+
+      <div class="settings-body">
+        <section class="settings-section">
+          <h2 class="section-title">Google Keep</h2>
+          <p class="section-desc">
+            Auto-add saved items to your Keep checklist notes.
+          </p>
+
+          <label class="toggle-row">
+            <input type="checkbox" id="keep-enabled" />
+            <span>Auto-add saves to Google Keep</span>
+          </label>
+
+          <label class="field">
+            <span class="field-label">Media list note URL</span>
+            <span class="field-hint">Movies, series, anime</span>
+            <input
+              type="url"
+              id="keep-media-url"
+              placeholder="https://keep.google.com/#LIST/..."
+            />
+            <span id="keep-media-status" class="field-status">Not linked</span>
+          </label>
+          <button type="button" id="keep-test-media" class="btn btn-outline btn-block">
+            Test media list
+          </button>
+
+          <label class="field">
+            <span class="field-label">Books list note URL</span>
+            <input
+              type="url"
+              id="keep-books-url"
+              placeholder="https://keep.google.com/#LIST/..."
+            />
+            <span id="keep-books-status" class="field-status">Not linked</span>
+          </label>
+          <button type="button" id="keep-test-books" class="btn btn-outline btn-block">
+            Test books list
+          </button>
+
+          <button type="button" id="keep-save-settings" class="btn btn-primary btn-block">
+            Save settings
+          </button>
+
+          <div id="settings-status" class="settings-toast" hidden>
+            <div class="settings-toast-content">
+              <span id="settings-status-icon" class="material-symbols-outlined">check_circle</span>
+              <span id="settings-status-text"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <div id="confirm-dialog" class="confirm-dialog" hidden>
+      <div class="confirm-backdrop" data-confirm-dismiss></div>
+      <div
+        class="confirm-panel"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="confirm-title"
+        aria-describedby="confirm-message"
+      >
+        <div class="confirm-icon-wrap">
+          <span class="material-symbols-outlined">delete_sweep</span>
+        </div>
+        <h2 id="confirm-title" class="confirm-title">Clear all saved items?</h2>
+        <p id="confirm-message" class="confirm-message">
+          This removes every item from KeepShelf. Your Google Keep lists are not affected.
+        </p>
+        <div class="confirm-actions">
+          <button type="button" id="confirm-cancel" class="btn btn-outline">
+            Cancel
+          </button>
+          <button type="button" id="confirm-ok" class="btn btn-danger">
+            Clear all
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
