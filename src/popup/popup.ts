@@ -13,9 +13,11 @@ let settingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
 const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
 const listEl = document.getElementById("list")!;
+const mainEl = document.getElementById("main")!;
+const toolbarPanelEl = document.getElementById("toolbar-panel")!;
 const emptyEl = document.getElementById("empty")!;
 const filterEmptyEl = document.getElementById("filter-empty")!;
-const emptyFooterEl = document.getElementById("empty-footer")!;
+const actionStripEl = document.getElementById("action-strip")!;
 const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
@@ -36,13 +38,23 @@ const confirmCancelEl = document.getElementById("confirm-cancel") as HTMLButtonE
 
 let confirmResolve: ((value: boolean) => void) | undefined;
 
+const TYPE_ICONS: Record<MediaType, string> = {
+  movie: "movie",
+  series: "tv",
+  anime: "live_tv",
+  book: "menu_book",
+};
+
 function filteredItems(): SavedItem[] {
   if (activeFilter === "all") return allItems;
   return allItems.filter((i) => i.type === activeFilter);
 }
 
 function typeLabel(type: MediaType): string {
-  return type.charAt(0).toUpperCase() + type.slice(1);
+  if (type === "movie") return "MOVIE";
+  if (type === "series") return "SERIES";
+  if (type === "anime") return "ANIME";
+  return "BOOK";
 }
 
 function formatSeason(value: string): string {
@@ -54,8 +66,9 @@ function formatSeason(value: string): string {
 }
 
 function itemTitle(item: SavedItem): string {
-  if (item.type === "book") return formatBookTitlePart(item);
-  return item.year ? `${item.title} (${item.year})` : item.title;
+  if (item.type === "book") return formatBookTitlePart(item).toUpperCase();
+  const title = item.title.toUpperCase();
+  return item.year ? `${title} (${item.year})` : title;
 }
 
 function itemSubtitle(item: SavedItem): string {
@@ -95,11 +108,16 @@ function relativeSavedTime(savedAt: number): string {
 
 function showStatus(message: string, isError = false, durationMs = 2500): void {
   if (statusTimer) clearTimeout(statusTimer);
-  statusTextEl.textContent = message;
+  statusTextEl.textContent = message.toUpperCase();
   statusEl.hidden = false;
   statusEl.classList.toggle("error", isError);
+
+  const rotate = (Math.random() - 0.5) * 8;
+  statusEl.style.transform = `translate(-50%, -50%) rotate(${rotate}deg)`;
+
   statusTimer = setTimeout(() => {
     statusEl.hidden = true;
+    statusEl.style.transform = "translate(-50%, -50%) rotate(-2deg)";
   }, durationMs);
 }
 
@@ -119,10 +137,10 @@ function showConfirm(options: {
     closeConfirmDialog(false);
   }
 
-  confirmTitleEl.textContent = options.title;
+  confirmTitleEl.textContent = options.title.toUpperCase();
   confirmMessageEl.textContent = options.message;
-  confirmOkEl.textContent = options.confirmLabel ?? "Confirm";
-  confirmCancelEl.textContent = options.cancelLabel ?? "Cancel";
+  confirmOkEl.textContent = options.confirmLabel?.toUpperCase() ?? "CONFIRM";
+  confirmCancelEl.textContent = options.cancelLabel?.toUpperCase() ?? "CANCEL";
 
   confirmDialogEl.hidden = false;
   confirmCancelEl.focus();
@@ -159,19 +177,25 @@ function closeSettings(): void {
   appView.hidden = false;
 }
 
+function syncCardSelection(card: HTMLElement, checked: boolean): void {
+  card.classList.toggle("selected", checked);
+}
+
 function render(): void {
   const items = filteredItems();
   const total = allItems.length;
-  countEl.textContent = `${total} saved`;
+  countEl.textContent = `${total} SAVED`;
   listEl.innerHTML = "";
 
   const showGlobalEmpty = total === 0;
   const showFilterEmpty = total > 0 && items.length === 0;
 
   emptyEl.hidden = !showGlobalEmpty;
-  emptyFooterEl.hidden = !showGlobalEmpty;
   filterEmptyEl.hidden = !showFilterEmpty;
   listEl.hidden = items.length === 0;
+  actionStripEl.hidden = showGlobalEmpty;
+  mainEl.classList.toggle("is-empty", showGlobalEmpty);
+  toolbarPanelEl.classList.toggle("is-compact", showGlobalEmpty);
 
   if (items.length === 0) {
     return;
@@ -179,29 +203,36 @@ function render(): void {
 
   for (const item of items) {
     const li = document.createElement("li");
-    li.className = "list-item";
+    li.className = "brutal-card";
+    li.dataset.type = item.type;
     li.dataset.id = item.id;
+
+    const tag = document.createElement("span");
+    tag.className = "type-tag";
+    tag.textContent = typeLabel(item.type);
+
+    const inner = document.createElement("div");
+    inner.className = "card-inner";
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
+    checkbox.className = "card-select";
     checkbox.dataset.id = item.id;
+    checkbox.addEventListener("change", () => {
+      syncCardSelection(li, checkbox.checked);
+    });
+
+    const iconWrap = document.createElement("div");
+    iconWrap.className = "card-icon";
+    iconWrap.innerHTML = `<span class="material-symbols-outlined">${TYPE_ICONS[item.type]}</span>`;
 
     const body = document.createElement("div");
-    body.className = "item-body";
-
-    const head = document.createElement("div");
-    head.className = "item-head";
+    body.className = "card-body";
 
     const title = document.createElement("h3");
     title.className = "item-title";
     title.textContent = itemTitle(item);
     title.title = formatItemLine(item);
-
-    const badge = document.createElement("span");
-    badge.className = "type-badge";
-    badge.textContent = typeLabel(item.type);
-
-    head.append(title, badge);
 
     const subtitle = document.createElement("p");
     subtitle.className = "item-subtitle";
@@ -212,8 +243,16 @@ function render(): void {
     time.className = "item-time";
     time.innerHTML = `<span class="material-symbols-outlined">schedule</span>${relativeSavedTime(item.savedAt)}`;
 
-    body.append(head, subtitle, time);
-    li.append(checkbox, body);
+    body.append(title, subtitle, time);
+    inner.append(checkbox, iconWrap, body);
+    li.append(tag, inner);
+
+    li.addEventListener("click", (event) => {
+      if ((event.target as HTMLElement).closest(".card-select")) return;
+      checkbox.checked = !checkbox.checked;
+      syncCardSelection(li, checkbox.checked);
+    });
+
     listEl.append(li);
   }
 }
@@ -363,7 +402,7 @@ async function testKeep(target: "media" | "books"): Promise<void> {
 
 function getSelectedIds(): string[] {
   return Array.from(
-    listEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked')
+    listEl.querySelectorAll<HTMLInputElement>(".card-select:checked")
   ).map((el) => el.dataset.id!);
 }
 
@@ -467,6 +506,14 @@ document.getElementById("keep-test-media")!.addEventListener("click", () => {
 
 document.getElementById("keep-test-books")!.addEventListener("click", () => {
   void testKeep("books");
+});
+
+document.getElementById("empty-google")!.addEventListener("click", () => {
+  chrome.tabs.create({ url: "https://www.google.com" });
+});
+
+document.getElementById("empty-seriesgraph")!.addEventListener("click", () => {
+  chrome.tabs.create({ url: "https://seriesgraph.com" });
 });
 
 void loadItems();

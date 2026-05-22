@@ -2,10 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=400, initial-scale=1.0" />
+    <meta name="viewport" content="width=380, initial-scale=1.0" />
     <title>KeepShelf</title>
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&family=Syne:wght@400..800&display=swap"
       rel="stylesheet"
     />
     <link
@@ -18,47 +18,51 @@
     <div id="app-view" class="view">
       <header class="top-bar">
         <div class="brand">
-          <span class="material-symbols-outlined brand-icon">bookmark</span>
+          <span class="material-symbols-outlined brand-icon">sdk</span>
           <h1>KeepShelf</h1>
         </div>
-        <div class="top-bar-actions">
-          <span id="count" class="count-badge">0 saved</span>
-          <button
-            type="button"
-            id="open-settings"
-            class="icon-btn"
-            aria-label="Settings"
-            title="Settings"
-          >
-            <span class="material-symbols-outlined">settings</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          id="open-settings"
+          class="icon-btn icon-btn-brutal"
+          aria-label="Settings"
+          title="Settings"
+        >
+          <span class="material-symbols-outlined">settings</span>
+        </button>
       </header>
 
-      <div class="toolbar">
-        <div class="filters" id="filters">
-          <button type="button" class="filter active" data-filter="all">All</button>
-          <button type="button" class="filter" data-filter="movie">Movies</button>
-          <button type="button" class="filter" data-filter="series">Series</button>
-          <button type="button" class="filter" data-filter="anime">Anime</button>
-          <button type="button" class="filter" data-filter="book">Books</button>
+      <div id="toolbar-panel" class="toolbar-panel">
+        <div id="status-row" class="status-row brutal-box">
+          <div class="status-count">
+            <div class="pulse-dot" aria-hidden="true"></div>
+            <span id="count" class="count-label">0 SAVED</span>
+          </div>
+          <button type="button" id="copy-all" class="btn-brutal btn-magenta">
+            <span class="material-symbols-outlined btn-icon">content_copy</span>
+            COPY ALL
+          </button>
         </div>
 
-        <div class="action-row">
-          <div class="action-group">
-            <button type="button" id="copy-all" class="btn btn-primary">
-              <span class="material-symbols-outlined btn-icon">content_copy</span>
-              Copy all
-            </button>
-            <button type="button" id="copy-selected" class="btn btn-outline">
-              Copy selected
-            </button>
+        <div class="filters-wrap brutal-box">
+          <div class="filters" id="filters">
+            <button type="button" class="filter active" data-filter="all">ALL</button>
+            <button type="button" class="filter" data-filter="movie">MOVIES</button>
+            <button type="button" class="filter" data-filter="series">SERIES</button>
+            <button type="button" class="filter" data-filter="anime">ANIME</button>
+            <button type="button" class="filter" data-filter="book">BOOKS</button>
           </div>
-          <div class="action-group icon-actions">
+        </div>
+
+        <div id="action-strip" class="action-strip">
+          <button type="button" id="copy-selected" class="btn-brutal btn-ghost">
+            COPY SELECTED
+          </button>
+          <div class="action-strip-icons">
             <button
               type="button"
               id="clear-all"
-              class="icon-btn"
+              class="icon-btn icon-btn-brutal"
               aria-label="Clear all"
               title="Clear all"
             >
@@ -67,7 +71,7 @@
             <button
               type="button"
               id="delete-selected"
-              class="icon-btn icon-btn-danger"
+              class="icon-btn icon-btn-brutal icon-btn-danger"
               aria-label="Delete selected"
               title="Delete selected"
             >
@@ -75,81 +79,73 @@
             </button>
           </div>
         </div>
-
-        <div id="status" class="toast" hidden>
-          <div class="toast-content">
-            <span class="material-symbols-outlined toast-icon">check_circle</span>
-            <span id="status-text"></span>
-          </div>
-          <button type="button" id="status-close" class="toast-close" aria-label="Dismiss">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
       </div>
 
       <main id="main" class="main">
         <ul id="list" class="list"></ul>
 
         <div id="empty" class="empty-state" hidden>
-          <div class="empty-bg" aria-hidden="true">
-            <span class="material-symbols-outlined">auto_awesome</span>
+          <div class="empty-deco empty-deco-square" aria-hidden="true"></div>
+          <div class="empty-deco empty-deco-circle" aria-hidden="true"></div>
+
+          <div class="empty-sticker">
+            <div class="empty-sticker-back" aria-hidden="true"></div>
+            <div class="empty-sticker-front">
+              <span class="material-symbols-outlined empty-face">sentiment_dissatisfied</span>
+              <div class="empty-sticker-bar empty-sticker-bar-a" aria-hidden="true"></div>
+              <div class="empty-sticker-bar empty-sticker-bar-b" aria-hidden="true"></div>
+            </div>
+            <div class="empty-sticker-tag">EMPTY</div>
           </div>
-          <div class="empty-content">
-            <div class="empty-icon-wrap">
-              <span class="material-symbols-outlined">search</span>
+
+          <div class="empty-copy">
+            <h2 class="empty-headline">NO VIBES<br />HERE YET</h2>
+            <div class="empty-message brutal-box">
+              <div class="empty-pin" aria-hidden="true"></div>
+              <p>
+                Search on Google, Goodreads, BookFilter, IMDb, or Series Graph, then tap the
+                <strong>bookmark</strong> button on the page.
+              </p>
             </div>
-            <h2>Nothing saved yet</h2>
-            <p>
-              Search on Google, open Goodreads or BookFilter, visit IMDb or Series Graph, then tap
-              the blue <strong>bookmark</strong> button on the page.
-            </p>
-            <div class="source-hints">
-              <div class="source-chip">
-                <span class="material-symbols-outlined">travel_explore</span>
-                Google Search
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">menu_book</span>
-                Goodreads
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">filter_alt</span>
-                BookFilter
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">star</span>
-                IMDb
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">movie</span>
-                Series Graph
-              </div>
-            </div>
+          </div>
+
+          <div class="empty-actions">
+            <button type="button" id="empty-google" class="btn-brutal btn-lime empty-link">
+              <span>SEARCH GOOGLE</span>
+              <span class="material-symbols-outlined">travel_explore</span>
+            </button>
+            <button type="button" id="empty-seriesgraph" class="btn-brutal btn-magenta empty-link">
+              <span>SERIES GRAPH</span>
+              <span class="material-symbols-outlined">monitoring</span>
+            </button>
           </div>
         </div>
 
-        <div id="filter-empty" class="filter-empty" hidden>
-          <p>No items for this filter.</p>
+        <div id="filter-empty" class="filter-empty brutal-box" hidden>
+          <p>NO ITEMS FOR THIS FILTER</p>
         </div>
       </main>
 
-      <footer id="empty-footer" class="empty-footer" hidden>
-        <p>Waiting for activity…</p>
-      </footer>
+      <div id="status" class="status-toast" hidden>
+        <span id="status-text"></span>
+        <button type="button" id="status-close" class="status-toast-close" aria-label="Dismiss">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
     </div>
 
     <div id="settings-view" class="view settings-view" hidden>
       <header class="top-bar">
-        <button type="button" id="close-settings" class="icon-btn" aria-label="Back">
+        <button type="button" id="close-settings" class="icon-btn icon-btn-brutal" aria-label="Back">
           <span class="material-symbols-outlined">arrow_back</span>
         </button>
-        <h1 class="settings-title">Settings</h1>
+        <h1 class="settings-title">SETTINGS</h1>
         <span class="top-bar-spacer"></span>
       </header>
 
       <div class="settings-body">
-        <section class="settings-section">
-          <h2 class="section-title">Google Keep</h2>
+        <section class="settings-section brutal-box">
+          <h2 class="section-title">GOOGLE KEEP</h2>
           <p class="section-desc">
             Auto-add saved items to your Keep checklist notes.
           </p>
@@ -169,8 +165,8 @@
             />
             <span id="keep-media-status" class="field-status">Not linked</span>
           </label>
-          <button type="button" id="keep-test-media" class="btn btn-outline btn-block">
-            Test media list
+          <button type="button" id="keep-test-media" class="btn-brutal btn-ghost btn-block">
+            TEST MEDIA LIST
           </button>
 
           <label class="field">
@@ -182,19 +178,17 @@
             />
             <span id="keep-books-status" class="field-status">Not linked</span>
           </label>
-          <button type="button" id="keep-test-books" class="btn btn-outline btn-block">
-            Test books list
+          <button type="button" id="keep-test-books" class="btn-brutal btn-ghost btn-block">
+            TEST BOOKS LIST
           </button>
 
-          <button type="button" id="keep-save-settings" class="btn btn-primary btn-block">
-            Save settings
+          <button type="button" id="keep-save-settings" class="btn-brutal btn-lime btn-block">
+            SAVE SETTINGS
           </button>
 
           <div id="settings-status" class="settings-toast" hidden>
-            <div class="settings-toast-content">
-              <span id="settings-status-icon" class="material-symbols-outlined">check_circle</span>
-              <span id="settings-status-text"></span>
-            </div>
+            <span id="settings-status-icon" class="material-symbols-outlined">check_circle</span>
+            <span id="settings-status-text"></span>
           </div>
         </section>
       </div>
@@ -203,7 +197,7 @@
     <div id="confirm-dialog" class="confirm-dialog" hidden>
       <div class="confirm-backdrop" data-confirm-dismiss></div>
       <div
-        class="confirm-panel"
+        class="confirm-panel brutal-box"
         role="alertdialog"
         aria-modal="true"
         aria-labelledby="confirm-title"
@@ -212,16 +206,16 @@
         <div class="confirm-icon-wrap">
           <span class="material-symbols-outlined">delete_sweep</span>
         </div>
-        <h2 id="confirm-title" class="confirm-title">Clear all saved items?</h2>
+        <h2 id="confirm-title" class="confirm-title">CLEAR ALL SAVED ITEMS?</h2>
         <p id="confirm-message" class="confirm-message">
           This removes every item from KeepShelf. Your Google Keep lists are not affected.
         </p>
         <div class="confirm-actions">
-          <button type="button" id="confirm-cancel" class="btn btn-outline">
-            Cancel
+          <button type="button" id="confirm-cancel" class="btn-brutal btn-ghost">
+            CANCEL
           </button>
-          <button type="button" id="confirm-ok" class="btn btn-danger">
-            Clear all
+          <button type="button" id="confirm-ok" class="btn-brutal btn-danger">
+            CLEAR ALL
           </button>
         </div>
       </div>

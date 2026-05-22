@@ -5,7 +5,7 @@ const TOAST_ID = "keepshelf-toast";
 const STYLE_ID = "keepshelf-ui-styles";
 
 const UI_FONT_LINK =
-  "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap";
+  "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Mono:ital,wght@0,400;0,700&family=Syne:wght@400..800&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap";
 
 export type ToastVariant = "success" | "error" | "info";
 
@@ -32,43 +32,46 @@ function ensureUiStyles(): void {
       bottom: 24px;
       right: 24px;
       z-index: 2147483646;
-      width: 44px;
-      height: 44px;
+      width: 52px;
+      height: 52px;
       padding: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      border: none;
+      border: 4px solid #000000;
       border-radius: 999px;
-      background: #2563eb;
-      color: #fff;
+      background: #c3f400;
+      color: #000000;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      transition: opacity 0.15s ease, transform 0.15s ease;
-      font-family: Inter, system-ui, sans-serif;
+      box-shadow: 4px 4px 0 0 #000000;
+      transition: transform 0.1s ease, box-shadow 0.1s ease;
+      font-family: "Space Mono", monospace;
     }
-    #${BUTTON_ID}:hover { opacity: 0.92; }
-    #${BUTTON_ID}:active { transform: scale(0.98); }
+    #${BUTTON_ID}:hover {
+      transform: translate(-2px, -2px);
+      box-shadow: 6px 6px 0 0 #000000;
+    }
+    #${BUTTON_ID}:active {
+      transform: translate(2px, 2px);
+      box-shadow: 2px 2px 0 0 #000000;
+    }
     #${BUTTON_ID} .material-symbols-outlined {
-      font-size: 20px;
+      font-size: 24px;
       font-variation-settings: "FILL" 1;
     }
     #${TOAST_ID} {
       position: fixed;
-      bottom: 80px;
+      bottom: 88px;
       right: 24px;
       z-index: 2147483647;
-      width: 300px;
+      width: 320px;
       max-width: calc(100vw - 48px);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px;
-      border: 1px solid #c4c7c7;
-      border-radius: 12px;
-      background: #fff;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-      font-family: Inter, system-ui, sans-serif;
+      padding: 14px 12px;
+      border: 4px solid #000000;
+      border-radius: 4px;
+      background: #201f1f;
+      box-shadow: 4px 4px 0 0 #000000;
+      font-family: "Bricolage Grotesque", system-ui, sans-serif;
       opacity: 0;
       transform: translateY(16px);
       transition: opacity 0.2s ease, transform 0.2s ease;
@@ -77,30 +80,36 @@ function ensureUiStyles(): void {
       opacity: 1;
       transform: translateY(0);
     }
+    #${TOAST_ID} .keepshelf-toast-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
     #${TOAST_ID} .keepshelf-toast-icon {
       flex-shrink: 0;
-      width: 24px;
-      height: 24px;
-      border-radius: 999px;
+      width: 32px;
+      height: 32px;
+      border: 2px solid #000000;
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 2px 2px 0 0 #000000;
     }
     #${TOAST_ID} .keepshelf-toast-icon .material-symbols-outlined {
-      font-size: 16px;
+      font-size: 18px;
       font-variation-settings: "FILL" 1;
     }
     #${TOAST_ID}[data-variant="success"] .keepshelf-toast-icon {
-      background: #e8f5e9;
-      color: #2e7d32;
+      background: #c3f400;
+      color: #556d00;
     }
     #${TOAST_ID}[data-variant="error"] .keepshelf-toast-icon {
-      background: #ffdad6;
-      color: #ba1a1a;
+      background: #93000a;
+      color: #ffb4ab;
     }
     #${TOAST_ID}[data-variant="info"] .keepshelf-toast-icon {
-      background: #e8e8e8;
-      color: #444748;
+      background: #fe00fe;
+      color: #500050;
     }
     #${TOAST_ID} .keepshelf-toast-body {
       flex: 1;
@@ -108,36 +117,41 @@ function ensureUiStyles(): void {
     }
     #${TOAST_ID} .keepshelf-toast-title {
       margin: 0;
-      font-size: 13px;
-      line-height: 18px;
-      color: #1a1c1c;
+      font-family: Syne, sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.2;
+      text-transform: uppercase;
+      color: #ffffff;
     }
     #${TOAST_ID} .keepshelf-toast-subtitle {
-      margin: 0;
-      font-size: 11px;
-      line-height: 14px;
-      font-weight: 600;
-      color: #444748;
+      margin: 4px 0 0;
+      font-family: "Space Mono", monospace;
+      font-size: 10px;
+      line-height: 1.3;
+      font-weight: 700;
+      color: #c4c9ac;
     }
     #${TOAST_ID} .keepshelf-toast-close {
       flex-shrink: 0;
       width: 28px;
       height: 28px;
-      border: none;
-      border-radius: 999px;
-      background: transparent;
-      color: #444748;
+      border: 2px solid #000000;
+      background: #353534;
+      color: #e5e2e1;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 0;
+      box-shadow: 2px 2px 0 0 #000000;
     }
-    #${TOAST_ID} .keepshelf-toast-close:hover {
-      background: #eeeeee;
+    #${TOAST_ID} .keepshelf-toast-close:active {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 0 #000000;
     }
     #${TOAST_ID} .keepshelf-toast-close .material-symbols-outlined {
-      font-size: 18px;
+      font-size: 16px;
       font-variation-settings: "FILL" 0;
     }
   `;
@@ -186,16 +200,18 @@ export function showToast(
     toast = document.createElement("div");
     toast.id = TOAST_ID;
     toast.innerHTML = `
-      <div class="keepshelf-toast-icon">
-        <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+      <div class="keepshelf-toast-row">
+        <div class="keepshelf-toast-icon">
+          <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+        </div>
+        <div class="keepshelf-toast-body">
+          <p class="keepshelf-toast-title"></p>
+          <p class="keepshelf-toast-subtitle" hidden></p>
+        </div>
+        <button type="button" class="keepshelf-toast-close" aria-label="Dismiss">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
-      <div class="keepshelf-toast-body">
-        <p class="keepshelf-toast-title"></p>
-        <p class="keepshelf-toast-subtitle" hidden></p>
-      </div>
-      <button type="button" class="keepshelf-toast-close" aria-label="Dismiss">
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
     `;
     toast
       .querySelector(".keepshelf-toast-close")
