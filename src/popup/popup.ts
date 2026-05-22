@@ -33,12 +33,79 @@ const confirmTitleEl = document.getElementById("confirm-title")!;
 const confirmMessageEl = document.getElementById("confirm-message")!;
 const confirmOkEl = document.getElementById("confirm-ok") as HTMLButtonElement;
 const confirmCancelEl = document.getElementById("confirm-cancel") as HTMLButtonElement;
+const itemTooltipEl = document.getElementById("item-tooltip")!;
+const mainEl = document.getElementById("main")!;
+const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
 
 let confirmResolve: ((value: boolean) => void) | undefined;
+
+function isTextTruncated(el: HTMLElement): boolean {
+  return el.scrollWidth > el.clientWidth;
+}
+
+function showItemTooltip(text: string, anchor: HTMLElement): void {
+  itemTooltipEl.textContent = text;
+  itemTooltipEl.hidden = false;
+  itemTooltipEl.classList.add("visible");
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const tooltipRect = itemTooltipEl.getBoundingClientRect();
+
+  let top = anchorRect.bottom + 6;
+  let left = anchorRect.left;
+
+  if (top + tooltipRect.height > window.innerHeight - 8) {
+    top = anchorRect.top - tooltipRect.height - 6;
+  }
+  if (left + tooltipRect.width > window.innerWidth - 8) {
+    left = Math.max(8, window.innerWidth - tooltipRect.width - 8);
+  }
+  if (left < 8) left = 8;
+
+  itemTooltipEl.style.top = `${Math.round(top)}px`;
+  itemTooltipEl.style.left = `${Math.round(left)}px`;
+}
+
+function hideItemTooltip(): void {
+  itemTooltipEl.classList.remove("visible");
+  itemTooltipEl.hidden = true;
+}
+
+mainEl.addEventListener("scroll", hideItemTooltip, { passive: true });
 
 function filteredItems(): SavedItem[] {
   if (activeFilter === "all") return allItems;
   return allItems.filter((i) => i.type === activeFilter);
+}
+
+function typeIcon(type: MediaType): string {
+  switch (type) {
+    case "book":
+      return "menu_book";
+    case "series":
+      return "live_tv";
+    default:
+      return "movie";
+  }
+}
+
+function createTypeIconEl(type: MediaType): HTMLElement {
+  const label = typeLabel(type);
+
+  if (type === "anime") {
+    const img = document.createElement("img");
+    img.className = "type-icon type-icon-img";
+    img.src = animeIconUrl;
+    img.alt = "";
+    img.setAttribute("aria-label", label);
+    return img;
+  }
+
+  const icon = document.createElement("span");
+  icon.className = "type-icon material-symbols-outlined";
+  icon.textContent = typeIcon(type);
+  icon.setAttribute("aria-label", label);
+  return icon;
 }
 
 function typeLabel(type: MediaType): string {
@@ -75,22 +142,6 @@ function itemSubtitle(item: SavedItem): string {
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);
   return parts.join(" | ");
-}
-
-function relativeSavedTime(savedAt: number): string {
-  const startOfDay = (date: Date) =>
-    new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-
-  const now = new Date();
-  const saved = new Date(savedAt);
-  const dayDiff = Math.floor(
-    (startOfDay(now) - startOfDay(saved)) / (24 * 60 * 60 * 1000)
-  );
-
-  if (dayDiff <= 0) return "Saved today";
-  if (dayDiff === 1) return "Saved yesterday";
-  if (dayDiff < 7) return `Saved ${dayDiff} days ago`;
-  return `Saved ${saved.toLocaleDateString(undefined, { dateStyle: "medium" })}`;
 }
 
 function showStatus(message: string, isError = false, durationMs = 2500): void {
@@ -186,34 +237,46 @@ function render(): void {
     checkbox.type = "checkbox";
     checkbox.dataset.id = item.id;
 
+    const typeIconEl = createTypeIconEl(item.type);
+
+    typeIconEl.addEventListener("mouseenter", () => {
+      showItemTooltip(typeLabel(item.type), typeIconEl);
+    });
+    typeIconEl.addEventListener("mouseleave", hideItemTooltip);
+
     const body = document.createElement("div");
     body.className = "item-body";
-
-    const head = document.createElement("div");
-    head.className = "item-head";
 
     const title = document.createElement("h3");
     title.className = "item-title";
     title.textContent = itemTitle(item);
-    title.title = formatItemLine(item);
-
-    const badge = document.createElement("span");
-    badge.className = "type-badge";
-    badge.textContent = typeLabel(item.type);
-
-    head.append(title, badge);
 
     const subtitle = document.createElement("p");
     subtitle.className = "item-subtitle";
     subtitle.textContent = itemSubtitle(item);
-    subtitle.title = itemSubtitle(item);
 
-    const time = document.createElement("p");
-    time.className = "item-time";
-    time.innerHTML = `<span class="material-symbols-outlined">schedule</span>${relativeSavedTime(item.savedAt)}`;
+    body.append(title, subtitle);
+    li.append(typeIconEl, body, checkbox);
 
-    body.append(head, subtitle, time);
-    li.append(checkbox, body);
+    const fullLine = formatItemLine(item);
+
+    const showFullLineTooltip = (): void => {
+      if (!isTextTruncated(title) && !isTextTruncated(subtitle)) return;
+      showItemTooltip(fullLine, li);
+    };
+
+    title.addEventListener("mouseenter", showFullLineTooltip);
+    subtitle.addEventListener("mouseenter", showFullLineTooltip);
+    title.addEventListener("mouseleave", hideItemTooltip);
+    subtitle.addEventListener("mouseleave", hideItemTooltip);
+
+    li.addEventListener("mouseleave", hideItemTooltip);
+
+    li.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+      checkbox.checked = !checkbox.checked;
+    });
+
     listEl.append(li);
   }
 }
