@@ -198,6 +198,7 @@ Everything stays on your device unless you turn on Keep sync. No analytics serve
 | [Goodreads](https://www.goodreads.com) | Book pages (`/book/show/…`) | Title, author, year, GR rating |
 | [BookFilter](https://www.book-filter.com) | Book pages (`/books/…`) | Title, author, year, BF rating |
 | [MyAnimeList](https://myanimelist.net) | Anime pages (`/anime/{id}/…`) | Title, year, episode count, MAL score |
+| [Letterboxd](https://letterboxd.com) | Film pages (`/film/…`) | Title, year, runtime, LB rating |
 
 ### Tips for best results
 
@@ -219,6 +220,11 @@ Everything stays on your device unless you turn on Keep sync. No analytics serve
 
 - Open the anime title page (for example `/anime/21/One_Piece`), not season or genre listing pages.
 - Wait for the score and information block to load before saving.
+
+**Letterboxd**
+
+- Open the film page (for example `/film/inception/`), not a member review URL.
+- Wait for the rating and runtime to load before saving.
 
 ---
 
@@ -519,7 +525,7 @@ When you publish this repository, set these under **Settings → General → Abo
 **Description**
 
 ```
-Open-source Chrome extension: save movies, series, anime and books from Google, IMDb, Goodreads, MyAnimeList and Series Graph. Sync your watchlist and reading list to Google Keep.
+Open-source Chrome extension: save movies, series, anime and books from Google, IMDb, Goodreads, MyAnimeList, Letterboxd and Series Graph. Sync your watchlist and reading list to Google Keep.
 ```
 
 **Topics**
@@ -534,6 +540,7 @@ book-tracker
 imdb
 goodreads
 myanimelist
+letterboxd
 anime
 productivity-tools
 manifest-v3

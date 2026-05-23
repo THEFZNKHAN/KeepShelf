@@ -20,6 +20,7 @@ function formatRatingLabel(item: SavedItem): string | undefined {
   if (item.type === "book") return formatBookRatingLabel(item);
   const url = item.sourceUrl ?? "";
   if (url.includes("myanimelist.net")) return `MAL ${item.imdbRating}`;
+  if (url.includes("letterboxd.com")) return `LB ${item.imdbRating}`;
   return `IMDb ${item.imdbRating}`;
 }
 

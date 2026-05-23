@@ -11,7 +11,8 @@
     "https://keep.google.com/*",
     "https://www.goodreads.com/*",
     "https://www.book-filter.com/*",
-    "https://myanimelist.net/*"
+    "https://myanimelist.net/*",
+    "https://letterboxd.com/*"
   ],
   "action": {
     "default_popup": "dist/popup.html",
@@ -53,6 +54,11 @@
     },
     {
       "matches": ["https://myanimelist.net/anime/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://letterboxd.com/film/*"],
       "js": ["dist/content.js"],
       "run_at": "document_idle"
     }
