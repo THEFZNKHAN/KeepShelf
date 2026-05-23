@@ -197,6 +197,7 @@ Everything stays on your device unless you turn on Keep sync. No analytics serve
 | [Series Graph](https://seriesgraph.com) | Show pages (`/show/…`) | Series with season count and IMDb rating |
 | [Goodreads](https://www.goodreads.com) | Book pages (`/book/show/…`) | Title, author, year, GR rating |
 | [BookFilter](https://www.book-filter.com) | Book pages (`/books/…`) | Title, author, year, BF rating |
+| [MyAnimeList](https://myanimelist.net) | Anime pages (`/anime/{id}/…`) | Title, year, episode count, MAL score |
 
 ### Tips for best results
 
@@ -213,6 +214,11 @@ Everything stays on your device unless you turn on Keep sync. No analytics serve
 **Goodreads and BookFilter**
 
 - Wait for ratings and metadata to render before saving.
+
+**MyAnimeList**
+
+- Open the anime title page (for example `/anime/21/One_Piece`), not season or genre listing pages.
+- Wait for the score and information block to load before saving.
 
 ---
 
@@ -513,7 +519,7 @@ When you publish this repository, set these under **Settings → General → Abo
 **Description**
 
 ```
-Open-source Chrome extension: save movies, series, anime and books from Google, IMDb, Goodreads and Series Graph. Sync your watchlist and reading list to Google Keep.
+Open-source Chrome extension: save movies, series, anime and books from Google, IMDb, Goodreads, MyAnimeList and Series Graph. Sync your watchlist and reading list to Google Keep.
 ```
 
 **Topics**
@@ -527,6 +533,7 @@ movie-tracker
 book-tracker
 imdb
 goodreads
+myanimelist
 anime
 productivity-tools
 manifest-v3

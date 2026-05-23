@@ -18,6 +18,8 @@ function formatBookTitlePart(item: SavedItem): string {
 function formatRatingLabel(item: SavedItem): string | undefined {
   if (!item.imdbRating) return undefined;
   if (item.type === "book") return formatBookRatingLabel(item);
+  const url = item.sourceUrl ?? "";
+  if (url.includes("myanimelist.net")) return `MAL ${item.imdbRating}`;
   return `IMDb ${item.imdbRating}`;
 }
 

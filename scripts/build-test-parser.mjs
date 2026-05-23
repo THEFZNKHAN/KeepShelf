@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 mkdirSync(join(root, "dist-test"), { recursive: true });
 
-const entries = ["parser", "format", "year", "book", "book-jsonld", "goodreads", "book-filter", "seriesgraph", "imdb", "keep-settings"].map((name) => ({
+const entries = ["parser", "format", "year", "book", "book-jsonld", "goodreads", "book-filter", "seriesgraph", "imdb", "mal", "keep-settings"].map((name) => ({
   in: join(root, `src/shared/${name}.ts`),
   out: join(root, `dist-test/${name}.js`),
 }));

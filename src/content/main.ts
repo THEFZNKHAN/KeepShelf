@@ -2,10 +2,12 @@ import { initBookFilter, teardownBookFilter } from "./book-filter.js";
 import { initGoogle, teardownGoogle } from "./google.js";
 import { initGoodreads, teardownGoodreads } from "./goodreads.js";
 import { initImdb, teardownImdb } from "./imdb.js";
+import { initMal, teardownMal } from "./mal.js";
 import { initSeriesGraph, teardownSeriesGraph } from "./seriesgraph.js";
 import { isBookFilterPage } from "../shared/book-filter.js";
 import { isGoodreadsBookPage } from "../shared/goodreads.js";
 import { isImdbTitlePage } from "../shared/imdb.js";
+import { isMalAnimePage } from "../shared/mal.js";
 import { isSeriesGraphShowPage } from "../shared/seriesgraph.js";
 
 function init(): void {
@@ -29,6 +31,11 @@ function init(): void {
     return;
   }
 
+  if (isMalAnimePage()) {
+    initMal();
+    return;
+  }
+
   if (
     location.hostname.endsWith("google.com") &&
     location.pathname.startsWith("/search")
@@ -43,6 +50,7 @@ function onNavigation(): void {
   teardownBookFilter();
   teardownImdb();
   teardownSeriesGraph();
+  teardownMal();
   init();
 }
 

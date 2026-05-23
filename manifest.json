@@ -10,7 +10,8 @@
     "https://seriesgraph.com/*",
     "https://keep.google.com/*",
     "https://www.goodreads.com/*",
-    "https://www.book-filter.com/*"
+    "https://www.book-filter.com/*",
+    "https://myanimelist.net/*"
   ],
   "action": {
     "default_popup": "dist/popup.html",
@@ -47,6 +48,11 @@
     },
     {
       "matches": ["https://www.book-filter.com/books/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://myanimelist.net/anime/*"],
       "js": ["dist/content.js"],
       "run_at": "document_idle"
     }
