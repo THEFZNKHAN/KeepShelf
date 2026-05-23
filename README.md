@@ -42,7 +42,7 @@
 
 | | |
 |---|---|
-| **What it does** | Parses title metadata from Google, IMDb, Goodreads, and more, then saves a clean one-line entry to your shelf |
+| **What it does** | Parses title metadata from Google, IMDb, Goodreads, MyAnimeList, Letterboxd, and more, then saves a clean one-line entry to your shelf |
 | **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes |
 | **Who it is for** | Anyone building a watchlist, reading list, or recommendation backlog without copy-pasting |
 | **Setup time** | About 2 minutes to load the extension. About 5 minutes to link Keep notes if you want sync |
@@ -104,7 +104,7 @@ npm run build
 
 1. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, and select this folder.
 2. Pin KeepShelf to your Chrome toolbar.
-3. Search a movie on Google (or open an IMDb title page).
+3. Search a movie on Google, or open an IMDb, Letterboxd, or MyAnimeList title page.
 4. Click the blue **bookmark** button that appears at the bottom right.
 5. Open the KeepShelf popup to see your saved line.
 
@@ -128,7 +128,7 @@ flowchart LR
 
 **Step by step**
 
-1. **Detect** supported pages: Google knowledge panels, IMDb title pages, Goodreads book pages, and more.
+1. **Detect** supported pages: Google knowledge panels, IMDb and Series Graph title pages, Goodreads and BookFilter book pages, MyAnimeList anime pages, Letterboxd film pages, and more.
 2. **Parse** title, year, runtime or season count, author (for books), and ratings where available.
 3. **Save** to your local KeepShelf list with duplicate detection.
 4. **Sync** optionally to Google Keep: media titles go to your Media note, books go to your Books note.
@@ -147,12 +147,12 @@ Every item becomes a single readable line, ready for Keep or clipboard export:
 
 | Type | What gets captured |
 |------|-------------------|
-| **Movies** | Title, year, runtime, IMDb rating |
+| **Movies** | Title, year, runtime, rating from the source (IMDb or Letterboxd) |
 | **Series** | Title, year, latest season, IMDb rating |
-| **Anime** | Same as series (detected via Google knowledge panel) |
+| **Anime** | Title, year, episode count (when available), MAL score or Google panel metadata |
 | **Books** | Title, author, year, Goodreads or BookFilter rating |
 
-Ratings are labeled clearly: `IMDb 8.4`, `GR 3.92`, `BF 3.78`.
+Ratings are labeled by source: `IMDb 8.4`, `LB 4.23`, `MAL 8.73`, `GR 3.92`, `BF 3.78`.
 
 ### Local shelf popup
 
@@ -232,7 +232,7 @@ Everything stays on your device unless you turn on Keep sync. No analytics serve
 
 Every saved item becomes one line. These are real examples of the format KeepShelf produces:
 
-### Movies
+### Movies (IMDb)
 
 ```
 The Shawshank Redemption (1994) | 2h 22m | IMDb 9.3
@@ -240,11 +240,25 @@ Inception (2010) | 2h 28m | IMDb 8.8
 Avengers: Infinity War (2018) | 2h 29m | IMDb 8.4
 ```
 
+### Movies (Letterboxd)
+
+```
+Inception (2010) | 2h 28m | LB 4.23
+The Shawshank Redemption (1994) | 2h 22m | LB 4.49
+```
+
 ### Series
 
 ```
 Dark (2017) | S03 | IMDb 8.7
 Daredevil (2015) | S03 | IMDb 8.6
+```
+
+### Anime (MyAnimeList)
+
+```
+One Piece (1999) | MAL 8.73
+Death Note (2006) | 37 eps | MAL 8.62
 ```
 
 ### Books (Goodreads / BookFilter)
@@ -306,7 +320,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 
 ### Save a title
 
-1. Visit a supported page (Google search with a knowledge panel, IMDb, Goodreads, etc.)
+1. Visit a supported page (Google search with a knowledge panel, IMDb, Letterboxd, MyAnimeList, Goodreads, etc.)
 2. Click the blue **bookmark** button at the bottom right of the page
 3. An on-page toast confirms the save and shows the formatted line
 
@@ -402,7 +416,7 @@ Uninstalling the extension removes local shelf data. Your Google Keep notes are 
 | `tabs` | Find or open linked Keep note tabs for sync |
 | `scripting` | Run the Keep append script in your Keep tab |
 | `debugger` | Send trusted text input so Keep persists list items |
-| `google.com`, `imdb.com`, `seriesgraph.com`, `goodreads.com`, `book-filter.com` | Parse page metadata and show the save button |
+| `google.com`, `imdb.com`, `seriesgraph.com`, `goodreads.com`, `book-filter.com`, `myanimelist.net`, `letterboxd.com` | Parse page metadata and show the save button |
 | `keep.google.com` | Append lines to your linked Keep notes |
 
 ---
@@ -413,7 +427,7 @@ Uninstalling the extension removes local shelf data. Your Google Keep notes are 
 
 ```bash
 npm run build    # Compile TypeScript to dist/
-npm test         # Run 52 parser and format tests
+npm test         # Run parser and format tests (HTML fixtures)
 npm run watch    # Rebuild on file changes
 ```
 
@@ -458,6 +472,10 @@ npm test
 
 ## FAQ
 
+**Why does Letterboxd show a different rating number than IMDb?**
+
+Letterboxd uses its own community score (shown as `LB 4.23` on a roughly 5-point scale). IMDb uses a 10-point scale (`IMDb 8.8`). KeepShelf labels the source so you can tell them apart.
+
 **Does KeepShelf work without Google Keep?**
 
 Yes. The local shelf works on its own. Keep sync is optional.
@@ -489,6 +507,7 @@ Not yet. Install from source using the steps above.
 | Problem | What to try |
 |---------|-------------|
 | Save button does not appear | Confirm the URL is supported and the page panel has fully loaded |
+| Letterboxd or MAL save fails | Use the canonical title page (`/film/slug/` or `/anime/id/slug`), not a member review or listing URL |
 | Keep line vanishes after closing the note | Reload the extension; Keep needs trusted input to persist |
 | "URL looks incomplete" in settings | Paste the full `#LIST/…` URL from the browser address bar |
 | Book saved without author (Google) | Scroll the knowledge panel, then save again |
@@ -525,7 +544,7 @@ When you publish this repository, set these under **Settings → General → Abo
 **Description**
 
 ```
-Open-source Chrome extension: save movies, series, anime and books from Google, IMDb, Goodreads, MyAnimeList, Letterboxd and Series Graph. Sync your watchlist and reading list to Google Keep.
+Open-source Chrome extension: save movies, series, anime, and books from Google, IMDb, Goodreads, BookFilter, MyAnimeList, Letterboxd, and Series Graph. Sync your watchlist and reading list to Google Keep.
 ```
 
 **Topics**
@@ -539,6 +558,7 @@ movie-tracker
 book-tracker
 imdb
 goodreads
+book-filter
 myanimelist
 letterboxd
 anime
