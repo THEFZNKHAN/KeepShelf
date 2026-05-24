@@ -411,8 +411,22 @@ function render(): void {
     title.addEventListener("mouseleave", hideItemTooltip);
     li.addEventListener("mouseleave", hideItemTooltip);
 
+    const isOpenable = (item.type === "tab" || item.type === "link") && !!item.url;
+
+    if (isOpenable) {
+      body.classList.add("item-body-link");
+      body.title = item.url!;
+    }
+
     li.addEventListener("click", (e) => {
-      if ((e.target as HTMLElement).closest('input[type="checkbox"]')) return;
+      const target = e.target as HTMLElement;
+      if (target.closest('input[type="checkbox"]')) return;
+
+      if (isOpenable && target.closest(".item-body")) {
+        void chrome.tabs.create({ url: item.url });
+        return;
+      }
+
       checkbox.checked = !checkbox.checked;
     });
 

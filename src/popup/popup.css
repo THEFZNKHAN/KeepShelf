@@ -495,6 +495,21 @@ body {
   opacity: 0.85;
 }
 
+.item-body-link {
+  cursor: pointer;
+}
+
+.item-body-link .item-title {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: color 0.15s ease, font-weight 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.list-item:hover .item-body-link .item-title {
+  text-decoration-color: var(--primary);
+}
+
 .item-title {
   font-size: 13px;
   line-height: 18px;
