@@ -3,9 +3,6 @@ import {
   isSeriesGraphChartReady,
   seriesGraphQueryFromUrl,
 } from "../shared/seriesgraph.js";
-import { handleKeepSyncResult, showSavedToast } from "./keep-feedback.js";
-import { sendToBackground } from "../shared/messaging.js";
-import { previewLabel, removeSaveButton, showSaveButton, showToast } from "./ui.js";
 import type { ParsedMedia } from "../shared/types.js";
 
 let observer: MutationObserver | null = null;
@@ -20,7 +17,6 @@ function check(): void {
   if (!parsed) {
     chartWaitStartedAt = null;
     currentParsed = null;
-    removeSaveButton();
     return;
   }
 
@@ -30,7 +26,6 @@ function check(): void {
   if (!chartReady) {
     if (chartWaitStartedAt === null) chartWaitStartedAt = Date.now();
     if (Date.now() - chartWaitStartedAt < CHART_WAIT_MS) {
-      removeSaveButton();
       return;
     }
   } else {
@@ -38,41 +33,15 @@ function check(): void {
   }
 
   currentParsed = parsed;
-  showSaveButton(handleSave);
 }
 
-async function handleSave(): Promise<void> {
-  if (!currentParsed) {
-    showToast("Show details not loaded yet. Wait for the chart.", "error");
-    return;
-  }
-
-  let response;
-  try {
-    response = await sendToBackground({
-      action: "save",
-      item: {
-        ...currentParsed,
-        googleQuery:
-          seriesGraphQueryFromUrl(location.href) || currentParsed.title,
-        sourceUrl: location.href,
-      },
-    });
-  } catch (err) {
-    showToast(
-      err instanceof Error ? err.message : "KeepShelf is not connected.",
-      "error"
-    );
-    return;
-  }
-
-  if (!response?.ok) {
-    showToast(response?.error ?? "Failed to save.", "error");
-    return;
-  }
-
-  showSavedToast(currentParsed, Boolean(response.duplicate), previewLabel(currentParsed));
-  await handleKeepSyncResult(response.keep);
+export function getReadyToSave() {
+  if (!currentParsed) return null;
+  return {
+    ...currentParsed,
+    googleQuery: seriesGraphQueryFromUrl(location.href) || currentParsed.title,
+    sourceUrl: location.href,
+  };
 }
 
 export function initSeriesGraph(): void {
@@ -92,5 +61,4 @@ export function teardownSeriesGraph(): void {
   debounceTimer = null;
   currentParsed = null;
   chartWaitStartedAt = null;
-  removeSaveButton();
 }

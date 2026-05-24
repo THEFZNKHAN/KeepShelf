@@ -25,7 +25,6 @@ export async function saveItem(
   };
   items.unshift(item);
   await chrome.storage.local.set({ [STORAGE_KEY]: items });
-  await updateBadge(items.length);
   return { item, duplicate: false };
 }
 
@@ -33,13 +32,11 @@ export async function deleteItems(ids: string[]): Promise<SavedItem[]> {
   const idSet = new Set(ids);
   const items = (await getAllItems()).filter((i) => !idSet.has(i.id));
   await chrome.storage.local.set({ [STORAGE_KEY]: items });
-  await updateBadge(items.length);
   return items;
 }
 
 export async function clearAll(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: [] });
-  await updateBadge(0);
 }
 
 export function dedupeKey(
@@ -49,13 +46,3 @@ export function dedupeKey(
   return `${item.title.toLowerCase().trim()}|${year}|${item.type}`;
 }
 
-async function updateBadge(count: number): Promise<void> {
-  const text = count > 0 ? String(count) : "";
-  await chrome.action.setBadgeText({ text });
-  await chrome.action.setBadgeBackgroundColor({ color: "#4285F4" });
-}
-
-export async function initBadge(): Promise<void> {
-  const items = await getAllItems();
-  await updateBadge(items.length);
-}

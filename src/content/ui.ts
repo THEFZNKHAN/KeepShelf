@@ -1,6 +1,3 @@
-import type { ParsedMedia } from "../shared/types.js";
-
-const BUTTON_ID = "keepshelf-save-btn";
 const TOAST_ID = "keepshelf-toast";
 const STYLE_ID = "keepshelf-ui-styles";
 
@@ -16,7 +13,7 @@ export interface ToastContent {
   durationMs?: number;
 }
 
-function ensureUiStyles(): void {
+function ensureToastStyles(): void {
   if (document.getElementById(STYLE_ID)) return;
 
   const link = document.createElement("link");
@@ -27,35 +24,9 @@ function ensureUiStyles(): void {
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
-    #${BUTTON_ID} {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 2147483646;
-      width: 44px;
-      height: 44px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: none;
-      border-radius: 999px;
-      background: #2563eb;
-      color: #fff;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      transition: opacity 0.15s ease, transform 0.15s ease;
-      font-family: Inter, system-ui, sans-serif;
-    }
-    #${BUTTON_ID}:hover { opacity: 0.92; }
-    #${BUTTON_ID}:active { transform: scale(0.98); }
-    #${BUTTON_ID} .material-symbols-outlined {
-      font-size: 20px;
-      font-variation-settings: "FILL" 1;
-    }
     #${TOAST_ID} {
       position: fixed;
-      bottom: 80px;
+      bottom: 24px;
       right: 24px;
       z-index: 2147483647;
       width: 300px;
@@ -144,33 +115,11 @@ function ensureUiStyles(): void {
   document.head.appendChild(style);
 }
 
-export function removeSaveButton(): void {
-  document.getElementById(BUTTON_ID)?.remove();
-}
-
-export function showSaveButton(onSave: () => void): void {
-  ensureUiStyles();
-
-  let btn = document.getElementById(BUTTON_ID) as HTMLButtonElement | null;
-  if (!btn) {
-    btn = document.createElement("button");
-    btn.id = BUTTON_ID;
-    btn.type = "button";
-    btn.setAttribute("aria-label", "Save to KeepShelf");
-    btn.title = "Save to KeepShelf";
-    btn.innerHTML =
-      '<span class="material-symbols-outlined" aria-hidden="true">bookmark</span>';
-    document.body.appendChild(btn);
-  }
-  btn.onclick = onSave;
-  btn.style.display = "flex";
-}
-
 export function showToast(
   content: string | ToastContent,
   variant?: ToastVariant
 ): void {
-  ensureUiStyles();
+  ensureToastStyles();
 
   const options: ToastContent =
     typeof content === "string"
@@ -246,9 +195,4 @@ export function showToast(
 
 function hideToast(toast: HTMLElement): void {
   toast.classList.remove("visible");
-}
-
-export function previewLabel(parsed: ParsedMedia): string {
-  const year = parsed.year ? ` (${parsed.year})` : "";
-  return `${parsed.title}${year}`;
 }

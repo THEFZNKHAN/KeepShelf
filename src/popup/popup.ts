@@ -6,6 +6,7 @@ import type { MediaType, SavedItem } from "../shared/types.js";
 
 let allItems: SavedItem[] = [];
 let activeFilter: MediaType | "all" = "all";
+let activeTab: "media" | "books" = "media";
 let keepSettings: KeepSettings = { enabled: false };
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
 let settingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -14,8 +15,10 @@ const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
 const listEl = document.getElementById("list")!;
 const emptyEl = document.getElementById("empty")!;
+const emptyHeadingEl = document.getElementById("empty-heading")!;
+const emptyBodyEl = document.getElementById("empty-body")!;
+const emptyHintsEl = document.getElementById("empty-hints")!;
 const filterEmptyEl = document.getElementById("filter-empty")!;
-const emptyFooterEl = document.getElementById("empty-footer")!;
 const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
@@ -35,6 +38,7 @@ const confirmOkEl = document.getElementById("confirm-ok") as HTMLButtonElement;
 const confirmCancelEl = document.getElementById("confirm-cancel") as HTMLButtonElement;
 const itemTooltipEl = document.getElementById("item-tooltip")!;
 const mainEl = document.getElementById("main")!;
+const shelfTabsEl = document.getElementById("shelf-tabs")!;
 const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
 
 let confirmResolve: ((value: boolean) => void) | undefined;
@@ -73,9 +77,17 @@ function hideItemTooltip(): void {
 
 mainEl.addEventListener("scroll", hideItemTooltip, { passive: true });
 
+function tabItems(): SavedItem[] {
+  return activeTab === "books"
+    ? allItems.filter((i) => i.type === "book")
+    : allItems.filter((i) => i.type !== "book");
+}
+
 function filteredItems(): SavedItem[] {
-  if (activeFilter === "all") return allItems;
-  return allItems.filter((i) => i.type === activeFilter);
+  const base = tabItems();
+  if (activeTab === "books") return base;
+  if (activeFilter === "all") return base;
+  return base.filter((i) => i.type === activeFilter);
 }
 
 function typeIcon(type: MediaType): string {
@@ -210,17 +222,68 @@ function closeSettings(): void {
   appView.hidden = false;
 }
 
+function updateEmptyState(): void {
+  if (activeTab === "books") {
+    emptyHeadingEl.textContent = "No books saved yet";
+    emptyBodyEl.innerHTML =
+      "Open a Goodreads or BookFilter page, then click <strong>Save page</strong> in the toolbar above.";
+    emptyHintsEl.innerHTML = `
+      <div class="source-chip">
+        <span class="material-symbols-outlined">menu_book</span>
+        Goodreads
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">filter_alt</span>
+        BookFilter
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">travel_explore</span>
+        Google Search
+      </div>
+    `;
+  } else {
+    emptyHeadingEl.textContent = "Nothing saved yet";
+    emptyBodyEl.innerHTML =
+      "Open a supported page, then click <strong>Save page</strong> in the toolbar above.";
+    emptyHintsEl.innerHTML = `
+      <div class="source-chip">
+        <span class="material-symbols-outlined">travel_explore</span>
+        Google Search
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">star</span>
+        IMDb
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">movie</span>
+        Letterboxd
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">animation</span>
+        MyAnimeList
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">show_chart</span>
+        Series Graph
+      </div>
+    `;
+  }
+}
+
 function render(): void {
   const items = filteredItems();
-  const total = allItems.length;
-  countEl.textContent = `${total} saved`;
+  const tabCount = tabItems().length;
+
+  countEl.textContent = `${tabCount} saved`;
   listEl.innerHTML = "";
 
-  const showGlobalEmpty = total === 0;
-  const showFilterEmpty = total > 0 && items.length === 0;
+  filtersEl.hidden = activeTab === "books";
 
+  const showGlobalEmpty = tabCount === 0;
+  const showFilterEmpty = tabCount > 0 && items.length === 0;
+
+  updateEmptyState();
   emptyEl.hidden = !showGlobalEmpty;
-  emptyFooterEl.hidden = !showGlobalEmpty;
   filterEmptyEl.hidden = !showFilterEmpty;
   listEl.hidden = items.length === 0;
 
@@ -439,6 +502,70 @@ async function copyToClipboard(items: SavedItem[]): Promise<void> {
   showStatus(`Copied ${items.length} item${items.length === 1 ? "" : "s"}.`);
 }
 
+async function saveCurrentPage(): Promise<void> {
+  let tab: chrome.tabs.Tab | undefined;
+  try {
+    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  } catch {
+    showStatus("Cannot access the current tab.", true);
+    return;
+  }
+
+  if (!tab?.id) {
+    showStatus("Cannot access the current tab.", true);
+    return;
+  }
+
+  let pageResponse: { item: Omit<SavedItem, "id" | "savedAt"> | null } | undefined;
+  try {
+    pageResponse = await chrome.tabs.sendMessage(tab.id, { action: "getPageData" });
+  } catch {
+    showStatus("This page is not supported.", true);
+    return;
+  }
+
+  if (!pageResponse?.item) {
+    showStatus("Nothing detected on this page.", true);
+    return;
+  }
+
+  let saveResponse;
+  try {
+    saveResponse = await sendToBackground({ action: "save", item: pageResponse.item });
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Failed to save.", true);
+    return;
+  }
+
+  if (!saveResponse?.ok) {
+    showStatus(saveResponse?.error ?? "Failed to save.", true);
+    return;
+  }
+
+  if ("duplicate" in saveResponse && saveResponse.duplicate) {
+    showStatus("Already saved.");
+  } else {
+    showStatus("Saved!");
+    await loadItems();
+  }
+}
+
+shelfTabsEl.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".shelf-tab");
+  if (!btn) return;
+  const tab = btn.dataset.tab as "media" | "books" | undefined;
+  if (!tab || tab === activeTab) return;
+  activeTab = tab;
+  activeFilter = "all";
+  shelfTabsEl.querySelectorAll(".shelf-tab").forEach((t) => {
+    t.classList.toggle("active", t === btn);
+  });
+  filtersEl.querySelectorAll(".filter").forEach((f) => {
+    f.classList.toggle("active", (f as HTMLElement).dataset.filter === "all");
+  });
+  render();
+});
+
 filtersEl.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".filter");
   if (!btn) return;
@@ -447,6 +574,10 @@ filtersEl.addEventListener("click", (e) => {
     f.classList.toggle("active", f === btn);
   });
   render();
+});
+
+document.getElementById("save-page")!.addEventListener("click", () => {
+  void saveCurrentPage();
 });
 
 document.getElementById("copy-all")!.addEventListener("click", () => {

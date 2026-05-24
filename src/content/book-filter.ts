@@ -2,9 +2,6 @@ import {
   bookFilterSlugFromUrl,
   parseBookFilterPage,
 } from "../shared/book-filter.js";
-import { handleKeepSyncResult, showSavedToast } from "./keep-feedback.js";
-import { sendToBackground } from "../shared/messaging.js";
-import { previewLabel, removeSaveButton, showSaveButton, showToast } from "./ui.js";
 import type { ParsedMedia } from "../shared/types.js";
 
 let observer: MutationObserver | null = null;
@@ -12,47 +9,16 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let currentParsed: ParsedMedia | null = null;
 
 function check(): void {
-  const parsed = parseBookFilterPage(document);
-  currentParsed = parsed;
-  if (!parsed) {
-    removeSaveButton();
-    return;
-  }
-  showSaveButton(handleSave);
+  currentParsed = parseBookFilterPage(document);
 }
 
-async function handleSave(): Promise<void> {
-  if (!currentParsed) {
-    showToast("Book details not loaded yet. Wait for the page.", "error");
-    return;
-  }
-
-  const slug = bookFilterSlugFromUrl(location.href);
-  let response;
-  try {
-    response = await sendToBackground({
-      action: "save",
-      item: {
-        ...currentParsed,
-        googleQuery: slug ?? currentParsed.title,
-        sourceUrl: location.href.split("?")[0],
-      },
-    });
-  } catch (err) {
-    showToast(
-      err instanceof Error ? err.message : "KeepShelf is not connected.",
-      "error"
-    );
-    return;
-  }
-
-  if (!response?.ok) {
-    showToast(response?.error ?? "Failed to save.", "error");
-    return;
-  }
-
-  showSavedToast(currentParsed, Boolean(response.duplicate), previewLabel(currentParsed));
-  await handleKeepSyncResult(response.keep);
+export function getReadyToSave() {
+  if (!currentParsed) return null;
+  return {
+    ...currentParsed,
+    googleQuery: bookFilterSlugFromUrl(location.href) ?? currentParsed.title,
+    sourceUrl: location.href.split("?")[0],
+  };
 }
 
 export function initBookFilter(): void {
@@ -71,5 +37,4 @@ export function teardownBookFilter(): void {
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = null;
   currentParsed = null;
-  removeSaveButton();
 }

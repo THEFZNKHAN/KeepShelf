@@ -22,6 +22,16 @@
           <h1>KeepShelf</h1>
         </div>
         <div class="top-bar-actions">
+          <button
+            type="button"
+            id="save-page"
+            class="btn btn-save"
+            title="Save current page"
+            aria-label="Save current page"
+          >
+            <span class="material-symbols-outlined btn-icon">bookmark_add</span>
+            Save page
+          </button>
           <span id="count" class="count-badge">0 saved</span>
           <button
             type="button"
@@ -35,13 +45,17 @@
         </div>
       </header>
 
+      <nav id="shelf-tabs" class="shelf-tabs">
+        <button type="button" class="shelf-tab active" data-tab="media">Media</button>
+        <button type="button" class="shelf-tab" data-tab="books">Books</button>
+      </nav>
+
       <div class="toolbar">
         <div class="filters" id="filters">
           <button type="button" class="filter active" data-filter="all">All</button>
           <button type="button" class="filter" data-filter="movie">Movies</button>
           <button type="button" class="filter" data-filter="series">Series</button>
           <button type="button" class="filter" data-filter="anime">Anime</button>
-          <button type="button" class="filter" data-filter="book">Books</button>
         </div>
 
         <div class="action-row">
@@ -96,25 +110,16 @@
           </div>
           <div class="empty-content">
             <div class="empty-icon-wrap">
-              <span class="material-symbols-outlined">search</span>
+              <span class="material-symbols-outlined" id="empty-icon">search</span>
             </div>
-            <h2>Nothing saved yet</h2>
-            <p>
-              Search on Google, open Goodreads or BookFilter, visit IMDb or Series Graph, then tap
-              the blue <strong>bookmark</strong> button on the page.
+            <h2 id="empty-heading">Nothing saved yet</h2>
+            <p id="empty-body">
+              Open a supported page, then click <strong>Save page</strong> in the toolbar above.
             </p>
-            <div class="source-hints">
+            <div id="empty-hints" class="source-hints">
               <div class="source-chip">
                 <span class="material-symbols-outlined">travel_explore</span>
                 Google Search
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">menu_book</span>
-                Goodreads
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">filter_alt</span>
-                BookFilter
               </div>
               <div class="source-chip">
                 <span class="material-symbols-outlined">star</span>
@@ -122,6 +127,14 @@
               </div>
               <div class="source-chip">
                 <span class="material-symbols-outlined">movie</span>
+                Letterboxd
+              </div>
+              <div class="source-chip">
+                <span class="material-symbols-outlined">animation</span>
+                MyAnimeList
+              </div>
+              <div class="source-chip">
+                <span class="material-symbols-outlined">show_chart</span>
                 Series Graph
               </div>
             </div>
@@ -132,10 +145,6 @@
           <p>No items for this filter.</p>
         </div>
       </main>
-
-      <footer id="empty-footer" class="empty-footer" hidden>
-        <p>Waiting for activity…</p>
-      </footer>
     </div>
 
     <div id="item-tooltip" class="item-tooltip" role="tooltip" hidden></div>

@@ -1,4 +1,4 @@
-import { initBadge, saveItem, getAllItems, deleteItems, clearAll } from "../shared/storage.js";
+import { saveItem, getAllItems, deleteItems, clearAll } from "../shared/storage.js";
 import {
   getKeepSettings,
   setKeepSettings,
@@ -61,12 +61,3 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  initBadge().catch(() => {});
-});
-
-chrome.runtime.onStartup.addListener(() => {
-  initBadge().catch(() => {});
-});
-
-initBadge().catch(() => {});
