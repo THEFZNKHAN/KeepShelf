@@ -19,6 +19,10 @@
 </p>
 
 <p align="center">
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/thefznkhan/KeepShelf?label=Download&color=4285F4&logo=googlechrome&logoColor=white" alt="Latest Release"></a>
+</p>
+
+<p align="center">
   <a href="#-quick-start">Quick start</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-supported-sources">Sources</a> ·
@@ -97,19 +101,16 @@ No copy-pasting. No tab juggling. No spreadsheet middleman.
 
 ## ⚡ Quick start
 
-```bash
-git clone https://github.com/thefznkhan/KeepShelf.git
-cd KeepShelf
-npm install
-node scripts/generate-icons.mjs
-npm run build
-```
+**Fastest path:** download the latest ZIP from the [Releases page](../../releases/latest), extract it, then load it unpacked in Chrome. Done in under two minutes with no tools needed.
 
-1. Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked**, select this folder.
-2. Pin KeepShelf to your Chrome toolbar.
-3. Open a movie on IMDb, an anime on MyAnimeList, a book on Goodreads, or search anything on Google.
-4. Click the **KeepShelf icon** in your toolbar, then click **Save page**.
-5. Your item appears in the shelf instantly.
+Want to build from source instead? See [Install from GitHub](#-install-from-github).
+
+Once the extension is loaded:
+
+1. Pin KeepShelf to your Chrome toolbar.
+2. Open a movie on IMDb, an anime on MyAnimeList, a book on Goodreads, or search anything on Google.
+3. Click the **KeepShelf icon** in your toolbar, then click **Save page**.
+4. Your item appears in the shelf instantly.
 
 Want automatic Keep sync? Jump to [Google Keep sync](#-google-keep-sync).
 
@@ -311,13 +312,32 @@ Use **Copy all** in the popup to export your entire shelf as plain text, ready t
 
 ## 📦 Install from GitHub
 
-### Requirements
+There are two ways to install KeepShelf. Choose the one that suits you.
 
-- [Google Chrome](https://www.google.com/chrome/) or any Chromium-based browser (Edge, Brave, Arc, Vivaldi)
+---
+
+### Option A: Download a release (recommended, no tools required)
+
+1. Go to the [**Releases page**](../../releases/latest).
+2. Download `KeepShelf-vX.X.X.zip` from the Assets section.
+3. Extract the ZIP to a permanent folder on your computer (do not delete it after loading).
+4. Open `chrome://extensions` in Chrome.
+5. Enable **Developer mode** (toggle in the top-right corner).
+6. Click **Load unpacked** and select the extracted folder.
+7. Pin KeepShelf to your Chrome toolbar.
+
+> No Node.js, Git, or terminal required.
+
+---
+
+### Option B: Build from source
+
+Use this if you want to modify the code or always stay on the latest commit.
+
+**Requirements:**
+- [Google Chrome](https://www.google.com/chrome/) or any Chromium browser (Edge, Brave, Arc, Vivaldi)
 - [Node.js](https://nodejs.org/) 18 or newer
 - [Git](https://git-scm.com/)
-
-### Build and load
 
 ```bash
 # 1. Clone the repo
@@ -327,7 +347,7 @@ cd KeepShelf
 # 2. Install dev dependencies (esbuild, TypeScript, jsdom)
 npm install
 
-# 3. Generate extension icons from icons/icon.png
+# 3. Generate extension icons from icons/icon.png  (requires Python + Pillow)
 node scripts/generate-icons.mjs
 
 # 4. Build the extension into dist/
@@ -339,13 +359,13 @@ Load into Chrome:
 1. Go to `chrome://extensions`
 2. Enable **Developer mode** (toggle, top right)
 3. Click **Load unpacked**
-4. Select the cloned `KeepShelf` folder (the directory that contains `manifest.json`)
+4. Select the cloned `KeepShelf` folder (the folder that contains `manifest.json`)
 5. Pin KeepShelf to your toolbar
 
 ### Updating after `git pull`
 
 ```bash
-npm install     # in case deps changed
+npm install     # only needed if dependencies changed
 npm run build   # rebuild dist/
 ```
 
@@ -555,7 +575,7 @@ KeepShelf is built for Chromium Manifest V3. Firefox would need a separate port.
 
 **Is there a Chrome Web Store listing?**
 
-Not yet. Install from source using the steps in [Install from GitHub](#-install-from-github).
+Not yet. Download the latest release ZIP from the [Releases page](../../releases/latest) and load it unpacked. No Node.js or Git required.
 
 **Can I save a page that is not in the supported list?**
 
@@ -600,42 +620,3 @@ For new site parsers, please include at least one saved HTML fixture and a corre
 ## 📄 License
 
 [MIT](LICENSE). Free to use, modify, and distribute.
-
----
-
-## 🏷 GitHub repo metadata
-
-Set these under **Settings → General → About** when you push:
-
-**Description**
-
-```
-Chrome extension to save movies, series, anime, books, and browser tabs to a local shelf with one click. Optional Google Keep sync. Supports IMDb, Letterboxd, MyAnimeList, Goodreads, BookFilter, and Google Search.
-```
-
-**Website:** leave empty or link to your GitHub Pages if you set one up.
-
-**Topics:** copy and paste these (GitHub uses them for search and recommendations):
-
-```
-chrome-extension
-google-keep
-watchlist
-reading-list
-bookmark-manager
-movie-tracker
-book-tracker
-anime-tracker
-imdb
-goodreads
-myanimelist
-letterboxd
-bookmark
-productivity
-manifest-v3
-typescript
-open-source
-browser-extension
-media-tracker
-tab-manager
-```
