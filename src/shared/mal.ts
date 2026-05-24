@@ -39,7 +39,8 @@ export function parseMalPage(doc: Document): ParsedMedia | null {
 
 function parseFromJsonLd(doc: Document): ParsedMedia | null {
   for (const block of readJsonLd(doc)) {
-    const work = pickCreativeWork(block);
+    if (typeof block !== "object" || block === null) continue;
+    const work = pickCreativeWork(block as Record<string, unknown>);
     if (!work) continue;
 
     const title = stringField(work.name);

@@ -295,8 +295,8 @@ body {
   align-items: center;
   gap: 5px;
   padding: 6px 8px 4px;
-  border-bottom: 1.5px solid var(--border);
-  background: var(--bg);
+  border-bottom: 1.5px solid var(--outline-variant);
+  background: var(--surface);
 }
 
 .tab-input {
@@ -304,21 +304,21 @@ body {
   min-width: 0;
   height: 28px;
   padding: 0 8px;
-  border: 1.5px solid var(--border);
+  border: 1.5px solid var(--outline-variant);
   border-radius: 4px;
-  background: var(--bg-secondary);
-  color: var(--text);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
   font-size: 11.5px;
   font-family: inherit;
   outline: none;
 }
 
 .tab-input:focus {
-  border-color: var(--accent);
+  border-color: var(--primary);
 }
 
 .tab-input::placeholder {
-  color: var(--text-muted);
+  color: var(--on-surface-variant);
   opacity: 0.8;
 }
 
@@ -557,8 +557,7 @@ body {
 }
 
 .empty-state[hidden],
-.filter-empty[hidden],
-.empty-footer[hidden] {
+.filter-empty[hidden] {
   display: none !important;
 }
 
@@ -651,20 +650,6 @@ body {
   font-size: 13px;
 }
 
-.empty-footer {
-  padding: var(--gap-sm) var(--padding);
-  text-align: center;
-  border-top: 1px solid var(--outline-variant);
-  background: var(--surface-container-low);
-  flex-shrink: 0;
-}
-
-.empty-footer p {
-  font-size: 11px;
-  line-height: 14px;
-  font-weight: 600;
-  color: var(--on-surface-variant);
-}
 
 .settings-view .top-bar {
   gap: var(--gap-sm);
@@ -691,12 +676,6 @@ body {
   color: var(--on-surface-variant);
 }
 
-.section-desc {
-  font-size: 11.5px;
-  line-height: 16px;
-  color: var(--on-surface-variant);
-  margin-top: -2px;
-}
 
 .toggle-row {
   display: flex;
@@ -718,18 +697,6 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
-}
-
-.field-label {
-  font-size: 11.5px;
-  line-height: 15px;
-  font-weight: 600;
-}
-
-.field-hint {
-  font-size: 10.5px;
-  line-height: 13px;
-  color: var(--on-surface-variant);
 }
 
 .field-input-row {

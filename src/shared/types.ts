@@ -1,5 +1,4 @@
-import type { KeepSyncResult } from "./keep-settings.js";
-import type { KeepSettings, KeepTarget } from "./keep-settings.js";
+import type { KeepSettings, KeepSyncResult, KeepTarget } from "./keep-settings.js";
 
 export type MediaType = "movie" | "series" | "anime" | "book" | "tab" | "link" | "note";
 

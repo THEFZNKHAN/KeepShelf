@@ -203,7 +203,7 @@ export function keepPageAction(
       findAddButtonIn(root)?.click();
       await wait(700);
       fields = listFields(root);
-      field = fields.find(isFieldEmpty) ?? clickEmptyRow(root) ?? fields.at(-1);
+      field = fields.find(isFieldEmpty) ?? clickEmptyRow(root) ?? fields.at(-1) ?? null;
     }
 
     if (!field) {

@@ -50,7 +50,8 @@ function parseProductionData(doc: Document): ParsedMedia | null {
 
 function parseFromJsonLd(doc: Document): ParsedMedia | null {
   for (const block of readJsonLd(doc)) {
-    const work = pickMovie(block);
+    if (typeof block !== "object" || block === null) continue;
+    const work = pickMovie(block as Record<string, unknown>);
     if (!work) continue;
 
     const title = stringField(work.name);

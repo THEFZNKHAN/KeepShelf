@@ -11,7 +11,7 @@ function handleDetected(parsed: ParsedMedia | null): void {
   currentParsed = parsed;
 }
 
-export function getReadyToSave() {
+export function getReadyToSave(): (ParsedMedia & { googleQuery: string; sourceUrl: string }) | null {
   if (!currentParsed) return null;
   return {
     ...currentParsed,
@@ -22,12 +22,6 @@ export function getReadyToSave() {
 
 export function initGoogle(): void {
   startDetector(handleDetected);
-
-  window.addEventListener("popstate", () => {
-    currentParsed = null;
-    stopDetector();
-    startDetector(handleDetected);
-  });
 }
 
 export function teardownGoogle(): void {

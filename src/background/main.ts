@@ -83,4 +83,3 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       return { ok: false, error: "Unknown action" };
   }
 }
-

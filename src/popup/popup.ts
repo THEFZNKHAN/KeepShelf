@@ -1,4 +1,4 @@
-import { formatBookTitlePart, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
+import { formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
 import type { KeepSettings } from "../shared/keep-settings.js";
 import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
@@ -9,9 +9,6 @@ let activeFilter: MediaType | "all" = "all";
 let activeTab: "media" | "books" | "tabs" = "media";
 let keepSettings: KeepSettings = { mediaEnabled: false, booksEnabled: false, tabsEnabled: false };
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
-let mediaSettingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
-let booksSettingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
-let tabsSettingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
 const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
@@ -150,14 +147,6 @@ function typeLabel(type: MediaType): string {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-function formatSeason(value: string): string {
-  const seasonMatch = value.match(/^(\d+)\s*seasons?$/i);
-  if (seasonMatch) {
-    return `S${seasonMatch[1].padStart(2, "0")}`;
-  }
-  return value;
-}
-
 function itemTitle(item: SavedItem): string {
   if (item.type === "book") return formatBookTitlePart(item);
   if (item.type === "note") return (item.body ?? item.title).trim();
@@ -184,7 +173,7 @@ function itemSubtitle(item: SavedItem): string {
 
   const parts: string[] = [];
   if (item.durationOrSeasons) {
-    parts.push(formatSeason(item.durationOrSeasons));
+    parts.push(formatDurationOrSeasons(item.durationOrSeasons));
   }
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);
@@ -247,9 +236,9 @@ function showSectionStatus(
   timerRef.value = setTimeout(() => { el.hidden = true; }, durationMs);
 }
 
-const mediaStatusTimer = { value: mediaSettingsStatusTimer };
-const booksStatusTimer = { value: booksSettingsStatusTimer };
-const tabsStatusTimerRef = { value: tabsSettingsStatusTimer };
+const mediaStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+const booksStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+const tabsStatusTimerRef: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
 
 function showMediaStatus(msg: string, err = false, ms = 3500): void {
   showSectionStatus(mediaSettingsStatusEl, mediaSettingsStatusTextEl, mediaSettingsStatusIconEl, mediaStatusTimer, msg, err, ms);
@@ -265,9 +254,9 @@ function openSettings(): void {
   mediaSettingsStatusEl.hidden = true;
   booksSettingsStatusEl.hidden = true;
   tabsSettingsStatusEl.hidden = true;
-  if (mediaSettingsStatusTimer) clearTimeout(mediaSettingsStatusTimer);
-  if (booksSettingsStatusTimer) clearTimeout(booksSettingsStatusTimer);
-  if (tabsSettingsStatusTimer) clearTimeout(tabsSettingsStatusTimer);
+  if (mediaStatusTimer.value) clearTimeout(mediaStatusTimer.value);
+  if (booksStatusTimer.value) clearTimeout(booksStatusTimer.value);
+  if (tabsStatusTimerRef.value) clearTimeout(tabsStatusTimerRef.value);
   appView.hidden = true;
   settingsView.hidden = false;
 }
@@ -507,12 +496,12 @@ async function persistSection(section: KeepSection): Promise<boolean> {
         : { tabsEnabled: keepTabsEnabledEl.checked, tabsNoteUrl: keepTabsUrlEl.value };
   try {
     const response = await sendToBackground({ action: "setKeepSettings", settings });
-    if (response?.ok && "settings" in response) {
+    if (response.ok && "settings" in response) {
       keepSettings = response.settings;
       renderKeepStatus();
       return true;
     }
-    show(response?.error ?? "Could not save settings.", true);
+    show(!response.ok ? response.error : "Could not save settings.", true);
     return false;
   } catch (err) {
     show(err instanceof Error ? err.message : "Could not save settings.", true);
@@ -543,11 +532,12 @@ async function testKeep(target: KeepSection): Promise<void> {
   show("Adding test line to Keep…", false, 8000);
   try {
     const response = await sendToBackground({ action: "testKeepAppend", target });
-    if (!response?.ok || !("keep" in response)) {
-      show(response?.error ?? "Keep test failed.", true, 8000);
+    if (!response.ok || !("keep" in response)) {
+      show(!response.ok ? response.error : "Keep test failed.", true, 8000);
       return;
     }
     const keep = response.keep;
+    if (!keep) { show("Keep test failed.", true, 8000); return; }
     if (keep.status === "missing_config") { show(keep.error ?? "Link the Keep note URL first.", true, 8000); return; }
     if (keep.status === "synced") { show(`Test line added to Keep (${target}).`, false, 8000); return; }
     if (keep.status === "duplicate") { show(`Test line already in Keep (${target}).`, false, 8000); return; }

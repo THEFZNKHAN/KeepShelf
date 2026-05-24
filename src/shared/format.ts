@@ -26,7 +26,7 @@ function formatRatingLabel(item: SavedItem): string | undefined {
 
 export { formatRatingLabel, formatBookTitlePart };
 
-function formatDurationOrSeasons(value: string): string {
+export function formatDurationOrSeasons(value: string): string {
   const seasonMatch = value.match(/^(\d+)\s*seasons?$/i);
   if (seasonMatch) {
     return `S${seasonMatch[1].padStart(2, "0")}`;

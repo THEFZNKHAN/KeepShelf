@@ -224,8 +224,7 @@ async function publishKeepResult(result: KeepSyncResult): Promise<void> {
   }
   if (result.status === "failed") {
     await storeLastResult(result.error ?? "Could not add to Keep.", true);
-  }
-  if (result.status === "missing_config") {
+  } else if (result.status === "missing_config") {
     await storeLastResult(
       result.error ?? "Link your Keep note in Settings.",
       true

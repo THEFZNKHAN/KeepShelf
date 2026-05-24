@@ -27,7 +27,8 @@ export function parseImdbPage(doc: Document): ParsedMedia | null {
 
 function findMainEntity(doc: Document): ParsedMedia | null {
   for (const block of readJsonLd(doc)) {
-    const work = pickCreativeWork(block);
+    if (typeof block !== "object" || block === null) continue;
+    const work = pickCreativeWork(block as Record<string, unknown>);
     if (work) return mapCreativeWork(work, doc);
   }
   return null;
