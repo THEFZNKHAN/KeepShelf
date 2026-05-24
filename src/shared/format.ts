@@ -68,7 +68,8 @@ export function formatItemLine(item: SavedItem): string {
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);
 
-  return parts.join(" | ");
+  const line = parts.join(" | ");
+  return item.type === "anime" ? `${line} (A)` : line;
 }
 
 export function formatItemsList(items: SavedItem[]): string {
