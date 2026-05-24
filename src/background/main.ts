@@ -3,7 +3,7 @@ import {
   getKeepSettings,
   setKeepSettings,
 } from "../shared/keep-settings.js";
-import { syncItemToKeep, testKeepAppend, getLastKeepResult } from "../shared/keep-sync.js";
+import { syncItemToKeep, testKeepAppend, getLastKeepResult, clearLastKeepResult } from "../shared/keep-sync.js";
 import type { MessageAction, MessageResponse } from "../shared/types.js";
 
 chrome.runtime.onMessage.addListener(
@@ -77,6 +77,7 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "getLastKeepResult": {
       const lastKeepResult = await getLastKeepResult();
+      await clearLastKeepResult();
       return { ok: true, lastKeepResult };
     }
     default:

@@ -50,6 +50,7 @@ const confirmCancelEl = document.getElementById("confirm-cancel") as HTMLButtonE
 const itemTooltipEl = document.getElementById("item-tooltip")!;
 const mainEl = document.getElementById("main")!;
 const shelfTabsEl = document.getElementById("shelf-tabs")!;
+const savePageBtnEl = document.getElementById("save-page") as HTMLButtonElement;
 const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
 
 let confirmResolve: ((value: boolean) => void) | undefined;
@@ -342,8 +343,7 @@ function render(): void {
   filtersEl.hidden = activeTab !== "media";
   tabsInputRowEl.hidden = activeTab !== "tabs";
 
-  const savePageBtn = document.getElementById("save-page")!;
-  savePageBtn.textContent =
+  savePageBtnEl.textContent =
     activeTab === "books" ? "Save book" :
     activeTab === "tabs" ? "Save tab" :
     "Save media";
@@ -484,7 +484,7 @@ async function loadKeepSettings(): Promise<void> {
     if (last?.ok && "lastKeepResult" in last && last.lastKeepResult) {
       const age = Date.now() - last.lastKeepResult.at;
       if (age < 5 * 60 * 1000) {
-        showStatus(last.lastKeepResult.message, last.lastKeepResult.isError, 8000);
+        showStatus(last.lastKeepResult.message, last.lastKeepResult.isError, 2000);
       }
     }
   } catch (err) {
@@ -576,51 +576,65 @@ async function copyToClipboard(items: SavedItem[]): Promise<void> {
   showStatus(`Copied ${items.length} item${items.length === 1 ? "" : "s"}.`);
 }
 
+function setSaveButtonBusy(busy: boolean): void {
+  savePageBtnEl.disabled = busy;
+  savePageBtnEl.textContent = busy
+    ? "Saving…"
+    : activeTab === "books" ? "Save book"
+    : activeTab === "tabs" ? "Save tab"
+    : "Save media";
+}
+
 async function saveCurrentPage(): Promise<void> {
-  let tab: chrome.tabs.Tab | undefined;
+  setSaveButtonBusy(true);
   try {
-    [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  } catch {
-    showStatus("Cannot access the current tab.", true);
-    return;
-  }
+    let tab: chrome.tabs.Tab | undefined;
+    try {
+      [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    } catch {
+      showStatus("Cannot access the current tab.", true);
+      return;
+    }
 
-  if (!tab?.id) {
-    showStatus("Cannot access the current tab.", true);
-    return;
-  }
+    if (!tab?.id) {
+      showStatus("Cannot access the current tab.", true);
+      return;
+    }
 
-  let pageResponse: { item: Omit<SavedItem, "id" | "savedAt"> | null } | undefined;
-  try {
-    pageResponse = await chrome.tabs.sendMessage(tab.id, { action: "getPageData" });
-  } catch {
-    showStatus("This page is not supported.", true);
-    return;
-  }
+    let pageResponse: { item: Omit<SavedItem, "id" | "savedAt"> | null } | undefined;
+    try {
+      pageResponse = await chrome.tabs.sendMessage(tab.id, { action: "getPageData" });
+    } catch {
+      showStatus("This page is not supported.", true);
+      return;
+    }
 
-  if (!pageResponse?.item) {
-    showStatus("Nothing detected on this page.", true);
-    return;
-  }
+    if (!pageResponse?.item) {
+      showStatus("Nothing detected on this page.", true);
+      return;
+    }
 
-  let saveResponse;
-  try {
-    saveResponse = await sendToBackground({ action: "save", item: pageResponse.item });
-  } catch (err) {
-    showStatus(err instanceof Error ? err.message : "Failed to save.", true);
-    return;
-  }
+    let saveResponse;
+    try {
+      saveResponse = await sendToBackground({ action: "save", item: pageResponse.item });
+    } catch (err) {
+      showStatus(err instanceof Error ? err.message : "Failed to save.", true);
+      return;
+    }
 
-  if (!saveResponse?.ok) {
-    showStatus(saveResponse?.error ?? "Failed to save.", true);
-    return;
-  }
+    if (!saveResponse?.ok) {
+      showStatus(saveResponse?.error ?? "Failed to save.", true);
+      return;
+    }
 
-  if ("duplicate" in saveResponse && saveResponse.duplicate) {
-    showStatus("Already saved.");
-  } else {
-    showStatus("Saved!");
-    await loadItems();
+    if ("duplicate" in saveResponse && saveResponse.duplicate) {
+      showStatus("Already saved.");
+    } else {
+      showStatus("Saved!");
+      await loadItems();
+    }
+  } finally {
+    setSaveButtonBusy(false);
   }
 }
 

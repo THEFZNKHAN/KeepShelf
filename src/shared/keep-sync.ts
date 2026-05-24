@@ -244,6 +244,10 @@ export async function getLastKeepResult(): Promise<{
   return raw ?? null;
 }
 
+export async function clearLastKeepResult(): Promise<void> {
+  await chrome.storage.local.remove(LAST_RESULT_KEY);
+}
+
 export async function syncItemToKeep(
   item: SavedItem
 ): Promise<KeepSyncResult> {
