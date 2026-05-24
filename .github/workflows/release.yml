@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate icons
+        run: |
+          pip install pillow --quiet
+          node scripts/generate-icons.mjs
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package extension ZIP
+        run: |
+          zip -r KeepShelf-${{ github.ref_name }}.zip \
+            manifest.json \
+            dist/ \
+            icons/ \
+            README.md \
+            LICENSE
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "KeepShelf ${{ github.ref_name }}"
+          files: KeepShelf-${{ github.ref_name }}.zip
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            > No Node.js or Git required. Just download, extract, and load.
+
+            1. Download **KeepShelf-${{ github.ref_name }}.zip** from the assets below.
+            2. Extract the ZIP to any permanent folder on your computer.
+            3. Open **chrome://extensions** in Chrome.
+            4. Enable **Developer mode** (toggle in the top-right corner).
+            5. Click **Load unpacked** and select the extracted folder.
+            6. Pin KeepShelf to your toolbar.
+
+            See the [full README](https://github.com/${{ github.repository }}#-quick-start) for usage instructions and Google Keep sync setup.
