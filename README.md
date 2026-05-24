@@ -72,7 +72,7 @@
 - [Google Keep sync](#-google-keep-sync)
 - [Privacy and data](#-privacy-and-data)
 - [Permissions explained](#-permissions-explained)
-- [Development](#-development)
+- [Development](DEVELOPER.md)
 - [FAQ](#-faq)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
@@ -493,61 +493,14 @@ Uninstalling the extension removes all local shelf data. Your Google Keep notes 
 
 ## 🛠 Development
 
-### Stack
+| Command | Purpose |
+|---------|---------|
+| `npm run build` | Compile TypeScript into `dist/` |
+| `npm run watch` | Rebuild on every file save |
+| `npm test` | Run parser and format tests |
+| `npx tsc --noEmit` | Type-check without building |
 
-| Layer | Technology |
-|-------|-----------|
-| Language | TypeScript 5 (strict mode) |
-| Bundler | esbuild, producing three IIFE bundles (`content.js`, `background.js`, `popup.js`) |
-| Tests | Node's built-in `node:test` runner + jsdom, no test framework dependency |
-| Extension API | Chrome Manifest V3 |
-
-### Commands
-
-```bash
-npm run build   # Compile TypeScript → dist/
-npm run watch   # Rebuild on file changes
-npm test        # Run parser and format tests against HTML fixtures
-```
-
-### Project structure
-
-```
-KeepShelf/
-├── src/
-│   ├── background/        # Service worker: storage CRUD, Keep sync, message routing
-│   ├── content/           # Per-site content scripts and page-data router
-│   ├── popup/             # Shelf UI, settings overlay, tab/link/note input
-│   └── shared/            # Parsers, formatters, Keep sync, storage, types
-├── tests/
-│   ├── fixtures/          # Saved HTML page snapshots for offline parser tests
-│   └── *.test.mjs         # Parser, format, year, book, and site-specific tests
-├── icons/                 # Extension icons (generated from icon.png)
-├── scripts/
-│   ├── build.mjs          # esbuild bundler config
-│   ├── build-test-parser.mjs  # Builds ESM bundles for node:test
-│   └── generate-icons.mjs    # Creates icon16/32/48/128.png via Python/PIL
-├── dist/                  # Built extension output (loaded by manifest.json)
-└── manifest.json          # Chrome MV3 manifest
-```
-
-### Regenerate icons
-
-After replacing `icons/icon.png`:
-
-```bash
-node scripts/generate-icons.mjs
-```
-
-Requires Python 3 with Pillow (`pip install pillow`).
-
-### Adding a new parser source
-
-1. Add a `shared/mysource.ts` with `isMysourcePage()` and `parseMysourcePage()`.
-2. Add a `content/mysource.ts` with `init`, `teardown`, and `getReadyToSave`.
-3. Import and wire both in `content/main.ts`.
-4. Add the host to `manifest.json` under `host_permissions` and `content_scripts`.
-5. Add a fixture HTML file and a `tests/mysource.test.mjs` to keep it regression-tested.
+For the full developer guide, including local setup, icon generation, adding a new parser source, and publishing a release, see [DEVELOPER.md](DEVELOPER.md).
 
 ---
 
