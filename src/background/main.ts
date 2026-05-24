@@ -28,6 +28,29 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       const keep = await syncItemToKeep(item);
       return { ok: true, item, duplicate, keep };
     }
+    case "saveTab": {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (
+        !tab?.url ||
+        tab.url.startsWith("chrome://") ||
+        tab.url.startsWith("chrome-extension://") ||
+        tab.url.startsWith("edge://") ||
+        tab.url.startsWith("about:")
+      ) {
+        return { ok: false, error: "Cannot save this page. Open a regular website first." };
+      }
+      const title = tab.title?.trim() || "Untitled tab";
+      const { item, duplicate } = await saveItem({
+        type: "tab",
+        title,
+        url: tab.url,
+        sourceUrl: tab.url,
+        googleQuery: tab.url,
+        subtitle: tab.url,
+      });
+      const keep = await syncItemToKeep(item);
+      return { ok: true, item, duplicate, keep };
+    }
     case "getAll": {
       const items = await getAllItems();
       return { ok: true, items };

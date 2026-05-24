@@ -3,3 +3,5 @@ dist/
 dist-test/
 *.log
 tests/
+
+KeepTab-main/

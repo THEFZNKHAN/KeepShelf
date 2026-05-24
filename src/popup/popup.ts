@@ -6,10 +6,12 @@ import type { MediaType, SavedItem } from "../shared/types.js";
 
 let allItems: SavedItem[] = [];
 let activeFilter: MediaType | "all" = "all";
-let activeTab: "media" | "books" = "media";
-let keepSettings: KeepSettings = { enabled: false };
+let activeTab: "media" | "books" | "tabs" = "media";
+let keepSettings: KeepSettings = { mediaEnabled: false, booksEnabled: false, tabsEnabled: false };
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
-let settingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
+let mediaSettingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
+let booksSettingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
+let tabsSettingsStatusTimer: ReturnType<typeof setTimeout> | undefined;
 
 const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
@@ -23,14 +25,26 @@ const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
 const filtersEl = document.getElementById("filters")!;
-const keepEnabledEl = document.getElementById("keep-enabled") as HTMLInputElement;
+const tabsInputRowEl = document.getElementById("tabs-input-row")!;
+const tabInputEl = document.getElementById("tab-input") as HTMLInputElement;
+const keepMediaEnabledEl = document.getElementById("keep-media-enabled") as HTMLInputElement;
+const keepBooksEnabledEl = document.getElementById("keep-books-enabled") as HTMLInputElement;
+const keepTabsEnabledEl = document.getElementById("keep-tabs-enabled") as HTMLInputElement;
 const keepMediaUrlEl = document.getElementById("keep-media-url") as HTMLInputElement;
 const keepBooksUrlEl = document.getElementById("keep-books-url") as HTMLInputElement;
+const keepTabsUrlEl = document.getElementById("keep-tabs-url") as HTMLInputElement;
 const keepMediaStatusEl = document.getElementById("keep-media-status")!;
 const keepBooksStatusEl = document.getElementById("keep-books-status")!;
-const settingsStatusEl = document.getElementById("settings-status")!;
-const settingsStatusTextEl = document.getElementById("settings-status-text")!;
-const settingsStatusIconEl = document.getElementById("settings-status-icon")!;
+const keepTabsStatusEl = document.getElementById("keep-tabs-status")!;
+const mediaSettingsStatusEl = document.getElementById("media-settings-status")!;
+const mediaSettingsStatusTextEl = document.getElementById("media-settings-status-text")!;
+const mediaSettingsStatusIconEl = document.getElementById("media-settings-status-icon")!;
+const booksSettingsStatusEl = document.getElementById("books-settings-status")!;
+const booksSettingsStatusTextEl = document.getElementById("books-settings-status-text")!;
+const booksSettingsStatusIconEl = document.getElementById("books-settings-status-icon")!;
+const tabsSettingsStatusEl = document.getElementById("tabs-settings-status")!;
+const tabsSettingsStatusTextEl = document.getElementById("tabs-settings-status-text")!;
+const tabsSettingsStatusIconEl = document.getElementById("tabs-settings-status-icon")!;
 const confirmDialogEl = document.getElementById("confirm-dialog")!;
 const confirmTitleEl = document.getElementById("confirm-title")!;
 const confirmMessageEl = document.getElementById("confirm-message")!;
@@ -42,6 +56,15 @@ const shelfTabsEl = document.getElementById("shelf-tabs")!;
 const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
 
 let confirmResolve: ((value: boolean) => void) | undefined;
+
+function isValidUrl(value: string): boolean {
+  try {
+    const p = new URL(value.trim());
+    return p.protocol === "http:" || p.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function isTextTruncated(el: HTMLElement): boolean {
   return el.scrollWidth > el.clientWidth;
@@ -78,26 +101,26 @@ function hideItemTooltip(): void {
 mainEl.addEventListener("scroll", hideItemTooltip, { passive: true });
 
 function tabItems(): SavedItem[] {
-  return activeTab === "books"
-    ? allItems.filter((i) => i.type === "book")
-    : allItems.filter((i) => i.type !== "book");
+  if (activeTab === "books") return allItems.filter((i) => i.type === "book");
+  if (activeTab === "tabs") return allItems.filter((i) => i.type === "tab" || i.type === "link" || i.type === "note");
+  return allItems.filter((i) => i.type !== "book" && i.type !== "tab" && i.type !== "link" && i.type !== "note");
 }
 
 function filteredItems(): SavedItem[] {
   const base = tabItems();
-  if (activeTab === "books") return base;
+  if (activeTab !== "media") return base;
   if (activeFilter === "all") return base;
   return base.filter((i) => i.type === activeFilter);
 }
 
 function typeIcon(type: MediaType): string {
   switch (type) {
-    case "book":
-      return "menu_book";
-    case "series":
-      return "live_tv";
-    default:
-      return "movie";
+    case "book": return "menu_book";
+    case "series": return "live_tv";
+    case "tab": return "tab";
+    case "link": return "link";
+    case "note": return "sticky_note_2";
+    default: return "movie";
   }
 }
 
@@ -121,6 +144,9 @@ function createTypeIconEl(type: MediaType): HTMLElement {
 }
 
 function typeLabel(type: MediaType): string {
+  if (type === "tab") return "Tab";
+  if (type === "link") return "Link";
+  if (type === "note") return "Note";
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -134,6 +160,7 @@ function formatSeason(value: string): string {
 
 function itemTitle(item: SavedItem): string {
   if (item.type === "book") return formatBookTitlePart(item);
+  if (item.type === "note") return (item.body ?? item.title).trim();
   return item.year ? `${item.title} (${item.year})` : item.title;
 }
 
@@ -145,6 +172,14 @@ function itemSubtitle(item: SavedItem): string {
     const rating = formatRatingLabel(item);
     if (rating) parts.push(rating);
     return parts.join(" | ");
+  }
+
+  if (item.type === "tab" || item.type === "link") {
+    return item.url ?? "";
+  }
+
+  if (item.type === "note") {
+    return "";
   }
 
   const parts: string[] = [];
@@ -195,24 +230,44 @@ function showConfirm(options: {
   });
 }
 
-function showSettingsStatus(
+function showSectionStatus(
+  el: HTMLElement,
+  textEl: HTMLElement,
+  iconEl: HTMLElement,
+  timerRef: { value: ReturnType<typeof setTimeout> | undefined },
   message: string,
   isError = false,
   durationMs = 3500
 ): void {
-  if (settingsStatusTimer) clearTimeout(settingsStatusTimer);
-  settingsStatusTextEl.textContent = message;
-  settingsStatusIconEl.textContent = isError ? "error" : "check_circle";
-  settingsStatusEl.hidden = false;
-  settingsStatusEl.classList.toggle("error", isError);
-  settingsStatusTimer = setTimeout(() => {
-    settingsStatusEl.hidden = true;
-  }, durationMs);
+  if (timerRef.value) clearTimeout(timerRef.value);
+  textEl.textContent = message;
+  iconEl.textContent = isError ? "error" : "check_circle";
+  el.hidden = false;
+  el.classList.toggle("error", isError);
+  timerRef.value = setTimeout(() => { el.hidden = true; }, durationMs);
+}
+
+const mediaStatusTimer = { value: mediaSettingsStatusTimer };
+const booksStatusTimer = { value: booksSettingsStatusTimer };
+const tabsStatusTimerRef = { value: tabsSettingsStatusTimer };
+
+function showMediaStatus(msg: string, err = false, ms = 3500): void {
+  showSectionStatus(mediaSettingsStatusEl, mediaSettingsStatusTextEl, mediaSettingsStatusIconEl, mediaStatusTimer, msg, err, ms);
+}
+function showBooksStatus(msg: string, err = false, ms = 3500): void {
+  showSectionStatus(booksSettingsStatusEl, booksSettingsStatusTextEl, booksSettingsStatusIconEl, booksStatusTimer, msg, err, ms);
+}
+function showTabsSectionStatus(msg: string, err = false, ms = 3500): void {
+  showSectionStatus(tabsSettingsStatusEl, tabsSettingsStatusTextEl, tabsSettingsStatusIconEl, tabsStatusTimerRef, msg, err, ms);
 }
 
 function openSettings(): void {
-  settingsStatusEl.hidden = true;
-  if (settingsStatusTimer) clearTimeout(settingsStatusTimer);
+  mediaSettingsStatusEl.hidden = true;
+  booksSettingsStatusEl.hidden = true;
+  tabsSettingsStatusEl.hidden = true;
+  if (mediaSettingsStatusTimer) clearTimeout(mediaSettingsStatusTimer);
+  if (booksSettingsStatusTimer) clearTimeout(booksSettingsStatusTimer);
+  if (tabsSettingsStatusTimer) clearTimeout(tabsSettingsStatusTimer);
   appView.hidden = true;
   settingsView.hidden = false;
 }
@@ -239,6 +294,24 @@ function updateEmptyState(): void {
       <div class="source-chip">
         <span class="material-symbols-outlined">travel_explore</span>
         Google Search
+      </div>
+    `;
+  } else if (activeTab === "tabs") {
+    emptyHeadingEl.textContent = "No tabs saved yet";
+    emptyBodyEl.innerHTML =
+      "Paste a URL or write a note in the box above, or click <strong>Save this tab</strong> to save the current page.";
+    emptyHintsEl.innerHTML = `
+      <div class="source-chip">
+        <span class="material-symbols-outlined">tab</span>
+        Save this tab
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">link</span>
+        Paste a link
+      </div>
+      <div class="source-chip">
+        <span class="material-symbols-outlined">sticky_note_2</span>
+        Write a note
       </div>
     `;
   } else {
@@ -277,7 +350,14 @@ function render(): void {
   countEl.textContent = `${tabCount} saved`;
   listEl.innerHTML = "";
 
-  filtersEl.hidden = activeTab === "books";
+  filtersEl.hidden = activeTab !== "media";
+  tabsInputRowEl.hidden = activeTab !== "tabs";
+
+  const savePageBtn = document.getElementById("save-page")!;
+  savePageBtn.textContent =
+    activeTab === "books" ? "Save book" :
+    activeTab === "tabs" ? "Save tab" :
+    "Save media";
 
   const showGlobalEmpty = tabCount === 0;
   const showFilterEmpty = tabCount > 0 && items.length === 0;
@@ -314,25 +394,32 @@ function render(): void {
     title.className = "item-title";
     title.textContent = itemTitle(item);
 
-    const subtitle = document.createElement("p");
-    subtitle.className = "item-subtitle";
-    subtitle.textContent = itemSubtitle(item);
+    body.append(title);
 
-    body.append(title, subtitle);
+    const subtitleText = itemSubtitle(item);
+    if (subtitleText) {
+      const subtitle = document.createElement("p");
+      subtitle.className = "item-subtitle";
+      subtitle.textContent = subtitleText;
+
+      subtitle.addEventListener("mouseenter", () => {
+        if (!isTextTruncated(subtitle)) return;
+        showItemTooltip(formatItemLine(item), li);
+      });
+      subtitle.addEventListener("mouseleave", hideItemTooltip);
+
+      body.append(subtitle);
+    }
+
     li.append(typeIconEl, body, checkbox);
 
     const fullLine = formatItemLine(item);
 
-    const showFullLineTooltip = (): void => {
-      if (!isTextTruncated(title) && !isTextTruncated(subtitle)) return;
+    title.addEventListener("mouseenter", () => {
+      if (!isTextTruncated(title)) return;
       showItemTooltip(fullLine, li);
-    };
-
-    title.addEventListener("mouseenter", showFullLineTooltip);
-    subtitle.addEventListener("mouseenter", showFullLineTooltip);
+    });
     title.addEventListener("mouseleave", hideItemTooltip);
-    subtitle.addEventListener("mouseleave", hideItemTooltip);
-
     li.addEventListener("mouseleave", hideItemTooltip);
 
     li.addEventListener("click", (e) => {
@@ -359,30 +446,28 @@ async function loadItems(): Promise<void> {
   render();
 }
 
+function linkedText(noteId: string | undefined, noteUrl: string | undefined): string {
+  if (isLikelyValidKeepNoteId(noteId)) return "Linked";
+  if (noteUrl) return "URL looks incomplete. Paste the full Keep link.";
+  return "Not linked";
+}
+
 function renderKeepStatus(): void {
-  keepEnabledEl.checked = keepSettings.enabled;
+  keepMediaEnabledEl.checked = keepSettings.mediaEnabled;
+  keepBooksEnabledEl.checked = keepSettings.booksEnabled;
+  keepTabsEnabledEl.checked = keepSettings.tabsEnabled;
   keepMediaUrlEl.value = keepSettings.mediaNoteUrl ?? "";
   keepBooksUrlEl.value = keepSettings.booksNoteUrl ?? "";
+  keepTabsUrlEl.value = keepSettings.tabsNoteUrl ?? "";
 
-  keepMediaStatusEl.textContent = isLikelyValidKeepNoteId(keepSettings.mediaNoteId)
-    ? "Linked"
-    : keepSettings.mediaNoteUrl
-      ? "URL looks incomplete. Paste the full Keep link."
-      : "Not linked";
-  keepMediaStatusEl.classList.toggle(
-    "linked",
-    isLikelyValidKeepNoteId(keepSettings.mediaNoteId)
-  );
+  keepMediaStatusEl.textContent = linkedText(keepSettings.mediaNoteId, keepSettings.mediaNoteUrl);
+  keepMediaStatusEl.classList.toggle("linked", isLikelyValidKeepNoteId(keepSettings.mediaNoteId));
 
-  keepBooksStatusEl.textContent = isLikelyValidKeepNoteId(keepSettings.booksNoteId)
-    ? "Linked"
-    : keepSettings.booksNoteUrl
-      ? "URL looks incomplete. Paste the full Keep link."
-      : "Not linked";
-  keepBooksStatusEl.classList.toggle(
-    "linked",
-    isLikelyValidKeepNoteId(keepSettings.booksNoteId)
-  );
+  keepBooksStatusEl.textContent = linkedText(keepSettings.booksNoteId, keepSettings.booksNoteUrl);
+  keepBooksStatusEl.classList.toggle("linked", isLikelyValidKeepNoteId(keepSettings.booksNoteId));
+
+  keepTabsStatusEl.textContent = linkedText(keepSettings.tabsNoteId, keepSettings.tabsNoteUrl);
+  keepTabsStatusEl.classList.toggle("linked", isLikelyValidKeepNoteId(keepSettings.tabsNoteId));
 }
 
 async function loadKeepSettings(): Promise<void> {
@@ -392,7 +477,6 @@ async function loadKeepSettings(): Promise<void> {
       keepSettings = response.settings;
       renderKeepStatus();
     }
-
     const last = await sendToBackground({ action: "getLastKeepResult" });
     if (last?.ok && "lastKeepResult" in last && last.lastKeepResult) {
       const age = Date.now() - last.lastKeepResult.at;
@@ -401,89 +485,75 @@ async function loadKeepSettings(): Promise<void> {
       }
     }
   } catch (err) {
-    showStatus(
-      err instanceof Error ? err.message : "Could not load Keep settings.",
-      true
-    );
+    showStatus(err instanceof Error ? err.message : "Could not load Keep settings.", true);
   }
 }
 
-async function persistKeepSettings(): Promise<boolean> {
+type KeepSection = "media" | "books" | "tabs";
+
+function sectionShowFn(section: KeepSection) {
+  if (section === "media") return showMediaStatus;
+  if (section === "books") return showBooksStatus;
+  return showTabsSectionStatus;
+}
+
+async function persistSection(section: KeepSection): Promise<boolean> {
+  const show = sectionShowFn(section);
+  const settings =
+    section === "media"
+      ? { mediaEnabled: keepMediaEnabledEl.checked, mediaNoteUrl: keepMediaUrlEl.value }
+      : section === "books"
+        ? { booksEnabled: keepBooksEnabledEl.checked, booksNoteUrl: keepBooksUrlEl.value }
+        : { tabsEnabled: keepTabsEnabledEl.checked, tabsNoteUrl: keepTabsUrlEl.value };
   try {
-    const response = await sendToBackground({
-      action: "setKeepSettings",
-      settings: {
-        enabled: keepEnabledEl.checked,
-        mediaNoteUrl: keepMediaUrlEl.value,
-        booksNoteUrl: keepBooksUrlEl.value,
-      },
-    });
+    const response = await sendToBackground({ action: "setKeepSettings", settings });
     if (response?.ok && "settings" in response) {
       keepSettings = response.settings;
       renderKeepStatus();
       return true;
     }
-    showSettingsStatus(
-      response?.error ?? "Could not save Keep settings.",
-      true
-    );
+    show(response?.error ?? "Could not save settings.", true);
     return false;
   } catch (err) {
-    showSettingsStatus(
-      err instanceof Error ? err.message : "Could not save Keep settings.",
-      true
-    );
+    show(err instanceof Error ? err.message : "Could not save settings.", true);
     return false;
   }
 }
 
-async function saveKeepSettings(): Promise<void> {
-  const saved = await persistKeepSettings();
-  if (!saved) return;
-
-  closeSettings();
-  showStatus("Keep settings saved.");
+async function saveSection(section: KeepSection): Promise<void> {
+  const saved = await persistSection(section);
+  if (saved) showStatus(`${section.charAt(0).toUpperCase() + section.slice(1)} Keep settings saved.`);
 }
 
-async function testKeep(target: "media" | "books"): Promise<void> {
-  const saved = await persistKeepSettings();
+async function testKeep(target: KeepSection): Promise<void> {
+  const show = sectionShowFn(target);
+  const saved = await persistSection(target);
   if (!saved) return;
 
   const noteId =
-    target === "books" ? keepSettings.booksNoteId : keepSettings.mediaNoteId;
+    target === "books" ? keepSettings.booksNoteId
+    : target === "tabs" ? keepSettings.tabsNoteId
+    : keepSettings.mediaNoteId;
+
   if (!isLikelyValidKeepNoteId(noteId)) {
-    showSettingsStatus(
-      "Paste the full Keep list URL from your browser (the long #LIST/… link).",
-      true,
-      8000
-    );
+    show("Paste the full Keep list URL from your browser (the long #LIST/… link).", true, 8000);
     return;
   }
 
-  showSettingsStatus("Adding test line to Keep…", false, 8000);
+  show("Adding test line to Keep…", false, 8000);
   try {
     const response = await sendToBackground({ action: "testKeepAppend", target });
     if (!response?.ok || !("keep" in response)) {
-      showSettingsStatus(response?.error ?? "Keep test failed.", true, 8000);
+      show(response?.error ?? "Keep test failed.", true, 8000);
       return;
     }
-
     const keep = response.keep;
-    if (keep.status === "missing_config") {
-      showSettingsStatus(keep.error ?? "Link the Keep note URL first.", true, 8000);
-      return;
-    }
-    if (keep.status === "synced") {
-      showSettingsStatus(`Test line added to Keep (${target}).`, false, 8000);
-      return;
-    }
-    if (keep.status === "duplicate") {
-      showSettingsStatus(`Test line already exists in Keep (${target}).`, false, 8000);
-      return;
-    }
-    showSettingsStatus(keep.error ?? "Keep test failed.", true, 8000);
+    if (keep.status === "missing_config") { show(keep.error ?? "Link the Keep note URL first.", true, 8000); return; }
+    if (keep.status === "synced") { show(`Test line added to Keep (${target}).`, false, 8000); return; }
+    if (keep.status === "duplicate") { show(`Test line already in Keep (${target}).`, false, 8000); return; }
+    show(keep.error ?? "Keep test failed.", true, 8000);
   } catch (err) {
-    showSettingsStatus(err instanceof Error ? err.message : "Keep test failed.", true, 8000);
+    show(err instanceof Error ? err.message : "Keep test failed.", true, 8000);
   }
 }
 
@@ -550,10 +620,72 @@ async function saveCurrentPage(): Promise<void> {
   }
 }
 
+async function saveTabInput(): Promise<void> {
+  const value = tabInputEl.value.trim();
+  if (!value) {
+    showStatus("Type a URL or note first.", true);
+    tabInputEl.focus();
+    return;
+  }
+
+  const item: Omit<SavedItem, "id" | "savedAt"> = isValidUrl(value)
+    ? {
+        type: "link",
+        title: new URL(value).hostname.replace(/^www\./, ""),
+        url: value,
+        sourceUrl: value,
+        googleQuery: value,
+        subtitle: value,
+      }
+    : {
+        type: "note",
+        title: value.length > 60 ? value.slice(0, 59) + "…" : value,
+        body: value,
+        sourceUrl: "",
+        googleQuery: value,
+        subtitle: value,
+      };
+
+  try {
+    const response = await sendToBackground({ action: "save", item });
+    if (!response?.ok) {
+      showStatus(response?.error ?? "Failed to save.", true);
+      return;
+    }
+    if ("duplicate" in response && response.duplicate) {
+      showStatus("Already saved.");
+    } else {
+      showStatus("Saved!");
+      tabInputEl.value = "";
+      await loadItems();
+    }
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Failed to save.", true);
+  }
+}
+
+async function saveCurrentTab(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "saveTab" });
+    if (!response?.ok) {
+      showStatus(response?.error ?? "Failed to save tab.", true);
+      return;
+    }
+    if ("duplicate" in response && response.duplicate) {
+      showStatus("Tab already saved.");
+    } else {
+      showStatus("Tab saved!");
+      await loadItems();
+    }
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Failed to save tab.", true);
+  }
+}
+
 shelfTabsEl.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".shelf-tab");
   if (!btn) return;
-  const tab = btn.dataset.tab as "media" | "books" | undefined;
+  const tab = btn.dataset.tab as "media" | "books" | "tabs" | undefined;
   if (!tab || tab === activeTab) return;
   activeTab = tab;
   activeFilter = "all";
@@ -563,6 +695,7 @@ shelfTabsEl.addEventListener("click", (e) => {
   filtersEl.querySelectorAll(".filter").forEach((f) => {
     f.classList.toggle("active", (f as HTMLElement).dataset.filter === "all");
   });
+  tabInputEl.value = "";
   render();
 });
 
@@ -578,6 +711,18 @@ filtersEl.addEventListener("click", (e) => {
 
 document.getElementById("save-page")!.addEventListener("click", () => {
   void saveCurrentPage();
+});
+
+document.getElementById("tab-input-save")!.addEventListener("click", () => {
+  void saveTabInput();
+});
+
+tabInputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") void saveTabInput();
+});
+
+document.getElementById("tab-save-tab")!.addEventListener("click", () => {
+  void saveCurrentTab();
 });
 
 document.getElementById("copy-all")!.addEventListener("click", () => {
@@ -651,17 +796,12 @@ document.getElementById("status-close")!.addEventListener("click", () => {
   if (statusTimer) clearTimeout(statusTimer);
 });
 
-document.getElementById("keep-save-settings")!.addEventListener("click", () => {
-  void saveKeepSettings();
-});
-
-document.getElementById("keep-test-media")!.addEventListener("click", () => {
-  void testKeep("media");
-});
-
-document.getElementById("keep-test-books")!.addEventListener("click", () => {
-  void testKeep("books");
-});
+document.getElementById("keep-save-media")!.addEventListener("click", () => { void saveSection("media"); });
+document.getElementById("keep-save-books")!.addEventListener("click", () => { void saveSection("books"); });
+document.getElementById("keep-save-tabs")!.addEventListener("click", () => { void saveSection("tabs"); });
+document.getElementById("keep-test-media")!.addEventListener("click", () => { void testKeep("media"); });
+document.getElementById("keep-test-books")!.addEventListener("click", () => { void testKeep("books"); });
+document.getElementById("keep-test-tabs")!.addEventListener("click", () => { void testKeep("tabs"); });
 
 void loadItems();
 void loadKeepSettings();

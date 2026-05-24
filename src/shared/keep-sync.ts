@@ -214,7 +214,7 @@ export async function appendToKeepList(options: {
 
 async function publishKeepResult(result: KeepSyncResult): Promise<void> {
   if (result.status === "synced") {
-    const label = result.target === "books" ? "Books" : "Media";
+    const label = result.target === "books" ? "Books" : result.target === "tabs" ? "Tabs" : "Media";
     await storeLastResult(`Added to Keep (${label})`, false);
     return;
   }
@@ -249,13 +249,17 @@ export async function syncItemToKeep(
   item: SavedItem
 ): Promise<KeepSyncResult> {
   const settings = await getKeepSettings();
-  if (!settings.enabled) {
-    return { status: "disabled" };
-  }
+
+  const isTabType = item.type === "tab" || item.type === "link" || item.type === "note";
+  const isBook = item.type === "book";
+  if (isTabType && !settings.tabsEnabled) return { status: "disabled" };
+  if (isBook && !settings.booksEnabled) return { status: "disabled" };
+  if (!isTabType && !isBook && !settings.mediaEnabled) return { status: "disabled" };
 
   const target = getKeepTargetForItem(item, settings);
   if (!target) {
-    const keepTarget: KeepTarget = item.type === "book" ? "books" : "media";
+    const keepTarget: KeepTarget =
+      item.type === "book" ? "books" : isTabType ? "tabs" : "media";
     return {
       status: "missing_config",
       target: keepTarget,
@@ -296,7 +300,9 @@ export async function testKeepAppend(
   const noteTarget =
     target === "books"
       ? getKeepTargetForItem({ type: "book" }, settings)
-      : getKeepTargetForItem({ type: "movie" }, settings);
+      : target === "tabs"
+        ? getKeepTargetForItem({ type: "tab" }, settings)
+        : getKeepTargetForItem({ type: "movie" }, settings);
 
   if (!noteTarget) {
     return {
@@ -309,7 +315,9 @@ export async function testKeepAppend(
   const sample =
     target === "books"
       ? "KeepShelf test | Sample Book | Author | 2026"
-      : "KeepShelf test | Sample Movie (2026) | Drama | IMDb 8.0";
+      : target === "tabs"
+        ? "KeepShelf test | https://example.com"
+        : "KeepShelf test | Sample Movie (2026) | Drama | IMDb 8.0";
 
   await storeLastResult("Adding test line to Keep…", false);
 

@@ -48,6 +48,7 @@
       <nav id="shelf-tabs" class="shelf-tabs">
         <button type="button" class="shelf-tab active" data-tab="media">Media</button>
         <button type="button" class="shelf-tab" data-tab="books">Books</button>
+        <button type="button" class="shelf-tab" data-tab="tabs">Tabs</button>
       </nav>
 
       <div class="toolbar">
@@ -56,6 +57,18 @@
           <button type="button" class="filter" data-filter="movie">Movies</button>
           <button type="button" class="filter" data-filter="series">Series</button>
           <button type="button" class="filter" data-filter="anime">Anime</button>
+        </div>
+
+        <div id="tabs-input-row" class="tabs-input-row" hidden>
+          <input
+            type="text"
+            id="tab-input"
+            class="tab-input"
+            placeholder="Paste a URL or write a note..."
+            autocomplete="off"
+          />
+          <button type="button" id="tab-input-save" class="btn btn-primary">Save</button>
+          <button type="button" id="tab-save-tab" class="btn btn-outline">Save this tab</button>
         </div>
 
         <div class="action-row">
@@ -160,51 +173,79 @@
 
       <div class="settings-body">
         <section class="settings-section">
-          <h2 class="section-title">Google Keep</h2>
-          <p class="section-desc">
-            Auto-add saved items to your Keep checklist notes.
-          </p>
-
+          <h2 class="section-title">Google Keep — Media</h2>
           <label class="toggle-row">
-            <input type="checkbox" id="keep-enabled" />
-            <span>Auto-add saves to Google Keep</span>
+            <input type="checkbox" id="keep-media-enabled" />
+            <span>Auto-add movies, series &amp; anime</span>
           </label>
-
-          <label class="field">
-            <span class="field-label">Media list note URL</span>
-            <span class="field-hint">Movies, series, anime</span>
-            <input
-              type="url"
-              id="keep-media-url"
-              placeholder="https://keep.google.com/#LIST/..."
-            />
+          <div class="field">
+            <div class="field-input-row">
+              <input
+                type="url"
+                id="keep-media-url"
+                placeholder="https://keep.google.com/#LIST/..."
+              />
+              <button type="button" id="keep-test-media" class="btn btn-outline btn-test">Test</button>
+            </div>
             <span id="keep-media-status" class="field-status">Not linked</span>
-          </label>
-          <button type="button" id="keep-test-media" class="btn btn-outline btn-block">
-            Test media list
-          </button>
-
-          <label class="field">
-            <span class="field-label">Books list note URL</span>
-            <input
-              type="url"
-              id="keep-books-url"
-              placeholder="https://keep.google.com/#LIST/..."
-            />
-            <span id="keep-books-status" class="field-status">Not linked</span>
-          </label>
-          <button type="button" id="keep-test-books" class="btn btn-outline btn-block">
-            Test books list
-          </button>
-
-          <button type="button" id="keep-save-settings" class="btn btn-primary btn-block">
-            Save settings
-          </button>
-
-          <div id="settings-status" class="settings-toast" hidden>
+          </div>
+          <button type="button" id="keep-save-media" class="btn btn-primary btn-block">Save</button>
+          <div id="media-settings-status" class="settings-toast" hidden>
             <div class="settings-toast-content">
-              <span id="settings-status-icon" class="material-symbols-outlined">check_circle</span>
-              <span id="settings-status-text"></span>
+              <span id="media-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+              <span id="media-settings-status-text"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section settings-section-divider">
+          <h2 class="section-title">Google Keep — Books</h2>
+          <label class="toggle-row">
+            <input type="checkbox" id="keep-books-enabled" />
+            <span>Auto-add books</span>
+          </label>
+          <div class="field">
+            <div class="field-input-row">
+              <input
+                type="url"
+                id="keep-books-url"
+                placeholder="https://keep.google.com/#LIST/..."
+              />
+              <button type="button" id="keep-test-books" class="btn btn-outline btn-test">Test</button>
+            </div>
+            <span id="keep-books-status" class="field-status">Not linked</span>
+          </div>
+          <button type="button" id="keep-save-books" class="btn btn-primary btn-block">Save</button>
+          <div id="books-settings-status" class="settings-toast" hidden>
+            <div class="settings-toast-content">
+              <span id="books-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+              <span id="books-settings-status-text"></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section settings-section-divider">
+          <h2 class="section-title">Google Keep — Tabs</h2>
+          <label class="toggle-row">
+            <input type="checkbox" id="keep-tabs-enabled" />
+            <span>Auto-add tabs, links &amp; notes</span>
+          </label>
+          <div class="field">
+            <div class="field-input-row">
+              <input
+                type="url"
+                id="keep-tabs-url"
+                placeholder="https://keep.google.com/#LIST/..."
+              />
+              <button type="button" id="keep-test-tabs" class="btn btn-outline btn-test">Test</button>
+            </div>
+            <span id="keep-tabs-status" class="field-status">Not linked</span>
+          </div>
+          <button type="button" id="keep-save-tabs" class="btn btn-primary btn-block">Save</button>
+          <div id="tabs-settings-status" class="settings-toast" hidden>
+            <div class="settings-toast-content">
+              <span id="tabs-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+              <span id="tabs-settings-status-text"></span>
             </div>
           </div>
         </section>

@@ -35,6 +35,14 @@ function formatDurationOrSeasons(value: string): string {
 }
 
 export function formatItemLine(item: SavedItem): string {
+  if (item.type === "tab" || item.type === "link") {
+    return item.url ? `${item.title} | ${item.url}` : item.title;
+  }
+
+  if (item.type === "note") {
+    return (item.body ?? item.title).trim();
+  }
+
   const parts: string[] = [];
 
   if (item.type === "book") {

@@ -1,7 +1,7 @@
 import type { KeepSyncResult } from "./keep-settings.js";
 import type { KeepSettings, KeepTarget } from "./keep-settings.js";
 
-export type MediaType = "movie" | "series" | "anime" | "book";
+export type MediaType = "movie" | "series" | "anime" | "book" | "tab" | "link" | "note";
 
 export interface SavedItem {
   id: string;
@@ -17,6 +17,8 @@ export interface SavedItem {
   googleQuery: string;
   savedAt: number;
   sourceUrl: string;
+  url?: string;
+  body?: string;
 }
 
 export interface ParsedMedia {
@@ -33,6 +35,7 @@ export interface ParsedMedia {
 
 export type MessageAction =
   | { action: "save"; item: Omit<SavedItem, "id" | "savedAt"> }
+  | { action: "saveTab" }
   | { action: "getAll" }
   | { action: "delete"; ids: string[] }
   | { action: "clear" }

@@ -39,10 +39,26 @@ export async function clearAll(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: [] });
 }
 
+export function normalizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url.trim());
+    parsed.hash = "";
+    const path = parsed.pathname.replace(/\/+$/, "") || "/";
+    return `${parsed.protocol}//${parsed.hostname.toLowerCase()}${path}${parsed.search}`;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
 export function dedupeKey(
-  item: Pick<SavedItem, "title" | "year" | "type">
+  item: Pick<SavedItem, "title" | "year" | "type" | "url" | "body">
 ): string {
+  if (item.type === "tab" || item.type === "link") {
+    return `${item.type}|${normalizeUrl(item.url ?? "")}`;
+  }
+  if (item.type === "note") {
+    return `note|${(item.body ?? item.title ?? "").trim().toLowerCase()}`;
+  }
   const year = (item.year ?? "").toLowerCase();
   return `${item.title.toLowerCase().trim()}|${year}|${item.type}`;
 }
-

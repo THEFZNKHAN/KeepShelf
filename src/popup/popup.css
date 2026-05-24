@@ -191,13 +191,7 @@ body {
 .filters {
   display: flex;
   gap: var(--gap-sm);
-  overflow-x: auto;
   padding-bottom: 4px;
-  scrollbar-width: none;
-}
-
-.filters::-webkit-scrollbar {
-  display: none;
 }
 
 .filters[hidden] {
@@ -205,6 +199,7 @@ body {
 }
 
 .filter {
+  flex: 1;
   padding: var(--gap-xs) var(--gap-sm);
   border: 1px solid var(--outline-variant);
   border-radius: var(--radius-lg);
@@ -215,6 +210,7 @@ body {
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+  text-align: center;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
@@ -286,6 +282,58 @@ body {
 
 .btn-block {
   width: 100%;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 11.5px;
+}
+
+/* ── Tabs input row ─────────────────────────────────────── */
+.tabs-input-row[hidden] { display: none !important; }
+
+.tabs-input-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px 4px;
+  border-bottom: 1.5px solid var(--border);
+  background: var(--bg);
+}
+
+.tab-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text);
+  font-size: 11.5px;
+  font-family: inherit;
+  outline: none;
+}
+
+.tab-input:focus {
+  border-color: var(--accent);
+}
+
+.tab-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.tabs-input-row .btn {
+  white-space: nowrap;
+  height: 28px;
+  padding: 0 9px;
+  font-size: 11px;
+}
+
+/* ── Settings section divider ───────────────────────────── */
+.settings-section-divider {
+  margin-top: 4px;
+  border-top: 1px solid var(--outline-variant);
+  padding-top: 10px;
 }
 
 .toast {
@@ -346,6 +394,7 @@ body {
 
 .main {
   flex: 1;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 4px 0;
   position: relative;
@@ -624,80 +673,103 @@ body {
 .settings-body {
   flex: 1;
   overflow-y: auto;
-  padding: var(--padding);
+  padding: 10px 12px;
 }
 
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .section-title {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
 }
 
 .section-desc {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 11.5px;
+  line-height: 16px;
   color: var(--on-surface-variant);
-  margin-top: -4px;
+  margin-top: -2px;
 }
 
 .toggle-row {
   display: flex;
   align-items: center;
   gap: var(--gap-sm);
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 12.5px;
+  line-height: 17px;
   cursor: pointer;
 }
 
 .toggle-row input {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   accent-color: var(--primary);
+  flex-shrink: 0;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-xs);
+  gap: 3px;
 }
 
 .field-label {
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 11.5px;
+  line-height: 15px;
   font-weight: 600;
 }
 
 .field-hint {
-  font-size: 11px;
-  line-height: 14px;
+  font-size: 10.5px;
+  line-height: 13px;
   color: var(--on-surface-variant);
 }
 
-.field input[type="url"] {
+.field-input-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.field-input-row input[type="url"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.field input[type="url"],
+.field-input-row input[type="url"] {
   width: 100%;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 16px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  line-height: 15px;
   border: 1px solid var(--outline-variant);
   border-radius: var(--radius-lg);
   background: #fff;
   color: var(--on-surface);
 }
 
-.field input[type="url"]:focus {
+.field input[type="url"]:focus,
+.field-input-row input[type="url"]:focus {
   outline: 2px solid var(--outline-variant);
   outline-offset: 1px;
 }
 
-.field-status {
+.btn-test {
+  flex-shrink: 0;
+  padding: 5px 10px;
   font-size: 11px;
-  line-height: 14px;
+}
+
+.field-status {
+  font-size: 10.5px;
+  line-height: 13px;
   color: var(--on-surface-variant);
 }
 
@@ -706,8 +778,8 @@ body {
 }
 
 .settings-toast {
-  margin-top: 4px;
-  padding: 10px 12px;
+  margin-top: 2px;
+  padding: 7px 10px;
   border-radius: var(--radius-lg);
   border: 1px solid var(--success-border);
   background: var(--success-bg);
