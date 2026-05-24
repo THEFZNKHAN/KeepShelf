@@ -62,8 +62,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  padding: 0 var(--padding);
+  height: 46px;
+  padding: 0 12px;
   background: var(--surface);
   border-bottom: 1px solid var(--outline-variant);
   flex-shrink: 0;
@@ -83,8 +83,8 @@ body {
 
 .brand h1,
 .settings-title {
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 14px;
+  line-height: 20px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--primary);
@@ -148,12 +148,12 @@ body {
 
 .shelf-tab {
   flex: 1;
-  padding: 8px var(--padding);
+  padding: 6px var(--padding);
   border: none;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--on-surface-variant);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -182,7 +182,7 @@ body {
 }
 
 .toolbar {
-  padding: var(--gap-sm) var(--padding);
+  padding: 6px 12px;
   border-bottom: 1px solid var(--outline-variant);
   background: var(--surface);
   flex-shrink: 0;
@@ -232,7 +232,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: var(--gap-xs);
+  margin-top: 3px;
 }
 
 .action-group {
@@ -347,7 +347,7 @@ body {
 .main {
   flex: 1;
   overflow-y: auto;
-  padding: var(--gap-sm) var(--padding);
+  padding: 4px 0;
   position: relative;
 }
 
@@ -368,7 +368,7 @@ body {
   list-style: none;
   display: flex;
   flex-direction: column;
-  margin: 0 calc(-1 * var(--padding));
+  margin: 0;
 }
 
 .list[hidden] {
@@ -378,8 +378,8 @@ body {
 .list-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px var(--padding);
+  gap: 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--row-border);
   cursor: pointer;
   transition: background-color 0.15s ease;
@@ -422,7 +422,7 @@ body {
 
 .type-icon {
   flex-shrink: 0;
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   color: var(--outline);
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
@@ -431,8 +431,8 @@ body {
 }
 
 .type-icon-img {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   object-fit: contain;
   display: block;
   transition: opacity 0.15s ease;
@@ -447,14 +447,14 @@ body {
 }
 
 .item-title {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
   color: var(--on-surface);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 2px;
+  margin-bottom: 1px;
   transition: color 0.15s ease, font-weight 0.15s ease;
 }
 
