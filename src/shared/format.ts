@@ -21,6 +21,8 @@ function formatRatingLabel(item: SavedItem): string | undefined {
   const url = item.sourceUrl ?? "";
   if (url.includes("myanimelist.net")) return `MAL ${item.imdbRating}`;
   if (url.includes("letterboxd.com")) return `LB ${item.imdbRating}`;
+  if (url.includes("rottentomatoes.com")) return `RT ${item.imdbRating}%`;
+  if (url.includes("trakt.tv")) return `Trakt ${item.imdbRating}`;
   return `IMDb ${item.imdbRating}`;
 }
 

@@ -3,7 +3,7 @@
   "name": "KeepShelf",
   "version": "1.0.0",
   "description": "Save movies, series, anime, and books to your shelf. Sync to Google Keep.",
-  "permissions": ["storage", "tabs", "scripting", "debugger"],
+  "permissions": ["storage", "tabs", "scripting", "debugger", "contextMenus"],
   "host_permissions": [
     "https://www.google.com/*",
     "https://www.imdb.com/*",
@@ -12,7 +12,10 @@
     "https://www.goodreads.com/*",
     "https://www.book-filter.com/*",
     "https://myanimelist.net/*",
-    "https://letterboxd.com/*"
+    "https://letterboxd.com/*",
+    "https://www.rottentomatoes.com/*",
+    "https://trakt.tv/*",
+    "https://app.trakt.tv/*"
   ],
   "action": {
     "default_popup": "dist/popup.html",
@@ -21,6 +24,12 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
+    }
+  },
+  "commands": {
+    "save-page": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "Save the current page to KeepShelf"
     }
   },
   "background": {
@@ -59,6 +68,16 @@
     },
     {
       "matches": ["https://letterboxd.com/film/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.rottentomatoes.com/m/*", "https://www.rottentomatoes.com/tv/*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.trakt.tv/*", "https://trakt.tv/*"],
       "js": ["dist/content.js"],
       "run_at": "document_idle"
     }

@@ -18,7 +18,22 @@ export interface SavedItem {
   sourceUrl: string;
   url?: string;
   body?: string;
+  imageUrl?: string;
+  /** Watched / read. */
+  done?: boolean;
+  doneAt?: number;
+  keepStatus?: ItemKeepStatus;
+  keepError?: string;
 }
+
+export type ItemKeepStatus = "synced" | "duplicate" | "failed" | "missing_config" | "disabled";
+
+export type ImportItem = Omit<SavedItem, "id" | "savedAt"> & { savedAt?: number };
+
+/** Fields the user may change from the edit dialog. */
+export type EditableFields = Partial<
+  Pick<SavedItem, "title" | "year" | "durationOrSeasons" | "imdbRating" | "author" | "publishedYear" | "url" | "body">
+>;
 
 export interface ParsedMedia {
   title: string;
@@ -30,6 +45,7 @@ export interface ParsedMedia {
   imdbRating?: string;
   author?: string;
   publishedYear?: string;
+  imageUrl?: string;
 }
 
 export type MessageAction =
@@ -37,6 +53,9 @@ export type MessageAction =
   | { action: "saveTab" }
   | { action: "getAll" }
   | { action: "delete"; ids: string[] }
+  | { action: "update"; id: string; changes: EditableFields & { done?: boolean } }
+  | { action: "syncKeep"; ids: string[] }
+  | { action: "import"; items: ImportItem[] }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
@@ -45,7 +64,7 @@ export type MessageAction =
 
 export type MessageResponse =
   | { ok: true; duplicate?: boolean; item?: SavedItem; keep?: KeepSyncResult }
-  | { ok: true; items: SavedItem[] }
+  | { ok: true; items: SavedItem[]; synced?: number; failed?: number; added?: number; skipped?: number }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }
   | { ok: true; lastKeepResult: { message: string; isError: boolean; at: number } | null }

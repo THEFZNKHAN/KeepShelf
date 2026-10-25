@@ -1,6 +1,6 @@
-import type { SavedItem } from "./types.js";
+import type { ImportItem, SavedItem } from "./types.js";
 
-const STORAGE_KEY = "trackbuddy_items";
+export const STORAGE_KEY = "trackbuddy_items";
 
 export async function getAllItems(): Promise<SavedItem[]> {
   const result = await chrome.storage.local.get(STORAGE_KEY);
@@ -26,6 +26,37 @@ export async function saveItem(
   items.unshift(item);
   await chrome.storage.local.set({ [STORAGE_KEY]: items });
   return { item, duplicate: false };
+}
+
+export async function updateItem(
+  id: string,
+  patch: Partial<Omit<SavedItem, "id">>
+): Promise<SavedItem[]> {
+  const items = await getAllItems();
+  const index = items.findIndex((i) => i.id === id);
+  if (index === -1) throw new Error("That item no longer exists.");
+  items[index] = { ...items[index], ...patch, id };
+  await chrome.storage.local.set({ [STORAGE_KEY]: items });
+  return items;
+}
+
+/** Adds items that aren't already saved; keeps the shelf ordered newest first. */
+export async function importItems(
+  incoming: ImportItem[]
+): Promise<{ items: SavedItem[]; added: number; skipped: number }> {
+  const items = await getAllItems();
+  const keys = new Set(items.map(dedupeKey));
+  let added = 0;
+  for (const partial of incoming) {
+    const key = dedupeKey(partial);
+    if (keys.has(key)) continue;
+    keys.add(key);
+    items.push({ ...partial, id: crypto.randomUUID(), savedAt: partial.savedAt ?? Date.now() });
+    added++;
+  }
+  items.sort((a, b) => b.savedAt - a.savedAt);
+  await chrome.storage.local.set({ [STORAGE_KEY]: items });
+  return { items, added, skipped: incoming.length - added };
 }
 
 export async function deleteItems(ids: string[]): Promise<SavedItem[]> {

@@ -166,7 +166,7 @@ One Piece (1999) | MAL 8.73 (A)
 The Alchemist (Paulo Coelho) | 1988 | GR 3.92
 ```
 
-Ratings are labeled by source: `IMDb`, `LB` (Letterboxd), `MAL` (MyAnimeList), `GR` (Goodreads), `BF` (BookFilter). Anime entries are marked with `(A)`.
+Ratings are labeled by source: `IMDb`, `LB` (Letterboxd), `MAL` (MyAnimeList), `GR` (Goodreads), `BF` (BookFilter), `RT 86%` (Rotten Tomatoes), `Trakt`. Anime entries are marked with `(A)`.
 
 ### Three-tab shelf
 
@@ -186,6 +186,26 @@ The **Tabs** shelf tab works like a personal bookmark manager:
 - **Paste a URL:** type or paste any URL to save it as a link
 - **Write a note:** type any text to save it as a quick note
 - **Click to open:** clicking a saved tab or link reopens it in a new tab
+
+### Quick save
+
+- **Right-click** a page, link, or selected text and choose **Save … to KeepShelf**
+- **Keyboard shortcut:** `Alt+Shift+S` saves the current page (change it at `chrome://extensions/shortcuts`)
+- **Toolbar badge:** `+` means the page can be saved, `✓` means it is already on your shelf
+
+### Manage your shelf
+
+- **Search, filter and sort** by title, year, rating, or date saved
+- **Watched / read:** tick items off and filter by status (kept on your shelf only, Keep is not changed)
+- **Edit** a saved item's title, year, runtime, rating, author, URL, or note text
+- **Open source page** to jump back to where you saved it
+- **Poster and cover thumbnails** next to each item
+- **Keep status per item:** items that failed to sync show a retry icon, and **Sync selected** pushes chosen items to Keep
+
+### Backup and import
+
+- **Export backup** downloads your whole shelf as JSON
+- **Import** a KeepShelf backup, a Letterboxd export CSV (watchlist, watched, diary, ratings), or a Goodreads library export CSV. Duplicates are skipped and imported items are not sent to Keep.
 
 ### Clipboard export
 
@@ -224,6 +244,8 @@ Everything stays on your device unless you turn on Keep sync. No analytics. No e
 | [Goodreads](https://www.goodreads.com) | Book pages (`/book/show/…`) | Title, author, year, GR rating |
 | [BookFilter](https://www.book-filter.com) | Book pages (`/books/…`) | Title, author, year, BF rating |
 | [Series Graph](https://seriesgraph.com) | Show pages (`/show/…`) | Series with season count and IMDb rating |
+| [Rotten Tomatoes](https://www.rottentomatoes.com) | Movie and TV pages (`/m/…`, `/tv/…`) | Title, year, runtime or seasons, Tomatometer |
+| [Trakt](https://app.trakt.tv) | Movie and show pages (`/movies/…`, `/shows/…`) | Title, year, runtime, Trakt rating |
 
 ### Tips for best results
 
@@ -377,7 +399,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 
 ### Save a media title
 
-1. Open a supported page: Google Search (with a knowledge panel), IMDb, Letterboxd, MyAnimeList, Goodreads, BookFilter, or Series Graph.
+1. Open a supported page: Google Search (with a knowledge panel), IMDb, Letterboxd, MyAnimeList, Goodreads, BookFilter, Series Graph, Rotten Tomatoes, or Trakt.
 2. Click the **KeepShelf icon** in your Chrome toolbar.
 3. Click **Save page** (or **Save book** on the Books tab).
 4. The item appears in your shelf with its formatted line.
@@ -448,7 +470,7 @@ The list ID is typically 40+ characters. If Settings shows **URL looks incomplet
 | Routing | Movies/series/anime go to Media note; books to Books note; tabs/links/notes to Tabs note |
 | Background sync | Keep opens in a hidden background tab; you stay on your current page |
 | Duplicate skip | Identical lines are not added twice |
-| Failure | If append fails, the line is copied to your clipboard |
+| Failure | The item stays on your shelf with a retry icon; click it, or select items and use **Sync selected** |
 
 ### Why the debugger permission?
 
@@ -466,7 +488,7 @@ You may see a short banner: **"KeepShelf started debugging this browser"**. It d
 | Keep settings (URLs, toggles) | `chrome.storage.local` (your device only) |
 | Keep list content | Your Google Keep account (only when sync is enabled) |
 
-KeepShelf does **not** send your data to any external server. Keep sync communicates only with `keep.google.com` inside your existing signed-in browser session.
+KeepShelf does **not** send your data to any external server. Keep sync communicates only with `keep.google.com` inside your existing signed-in browser session. Poster thumbnails load directly from the site's image server (for example IMDb's or Letterboxd's), without a referrer.
 
 Uninstalling the extension removes all local shelf data. Your Google Keep notes are never modified or deleted by KeepShelf except to append new lines.
 
@@ -480,6 +502,7 @@ Uninstalling the extension removes all local shelf data. Your Google Keep notes 
 | `tabs` | Read the current tab URL/title for tab-save; find or open Keep note tabs for sync |
 | `scripting` | Run the Keep append script inside your Keep tab |
 | `debugger` | Send trusted text input so Keep persists list items reliably |
+| `contextMenus` | Add the right-click **Save … to KeepShelf** entries |
 | `google.com` | Parse Google Search knowledge panels |
 | `imdb.com` | Parse IMDb title pages |
 | `seriesgraph.com` | Parse Series Graph show pages |
@@ -487,6 +510,8 @@ Uninstalling the extension removes all local shelf data. Your Google Keep notes 
 | `book-filter.com` | Parse BookFilter book pages |
 | `myanimelist.net` | Parse MyAnimeList anime pages |
 | `letterboxd.com` | Parse Letterboxd film pages |
+| `rottentomatoes.com` | Parse Rotten Tomatoes movie and TV pages |
+| `trakt.tv`, `app.trakt.tv` | Parse Trakt movie and show pages |
 | `keep.google.com` | Append lines to your linked Keep notes |
 
 ---

@@ -4,6 +4,7 @@ import {
   getKeepTargetForItem,
   isLikelyValidKeepNoteId,
   missingKeepConfigMessage,
+  parseKeepNoteId,
   type KeepSyncResult,
   type KeepTarget,
 } from "./keep-settings.js";
@@ -60,65 +61,21 @@ function waitForTabComplete(tabId: number, timeoutMs = 20000): Promise<void> {
   });
 }
 
-async function findKeepTab(noteId: string): Promise<chrome.tabs.Tab | undefined> {
+async function ensureKeepTab(noteId: string, noteUrl: string): Promise<number> {
   const tabs = await chrome.tabs.query({ url: "https://keep.google.com/*" });
-  return tabs.find(
-    (tab) =>
-      tab.url?.includes(`NOTE/${noteId}`) ||
-      tab.url?.includes(`LIST/${noteId}`) ||
-      tab.url?.includes(noteId)
-  );
-}
-
-async function ensureKeepTab(
-  noteId: string,
-  noteUrl: string
-): Promise<{ tabId: number; restoreTabId?: number }> {
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  const restoreTabId = activeTab?.id;
-
-  const existing = await findKeepTab(noteId);
-
+  const existing = tabs.find((tab) => tab.url && parseKeepNoteId(tab.url) === noteId);
   if (existing?.id) {
-    if (!existing.url?.includes(noteId)) {
-      await chrome.tabs.update(existing.id, { url: noteUrl, active: false });
-      await waitForTabComplete(existing.id);
-      await sleep(2000);
-    } else {
-      await sleep(500);
-    }
-    return { tabId: existing.id, restoreTabId };
+    await sleep(500);
+    return existing.id;
   }
 
-  const keepTabs = await chrome.tabs.query({ url: "https://keep.google.com/*" });
-  const tab = keepTabs[0];
-
-  if (tab?.id) {
-    await chrome.tabs.update(tab.id, { url: noteUrl, active: false });
-    await waitForTabComplete(tab.id);
-    await sleep(2000);
-    return { tabId: tab.id, restoreTabId };
-  }
-
-  const created = await chrome.tabs.create({
-    url: noteUrl,
-    active: false,
-  });
+  const created = await chrome.tabs.create({ url: noteUrl, active: false });
   if (!created.id) {
     throw new Error("Could not open Keep note tab.");
   }
   await waitForTabComplete(created.id);
   await sleep(2000);
-  return { tabId: created.id, restoreTabId };
-}
-
-async function restoreActiveTab(tabId: number | undefined): Promise<void> {
-  if (!tabId) return;
-  try {
-    await chrome.tabs.update(tabId, { active: true });
-  } catch {
-    /* tab may have been closed */
-  }
+  return created.id;
 }
 
 async function injectAppend(
@@ -201,14 +158,14 @@ export async function appendToKeepList(options: {
   noteUrl: string;
   text: string;
 }): Promise<{ ok: boolean; duplicate?: boolean; error?: string }> {
-  const { tabId, restoreTabId } = await ensureKeepTab(
-    options.noteId,
-    options.noteUrl
-  );
   try {
+    const tabId = await ensureKeepTab(options.noteId, options.noteUrl);
     return await injectAppend(tabId, options.noteId, options.text);
-  } finally {
-    await restoreActiveTab(restoreTabId);
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not open Keep note tab.",
+    };
   }
 }
 

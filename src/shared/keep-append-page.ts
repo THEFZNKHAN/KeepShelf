@@ -23,7 +23,7 @@ export function keepPageAction(
   };
 
   const noteIdMatches = (current: string | undefined, expected: string) => {
-    if (!current) return true;
+    if (!current) return false;
     if (current === expected) return true;
     const prefix = expected.slice(0, 16);
     if (prefix.length >= 12 && current.startsWith(prefix)) return true;
@@ -130,13 +130,11 @@ export function keepPageAction(
     return texts;
   };
 
-  const textMatchesTarget = (candidate: string, targetText: string) => {
-    if (!candidate) return false;
-    if (candidate === targetText) return true;
-    if (candidate.includes(targetText) || targetText.includes(candidate)) return true;
-    const prefix = targetText.slice(0, 24);
-    return prefix.length >= 12 && candidate.startsWith(prefix);
-  };
+  const isSameLine = (candidate: string, targetText: string) =>
+    candidate.toLowerCase() === targetText.toLowerCase();
+
+  const containsLine = (candidate: string, targetText: string) =>
+    candidate.toLowerCase().includes(targetText.toLowerCase());
 
   const isFieldEmpty = (field: HTMLElement) => {
     const text = readFieldText(field);
@@ -193,7 +191,7 @@ export function keepPageAction(
     let fields = listFields(root);
 
     for (const field of fields) {
-      if (textMatchesTarget(readFieldText(field), targetText)) {
+      if (isSameLine(readFieldText(field), targetText)) {
         return { ok: true, duplicate: true, editedBefore: editedLabel };
       }
     }
@@ -236,7 +234,7 @@ export function keepPageAction(
   ) => {
     for (let attempt = 0; attempt < 16; attempt++) {
       const allText = collectAllListTexts(root);
-      const hasText = allText.some((line) => textMatchesTarget(line, targetText));
+      const hasText = allText.some((line) => containsLine(line, targetText));
       const editedNow = getEditedLabel(root);
       if (hasText && editedNow && editedNow !== editedBefore) {
         return { ok: true };
@@ -248,7 +246,7 @@ export function keepPageAction(
     }
 
     const allText = collectAllListTexts(root);
-    if (allText.some((line) => textMatchesTarget(line, targetText))) {
+    if (allText.some((line) => containsLine(line, targetText))) {
       return { ok: true };
     }
 
@@ -263,15 +261,13 @@ export function keepPageAction(
     while (Date.now() < deadline) {
       const root = findBestRoot();
       if (root) {
-        const currentId =
-          parseId(location.href) ?? parseId(location.hash) ?? undefined;
-        if (noteIdMatches(currentId, expectedNoteId)) {
+        if (noteIdMatches(parseId(location.href), expectedNoteId)) {
           return root;
         }
       }
       await wait(250);
     }
-    return findBestRoot();
+    return null;
   };
 
   return (async () => {
@@ -279,7 +275,7 @@ export function keepPageAction(
     if (!root) {
       return {
         ok: false,
-        error: "Keep note editor did not load. Open your list note in Keep first.",
+        error: "Keep note editor did not load, or Keep opened a different note. Check the note URL in Settings.",
       };
     }
 

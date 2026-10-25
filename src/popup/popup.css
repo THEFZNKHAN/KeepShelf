@@ -236,6 +236,59 @@ body {
   margin-top: 3px;
 }
 
+/* ── Search / status / sort row ─────────────────────────── */
+.view-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.search-icon {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px !important;
+  color: var(--on-surface-variant);
+  pointer-events: none;
+}
+
+.search-input,
+.view-select {
+  height: 26px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 11.5px;
+  outline: none;
+}
+
+.search-input {
+  width: 100%;
+  padding: 0 8px 0 24px;
+}
+
+.view-select {
+  flex-shrink: 0;
+  padding: 0 4px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.search-input:focus,
+.view-select:focus {
+  border-color: var(--primary);
+}
+
 .action-group {
   display: flex;
   gap: var(--gap-sm);
@@ -476,6 +529,8 @@ body {
 
 .type-icon {
   flex-shrink: 0;
+  width: 24px;
+  text-align: center;
   font-size: 18px;
   line-height: 1;
   color: var(--outline);
@@ -485,7 +540,7 @@ body {
 }
 
 .type-icon-img {
-  width: 20px;
+  width: 24px;
   height: 20px;
   object-fit: contain;
   display: block;
@@ -498,6 +553,78 @@ body {
 
 .list-item:hover .type-icon-img {
   opacity: 0.85;
+}
+
+.item-thumb {
+  flex-shrink: 0;
+  width: 24px;
+  height: 36px;
+  border-radius: 3px;
+  object-fit: cover;
+  background: var(--surface-container);
+  display: block;
+}
+
+.list-item.done .item-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--outline);
+  color: var(--on-surface-variant);
+}
+
+.list-item.done .item-thumb,
+.list-item.done .type-icon {
+  opacity: 0.5;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.row-action .material-symbols-outlined {
+  font-size: 16px;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 20;
+}
+
+.list-item:hover .row-action,
+.row-action:focus-visible,
+.row-action.pinned {
+  opacity: 1;
+}
+
+.row-action:hover {
+  background: var(--surface-container-high);
+  color: var(--primary);
+}
+
+.row-action.is-done {
+  color: var(--success-text);
+}
+
+.row-action.is-done .material-symbols-outlined {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 20;
+}
+
+.row-action.keep-problem {
+  color: var(--error);
 }
 
 .item-body-link {
@@ -764,6 +891,42 @@ body {
   color: var(--success-text);
 }
 
+.settings-hint {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+}
+
+.settings-hint kbd,
+.settings-hint .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+}
+
+.settings-hint kbd {
+  padding: 0 3px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 3px;
+  background: #fff;
+}
+
+.settings-button-row {
+  display: flex;
+  gap: var(--gap-sm);
+}
+
+.settings-button-row .btn {
+  flex: 1;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+body.in-tab {
+  margin: 24px auto;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-xl);
+}
+
 .settings-toast {
   margin-top: 2px;
   padding: 7px 10px;
@@ -866,6 +1029,66 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: var(--gap-sm);
+}
+
+.edit-panel {
+  max-width: 340px;
+}
+
+.edit-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.edit-field input,
+.edit-field textarea {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  outline: none;
+  resize: vertical;
+}
+
+.edit-field input:focus,
+.edit-field textarea:focus {
+  border-color: var(--primary);
+}
+
+.edit-row {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-row .edit-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-error {
+  margin: -4px 0 10px;
+  font-size: 11.5px;
+  color: var(--error);
+}
+
+.edit-error[hidden] {
+  display: none;
 }
 
 .btn-danger {

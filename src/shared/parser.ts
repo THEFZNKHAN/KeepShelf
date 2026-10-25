@@ -139,7 +139,8 @@ export function parseKnowledgePanel(
 
   const type = resolveMediaType(googleType, subtitle, document);
   const subtitleParts = parseSubtitle(subtitle, type);
-  const imdbRating = extractImdbRating(scope, document);
+  const imdbRating =
+    extractImdbRating(getWidePanelScope(scope, document)) ?? extractImdbRating(document);
   const isBookSeries = isGenericBookSubtitle(subtitle);
   const bookFacts = type === "book" ? extractBookFacts(scope, document, title) : {};
   const publishedYear = isBookSeries
@@ -296,11 +297,8 @@ function parseSubtitle(
   return { year, genre, durationOrSeasons };
 }
 
-function extractImdbRating(scope: ParentNode, doc: Document): string | undefined {
-  const g = globalThis as { Document?: typeof Document };
-  const searchRoot =
-    g.Document && scope instanceof g.Document ? scope : doc;
-  const labels = searchRoot.querySelectorAll("[aria-label]");
+function extractImdbRating(panel: ParentNode): string | undefined {
+  const labels = panel.querySelectorAll("[aria-label]");
   for (const el of labels) {
     const label = el.getAttribute("aria-label") ?? "";
     if (!/IMDb/i.test(label) || !/scored/i.test(label)) continue;
@@ -321,10 +319,7 @@ function detectAnimeFromDocument(doc: Document): boolean {
     if (/\bAnime\b/i.test(alt)) return true;
     if (/MyAnimeList/i.test(alt)) return true;
   }
-  for (const link of doc.querySelectorAll('a[href*="myanimelist.net"]')) {
-    if (link) return true;
-  }
-  return false;
+  return doc.querySelector('a[href*="myanimelist.net"]') !== null;
 }
 
 function extractFactValue(container: Element): string | undefined {

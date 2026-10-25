@@ -94,12 +94,6 @@ function countSeasons(root: ParentNode): number {
   return max;
 }
 
-export function isSeriesGraphChartReady(doc: Document = document): boolean {
-  const root = findSeriesGraphRoot(doc);
-  if (!root) return false;
-  return countSeasons(root) > 0;
-}
-
 export function seriesGraphQueryFromUrl(href: string): string {
   const slug = href.match(/\/show\/\d+-(.+?)\/?$/)?.[1];
   if (slug) return slug.replace(/-/g, " ");
