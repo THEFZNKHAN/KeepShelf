@@ -5,8 +5,8 @@
 </p>
 
 <p align="center">
-  <strong>A Chrome extension that turns any IMDb, Letterboxd, Goodreads, MyAnimeList, or Google Search page<br>
-  into a one-click save to your personal watchlist, reading list, and bookmark shelf.</strong>
+  <strong>Save movies, series, anime, books and links to a personal shelf in one click.<br>
+  Rate them, tag them, track your progress, and optionally mirror everything to Google Keep.</strong>
 </p>
 
 <p align="center">
@@ -23,13 +23,13 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick start</a> ·
-  <a href="#-features">Features</a> ·
-  <a href="#-supported-sources">Sources</a> ·
-  <a href="#-tabs-links--notes">Bookmarks</a> ·
-  <a href="#-google-keep-sync">Keep sync</a> ·
-  <a href="#-install-from-github">Install</a> ·
-  <a href="#-faq">FAQ</a>
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#supported-sources">Sources</a> ·
+  <a href="#organise-and-track-your-shelf">Organise</a> ·
+  <a href="#google-keep-sync">Keep sync</a> ·
+  <a href="#installation">Install</a> ·
+  <a href="#faq">FAQ</a>
 </p>
 
 ---
@@ -49,79 +49,79 @@
 
 | | |
 |---|---|
-| **What it does** | Reads title metadata from supported pages and saves a clean formatted entry to your local shelf with one click |
-| **Also works as** | A lightweight bookmark manager: save the current tab or paste any URL and click it later to reopen |
+| **What it does** | Reads title metadata from supported pages and saves a clean, formatted entry to your local shelf with one click |
+| **Beyond saving** | Tags, custom lists, personal ratings and reviews, watch/read progress, a random "what next" picker, and a stats dashboard |
+| **Also works as** | A lightweight bookmark manager for tabs, links and notes |
 | **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes |
-| **Who it is for** | Anyone building a watchlist, reading list, anime list, or link collection without copy-pasting or tab-hoarding |
-| **Setup time** | ~2 minutes to load the extension. ~5 minutes to link Keep notes if you want sync |
+| **Who it is for** | Anyone keeping a watchlist, reading list, anime list or link collection without copy-pasting or tab-hoarding |
+| **Setup time** | About 2 minutes to load the extension, about 5 more to link Keep notes if you want sync |
 | **Cost** | Free and open source. No accounts, no API keys, no cloud backend |
 
 ---
 
 ## Table of contents
 
-- [Why KeepShelf exists](#-why-keepshelf-exists)
-- [Quick start](#-quick-start)
-- [How it works](#-how-it-works)
-- [Features](#-features)
-- [Supported sources](#-supported-sources)
-- [Tabs, links, and notes](#-tabs-links--notes)
-- [Output format](#-output-format)
-- [Install from GitHub](#-install-from-github)
-- [Usage guide](#-usage-guide)
-- [Google Keep sync](#-google-keep-sync)
-- [Privacy and data](#-privacy-and-data)
-- [Permissions explained](#-permissions-explained)
-- [Development](DEVELOPER.md)
-- [FAQ](#-faq)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [GitHub repo metadata](#-github-repo-metadata)
+- [Why KeepShelf exists](#why-keepshelf-exists)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [Features](#features)
+- [Organise and track your shelf](#organise-and-track-your-shelf)
+- [Supported sources](#supported-sources)
+- [Tabs, links and notes](#tabs-links-and-notes)
+- [Output format](#output-format)
+- [Installation](#installation)
+- [Usage guide](#usage-guide)
+- [Google Keep sync](#google-keep-sync)
+- [Backup and import](#backup-and-import)
+- [Privacy and data](#privacy-and-data)
+- [Permissions explained](#permissions-explained)
+- [Development](#development)
+- [FAQ](#faq)
+- [Troubleshooting](#troubleshooting)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## 💡 Why KeepShelf exists
+## Why KeepShelf exists
 
-Someone sends ten movie and book recommendations. The usual workflow looks like this:
+Someone sends you ten movie and book recommendations. The usual workflow:
 
 1. Google the title
-2. Copy the name, year, and rating by hand
+2. Copy the name, year and rating by hand
 3. Switch to Google Keep or a notes app
 4. Paste one formatted line
 5. Repeat nine more times
 
-That takes minutes per title. KeepShelf reduces it to **open popup → Save page → done**.
+That takes minutes per title. KeepShelf reduces it to **open popup, click Save page, done**.
 
-You stay on the page you are already on. KeepShelf reads the knowledge panel or page metadata, formats a single clean line, stores it locally, and (if you enable it) pushes that line into the right Google Keep checklist in the background.
+You stay on the page you are already on. KeepShelf reads the knowledge panel or page metadata, formats one clean line, stores it locally, and (if you enable it) pushes that line into the right Google Keep checklist in the background.
 
-No copy-pasting. No tab juggling. No spreadsheet middleman.
+Once it is on your shelf, you can rate it, tag it, track how far you are, and let KeepShelf pick what to watch tonight.
 
 ---
 
-## ⚡ Quick start
+## Quick start
 
-**Fastest path:** download the latest ZIP from the [Releases page](../../releases/latest), extract it, then load it unpacked in Chrome. Done in under two minutes with no tools needed.
-
-Want to build from source instead? See [Install from GitHub](#-install-from-github).
+**Fastest path:** download the latest ZIP from the [Releases page](../../releases/latest), extract it, and load it unpacked in Chrome. No tools needed. See [Installation](#installation) for the steps, or to build from source.
 
 Once the extension is loaded:
 
 1. Pin KeepShelf to your Chrome toolbar.
-2. Open a movie on IMDb, an anime on MyAnimeList, a book on Goodreads, or search anything on Google.
-3. Click the **KeepShelf icon** in your toolbar, then click **Save page**.
-4. Your item appears in the shelf instantly.
+2. Open a movie on IMDb, an anime on MyAnimeList, a book on Goodreads, or search for anything on Google.
+3. Click the **KeepShelf icon**, then **Save page**. Or press `Alt+Shift+S` without opening the popup.
+4. Your item appears on the shelf immediately.
 
-Want automatic Keep sync? Jump to [Google Keep sync](#-google-keep-sync).
+Want automatic Keep sync? Jump to [Google Keep sync](#google-keep-sync).
 
 ---
 
-## 🔄 How it works
+## How it works
 
 ```mermaid
 flowchart LR
-  browse[Open a supported page] --> popup[Click KeepShelf in toolbar]
-  popup --> save[Click Save page]
+  browse[Open a supported page] --> save[Save page, shortcut or right-click]
   save --> parse[Parse title metadata]
   parse --> format[Format one clean line]
   format --> shelf[Store in local shelf]
@@ -129,111 +129,133 @@ flowchart LR
   keep -->|Yes| append[Append to matching Keep list]
   keep -->|No| done[Done]
   append --> done
+  shelf --> organise[Tag, rate, track progress]
+  organise --> insights[Pick what's next, view stats]
 ```
 
-**Step by step**
-
-1. **Detect:** KeepShelf runs on supported pages and reads title, year, runtime or seasons, author, and ratings.
-2. **Parse:** metadata is extracted from page JSON-LD, knowledge panels, or DOM.
-3. **Save:** click **Save page** in the popup. Duplicates are detected and skipped automatically.
-4. **Sync:** if Keep sync is enabled, the formatted line is appended to the matching Google Keep checklist in the background.
+1. **Detect:** KeepShelf runs on supported pages and reads title, year, runtime or seasons, author and ratings.
+2. **Parse:** metadata comes from page JSON-LD, knowledge panels or the DOM.
+3. **Save:** duplicates are detected and skipped. Near-duplicates are flagged.
+4. **Sync:** if Keep sync is on, the formatted line is appended to the matching Google Keep checklist in the background.
 
 ---
 
-## ✨ Features
+## Features
 
-### Save media with one click
+### Save in one click
 
-Open the KeepShelf popup on any supported page and click **Save page**. KeepShelf parses the title, year, runtime, rating, and author automatically. No typing required.
-
-Supported media types:
+Click **Save page** in the popup, press `Alt+Shift+S`, or right-click a page, link or selected text and choose **Save … to KeepShelf**. The toolbar badge shows `+` when a page can be saved and `✓` when it is already on your shelf.
 
 | Type | What gets captured |
 |------|--------------------|
-| **Movies** | Title, year, runtime, IMDb or Letterboxd rating |
-| **Series** | Title, year, latest season count, IMDb rating |
+| **Movies** | Title, year, runtime, IMDb, Letterboxd, Rotten Tomatoes or Trakt rating |
+| **Series** | Title, year, latest season count, rating |
 | **Anime** | Title, year, episode count, MAL score |
 | **Books** | Title, author, published year, Goodreads or BookFilter rating |
-
-### Smart, consistent formatting
-
-Every saved item becomes a single readable line:
-
-```
-The Dark Knight (2008) | 2h 32m | IMDb 9.0
-Dark (2017) | S03 | IMDb 8.7
-One Piece (1999) | MAL 8.73 (A)
-The Alchemist (Paulo Coelho) | 1988 | GR 3.92
-```
-
-Ratings are labeled by source: `IMDb`, `LB` (Letterboxd), `MAL` (MyAnimeList), `GR` (Goodreads), `BF` (BookFilter), `RT 86%` (Rotten Tomatoes), `Trakt`. Anime entries are marked with `(A)`.
+| **Tabs, links, notes** | Title and URL, or note text (see [Tabs, links and notes](#tabs-links-and-notes)) |
 
 ### Three-tab shelf
 
-The popup has three independent tabs:
-
 | Tab | Stores |
 |-----|--------|
-| **Media** | Movies, series, and anime (filterable by type) |
+| **Media** | Movies, series and anime (filter by type) |
 | **Books** | Books from any source |
-| **Tabs** | Saved tabs, links, and notes (see below) |
+| **Tabs** | Saved tabs, links and notes |
 
-### Bookmark manager built in
+### Rate, tag and track
 
-The **Tabs** shelf tab works like a personal bookmark manager:
+Your own ratings and reviews, tags, custom lists, watch and read progress, a random picker and stats. Details in [Organise and track your shelf](#organise-and-track-your-shelf).
 
-- **Save this tab:** saves the current browser tab with its title and URL
-- **Paste a URL:** type or paste any URL to save it as a link
-- **Write a note:** type any text to save it as a quick note
-- **Click to open:** clicking a saved tab or link reopens it in a new tab
+### Find things fast
 
-### Quick save
+- **Search** across title, author, genre, URL, notes, tags, lists and your reviews
+- **Filter** by type, status, tag and list
+- **Sort** by newest, oldest, title, year, source rating or your own rating
+- **Poster and cover thumbnails** next to each item, and **Open source page** to jump back to where you saved it
 
-- **Right-click** a page, link, or selected text and choose **Save … to KeepShelf**
-- **Keyboard shortcut:** `Alt+Shift+S` saves the current page (change it at `chrome://extensions/shortcuts`)
-- **Toolbar badge:** `+` means the page can be saved, `✓` means it is already on your shelf
+### Duplicate protection
 
-### Manage your shelf
-
-- **Search, filter and sort** by title, year, rating, or date saved
-- **Watched / read:** tick items off and filter by status (kept on your shelf only, Keep is not changed)
-- **Edit** a saved item's title, year, runtime, rating, author, URL, or note text
-- **Open source page** to jump back to where you saved it
-- **Poster and cover thumbnails** next to each item
-- **Keep status per item:** items that failed to sync show a retry icon, and **Sync selected** pushes chosen items to Keep
-
-### Backup and import
-
-- **Export backup** downloads your whole shelf as JSON
-- **Import** a KeepShelf backup, a Letterboxd export CSV (watchlist, watched, diary, ratings), or a Goodreads library export CSV. Duplicates are skipped and imported items are not sent to Keep.
-
-### Clipboard export
-
-- **Copy all:** exports every visible item as plain text, one line each
-- **Copy selected:** select items with checkboxes, then copy just those
-
-### Duplicate detection
-
-Saving the same title, URL, or note twice shows a "Already saved" message and skips the duplicate locally and in Keep.
+- Saving the same title, URL or note twice shows "Already saved" and skips it, locally and in Keep.
+- Near-matches such as "The Office (US)" and "Office" are flagged when you save, and a **Duplicates** panel in Settings lets you review and merge them.
 
 ### Google Keep sync
 
-Link your own Google Keep checklists. Every new save can auto-append to the matching note:
+Optionally append every save to your own Google Keep checklists. No Google Cloud project or OAuth app. See [Google Keep sync](#google-keep-sync).
 
-- Media (movies, series, anime) go to your **Media note**
-- Books go to your **Books note**
-- Tabs, links, and notes go to your **Tabs note**
-- No Google Cloud project or OAuth app required
-- Works with a personal `@gmail.com` account
-- Duplicate lines are skipped automatically
+### Backup, import and export
 
-### Privacy-first by design
+Export your whole shelf as JSON, import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
 
-Everything stays on your device unless you turn on Keep sync. No analytics. No external APIs. No third-party data collection.
+### Clipboard export
+
+**Copy all** copies every visible item as plain text, one line each. **Copy selected** copies only the items you ticked.
+
+### Privacy first
+
+Everything stays on your device unless you turn on Keep sync. No analytics, no external APIs, no third-party data collection.
 
 ---
 
-## 🌐 Supported sources
+## Organise and track your shelf
+
+All of this is stored on your shelf only. Your Keep lists are never changed by it.
+
+### Status and progress
+
+Every movie, series, anime and book has a status:
+
+| Status | Meaning |
+|--------|---------|
+| **To watch / To read** | Planned (the default) |
+| **In progress** | Started but not finished |
+| **Watched / Read** | Finished. The ✓ button on each row still toggles this |
+| **Dropped** | Gave up on it |
+
+For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
+
+### Personal rating and review
+
+Rate anything from 1 to 10 and write a short review. Your rating is separate from the source rating (IMDb, MAL and so on), so both stay visible. Sort by **My rating** to see your favourites first. Hover the summary line on a row to read your review.
+
+### Tags and custom lists
+
+- **Tags** are free-form and comma separated, such as `sci-fi, weekend`. They are lowercased and de-duplicated. Click a tag chip on any row to filter by it.
+- **Lists** group items under a name of your choice, such as "Weekend watch" or "Book club". Use the **List** dropdown to focus on one.
+
+The tag and list dropdowns appear only when the current tab has any.
+
+To set any of this, open an item's **Edit** dialog and use the **Your shelf** section.
+
+### Pick something for me
+
+Can't decide? Click the **dice** button in the toolbar. KeepShelf suggests one item from whatever you are currently looking at (tab, type, tag, list and search all apply).
+
+- It picks from your **planned** items. If you have none, it suggests something already **in progress**. Finished and dropped items are never suggested.
+- **Pick another** draws again without repeating the last suggestion.
+- **Start watching / Start reading** moves it to *In progress*, and **Open page** jumps to it.
+
+Tip: filter to a tag like `weekend` or a type like **Series** first to narrow the pool.
+
+### Duplicates
+
+Open **Settings, then Duplicates, then Find duplicates**. KeepShelf groups titles that look like the same thing saved twice. It matches on normalised titles (ignoring case, accents, punctuation, a leading "The" and bracketed qualifiers), and it will not match items with years more than a year apart or books by different authors.
+
+For each group, choose the entry to keep and click **Keep selected, merge rest**. Tags, rating, review, list and progress from the others are merged into it, and the most advanced status wins. Click **Not duplicates** to dismiss a group.
+
+### Stats dashboard
+
+Click the **chart icon** in the popup header to see:
+
+- Totals for saved, finished and in-progress items, plus your average rating
+- **Finished per month** for the last 12 months
+- The distribution of your ratings
+- Breakdowns by **type**, **genre** and **tag**
+
+Hover or focus any bar for exact numbers, or expand **View as table**.
+
+---
+
+## Supported sources
 
 | Source | Page type | Captures |
 |--------|-----------|----------|
@@ -254,183 +276,127 @@ Everything stays on your device unless you turn on Keep sync. No analytics. No e
 - If a book save is missing the author, scroll the knowledge panel down to load more details, then save again.
 
 **IMDb, Letterboxd, MAL, Goodreads**
-- Wait for the full page to load before clicking Save page.
-- Use the canonical title page URL, not a list, review, or profile URL.
+- Wait for the full page to load before saving.
+- Use the canonical title page URL, not a list, review or profile URL.
 
 ---
 
-## 🔖 Tabs, links, and notes
+## Tabs, links and notes
 
-The **Tabs** shelf is a lightweight bookmark manager built into KeepShelf. Switch to the **Tabs** tab in the popup to use it.
+The **Tabs** shelf is a lightweight bookmark manager. Switch to the **Tabs** tab in the popup.
 
-### Save the current tab
+- **Save this tab** bookmarks the page you are on, with its title and URL.
+- **Paste a URL** into the input box and click **Save** to store it as a link.
+- **Type any other text** and click **Save** to store it as a note.
+- **Click a saved tab or link** to reopen it in a new tab.
+- Tabs, links and notes can be tagged and put in lists like everything else.
 
-Click **Save tab** in the toolbar to bookmark the page you are on right now. The title and URL are saved automatically.
-
-### Save a link
-
-Paste any URL into the input box and click **Save**. The hostname becomes the title and the URL is stored for later.
-
-### Write a quick note
-
-Type any text (not a URL) into the input box and click **Save**. It is stored as a note.
-
-### Open a saved tab or link
-
-Click the title or URL of any saved tab or link in the list. It opens in a new tab, exactly like clicking a bookmark.
-
-### Copy or delete
-
-Select items with checkboxes and use **Copy selected** or the delete button, same as the Media and Books tabs.
+Anything not on the supported-sources list can still be saved this way.
 
 ---
 
-## 📋 Output format
+## Output format
 
-Every saved item becomes one line. These are real examples of the format KeepShelf produces:
-
-### Movies
+Every saved item becomes one line. These are the formats KeepShelf produces, and what **Copy all** and Keep sync use:
 
 ```
-The Shawshank Redemption (1994) | 2h 22m | IMDb 9.3
-Inception (2010) | 2h 28m | LB 4.23
 The Dark Knight (2008) | 2h 32m | IMDb 9.0
-```
-
-### Series
-
-```
+Inception (2010) | 2h 28m | LB 4.23
 Dark (2017) | S03 | IMDb 8.7
-Breaking Bad (2008) | S05 | IMDb 9.5
-Daredevil (2015) | S03 | IMDb 8.6
-```
-
-### Anime
-
-```
 One Piece (1999) | MAL 8.73 (A)
 Death Note (2006) | 37 eps | MAL 8.62 (A)
-Attack on Titan (2013) | MAL 9.0 (A)
-```
-
-### Books
-
-```
 The Kite Runner (Khaled Hosseini) | 2003 | GR 4.36
-The Alchemist (Paulo Coelho) | 1988 | BF 3.78
 A Game of Thrones (George R. R. Martin) | 1996
-```
-
-### Tabs and links
-
-```
 GitHub | https://github.com
-YouTube | https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ```
 
-Use **Copy all** in the popup to export your entire shelf as plain text, ready to paste anywhere.
+Ratings are labelled by source: `IMDb`, `LB` (Letterboxd), `MAL` (MyAnimeList), `GR` (Goodreads), `BF` (BookFilter), `RT 86%` (Rotten Tomatoes) and `Trakt`. Anime entries end with `(A)`.
+
+Your own tags, rating, status and progress are not part of the line, so Keep and clipboard output stay clean.
 
 ---
 
-## 📦 Install from GitHub
+## Installation
 
-There are two ways to install KeepShelf. Choose the one that suits you.
-
----
-
-### Option A: Download a release (recommended, no tools required)
+### Option A: Download a release (recommended)
 
 1. Go to the [**Releases page**](../../releases/latest).
 2. Download `KeepShelf-vX.X.X.zip` from the Assets section.
-3. Extract the ZIP to a permanent folder on your computer (do not delete it after loading).
-4. Open `chrome://extensions` in Chrome.
-5. Enable **Developer mode** (toggle in the top-right corner).
-6. Click **Load unpacked** and select the extracted folder.
-7. Pin KeepShelf to your Chrome toolbar.
+3. Extract it to a permanent folder (do not delete it after loading).
+4. Open `chrome://extensions` and enable **Developer mode** (top right).
+5. Click **Load unpacked** and select the extracted folder.
+6. Pin KeepShelf to your toolbar.
 
-> No Node.js, Git, or terminal required.
-
----
+No Node.js, Git or terminal required.
 
 ### Option B: Build from source
 
-Use this if you want to modify the code or always stay on the latest commit.
-
-**Requirements:**
-- [Google Chrome](https://www.google.com/chrome/) or any Chromium browser (Edge, Brave, Arc, Vivaldi)
-- [Node.js](https://nodejs.org/) 18 or newer
-- [Git](https://git-scm.com/)
+**Requirements:** Chrome or another Chromium browser (Edge, Brave, Arc, Vivaldi), [Node.js](https://nodejs.org/) 18 or newer, and [Git](https://git-scm.com/).
 
 ```bash
-# 1. Clone the repo
 git clone https://github.com/thefznkhan/KeepShelf.git
 cd KeepShelf
-
-# 2. Install dev dependencies (esbuild, TypeScript, jsdom)
 npm install
-
-# 3. Generate extension icons from icons/icon.png  (requires Python + Pillow)
-node scripts/generate-icons.mjs
-
-# 4. Build the extension into dist/
 npm run build
 ```
 
-Load into Chrome:
+Then load the cloned folder (the one containing `manifest.json`) with **Load unpacked** at `chrome://extensions`.
 
-1. Go to `chrome://extensions`
-2. Enable **Developer mode** (toggle, top right)
-3. Click **Load unpacked**
-4. Select the cloned `KeepShelf` folder (the folder that contains `manifest.json`)
-5. Pin KeepShelf to your toolbar
+The extension icons are already committed. You only need `node scripts/generate-icons.mjs` (requires Python and Pillow) if you change `icons/icon.png`.
 
-### Updating after `git pull`
+**Updating after `git pull`:**
 
 ```bash
-npm install     # only needed if dependencies changed
-npm run build   # rebuild dist/
+npm install     # only if dependencies changed
+npm run build
 ```
 
 Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 
 ---
 
-## 📖 Usage guide
+## Usage guide
 
-### Save a media title
+### Save a title
 
-1. Open a supported page: Google Search (with a knowledge panel), IMDb, Letterboxd, MyAnimeList, Goodreads, BookFilter, Series Graph, Rotten Tomatoes, or Trakt.
-2. Click the **KeepShelf icon** in your Chrome toolbar.
-3. Click **Save page** (or **Save book** on the Books tab).
-4. The item appears in your shelf with its formatted line.
+1. Open a supported page.
+2. Click the KeepShelf icon, then **Save page** (or **Save book** on the Books tab). Or use `Alt+Shift+S`, or right-click the page.
+3. The item appears on your shelf.
 
-### Save a tab or bookmark a URL
+### Rate, tag and track it
 
-1. Click the **KeepShelf icon** in your toolbar.
-2. Switch to the **Tabs** tab.
-3. Click **Save this tab** to bookmark the current page, or paste a URL and click **Save**.
-4. Click any saved tab or link in the list to open it.
+1. Click the **pencil** on a row to open the Edit dialog.
+2. In **Your shelf**, set the status, your rating, progress, tags, list and review.
+3. Click **Save**. The row updates with a summary line and tag chips.
+
+### Decide what's next
+
+1. Optionally narrow the view with a type, tag or list.
+2. Click the **dice** button, then **Start watching** or **Pick another**.
+
+### Save a tab or bookmark
+
+1. Switch to the **Tabs** tab.
+2. Click **Save this tab**, or paste a URL or note and click **Save**.
 
 ### Manage your shelf
 
-1. Click the **KeepShelf icon** to open the popup.
-2. Use the filter chips (All / Movies / Series / Anime) to narrow the view.
-3. Select items with checkboxes, then **Copy selected**, or click **Copy all**.
-4. Delete selected items with the trash icon, or use **Clear all** (Keep notes are never affected).
+1. Use the filter chips, status, tag and list dropdowns, search box and sort menu to narrow the view.
+2. Tick items, then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon.
+3. **Clear all** empties your shelf. Keep notes are never affected.
 
 ### Configure Keep sync
 
-1. Open **Settings** (gear icon in the popup header).
-2. Paste the full **Keep note URL** for each section (Media, Books, Tabs).
-3. Enable the toggle next to each section you want synced.
-4. Click **Save** for each section.
-5. Click **Test** to verify the connection while signed into Keep in Chrome.
+1. Open **Settings** (gear icon).
+2. Paste the full Keep note URL for each section (Media, Books, Tabs).
+3. Turn on the toggle for each section you want synced, and click **Save**.
+4. Click **Test** while signed into Keep in Chrome.
 
 ---
 
-## 🔗 Google Keep sync
+## Google Keep sync
 
-KeepShelf can append each saved line directly into Google Keep **checklist notes**. This works with a personal Google account. No OAuth app or Google Cloud project required.
+KeepShelf can append each saved line into Google Keep **checklist notes**. It works with a personal Google account and needs no OAuth app or Google Cloud project.
 
 ### Step 1: Create Keep list notes
 
@@ -438,68 +404,79 @@ In [Google Keep](https://keep.google.com), create checklist notes (enable **Show
 
 | Note | Used for |
 |------|----------|
-| **Media watchlist** | Movies, series, and anime |
+| **Media watchlist** | Movies, series and anime |
 | **Books list** | Books from any source |
-| **Tabs list** | Saved tabs, links, and notes |
+| **Tabs list** | Saved tabs, links and notes |
 
-You can use fewer notes: paste the same URL in multiple sections if you prefer one list.
+You can paste the same URL into several sections if you prefer one list.
 
 ### Step 2: Copy the full note URL
 
-Open each note and copy the complete URL from your browser address bar:
+Open each note and copy the complete URL from the address bar:
 
 ```
 https://keep.google.com/#LIST/your-long-list-id-here
 ```
 
-The list ID is typically 40+ characters. If Settings shows **URL looks incomplete**, the link was truncated. Paste the full URL again directly from the address bar.
+The list ID is usually 40+ characters. If Settings shows **URL looks incomplete**, paste the full URL again from the address bar.
 
 ### Step 3: Link them in KeepShelf
 
-1. Open KeepShelf **Settings**
-2. Paste the URL into the matching field (Media, Books, or Tabs)
-3. Enable the toggle
-4. Click **Save**
-5. Click **Test** to verify. A test line will be added to the note.
+Open **Settings**, paste the URL into the matching field, turn on the toggle, click **Save**, then **Test**. A test line is added to the note.
 
 ### How sync works
 
-| Step | Behavior |
-|------|----------|
-| Local save | Item is stored in KeepShelf first, always |
-| Routing | Movies/series/anime go to Media note; books to Books note; tabs/links/notes to Tabs note |
-| Background sync | Keep opens in a hidden background tab; you stay on your current page |
+| Step | Behaviour |
+|------|-----------|
+| Local save | The item is stored in KeepShelf first, always |
+| Routing | Movies, series and anime go to the Media note, books to the Books note, tabs, links and notes to the Tabs note |
+| Background sync | Keep opens in a hidden tab, so you stay on your current page |
 | Duplicate skip | Identical lines are not added twice |
-| Failure | The item stays on your shelf with a retry icon; click it, or select items and use **Sync selected** |
+| Failure | The item stays on your shelf with a retry icon. Click it, or use **Sync selected** |
+| Scope | Only the formatted line is synced. Tags, ratings, status and edits stay on your shelf |
 
 ### Why the debugger permission?
 
-Google Keep only persists list items entered through trusted browser input. KeepShelf briefly uses Chrome's debugger API to deliver that trusted keystroke so your lines survive after you close the note.
-
-You may see a short banner: **"KeepShelf started debugging this browser"**. It disappears when sync finishes. This is expected and required for reliable Keep persistence.
+Google Keep only persists list items entered through trusted browser input. KeepShelf briefly uses Chrome's debugger API to deliver that trusted keystroke so your lines survive after the note is closed. You may see a short banner, **"KeepShelf started debugging this browser"**, which disappears when sync finishes.
 
 ---
 
-## 🔒 Privacy and data
+## Backup and import
+
+Your shelf lives only in this browser, so export a backup now and then.
+
+- **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress.
+- **Import** accepts:
+  - a **KeepShelf backup** (`.json`)
+  - a **Letterboxd** export CSV (watchlist, watched, diary or ratings)
+  - a **Goodreads** library export CSV
+- Items already on your shelf are skipped, and imported items are not sent to Keep.
+- Letterboxd and Goodreads imports mark watched and read items as finished.
+
+Importing from a file picker opens Settings in a full tab, because Chrome closes the popup when a file dialog opens.
+
+---
+
+## Privacy and data
 
 | Data | Where it lives |
 |------|----------------|
-| Saved shelf items | `chrome.storage.local` (your device only) |
+| Saved shelf items, including tags, ratings and reviews | `chrome.storage.local` (your device only) |
 | Keep settings (URLs, toggles) | `chrome.storage.local` (your device only) |
-| Keep list content | Your Google Keep account (only when sync is enabled) |
+| Keep list content | Your Google Keep account (only when sync is on) |
 
-KeepShelf does **not** send your data to any external server. Keep sync communicates only with `keep.google.com` inside your existing signed-in browser session. Poster thumbnails load directly from the site's image server (for example IMDb's or Letterboxd's), without a referrer.
+KeepShelf does **not** send your data to any external server. Keep sync talks only to `keep.google.com` inside your signed-in browser session. Poster thumbnails load directly from the source site's image server, without a referrer.
 
-Uninstalling the extension removes all local shelf data. Your Google Keep notes are never modified or deleted by KeepShelf except to append new lines.
+Uninstalling the extension removes all local shelf data. KeepShelf only ever appends lines to your Keep notes. It never edits or deletes them.
 
 ---
 
-## 🔐 Permissions explained
+## Permissions explained
 
 | Permission | Why it is needed |
-|------------|-----------------|
-| `storage` | Save your shelf items and settings locally |
-| `tabs` | Read the current tab URL/title for tab-save; find or open Keep note tabs for sync |
+|------------|------------------|
+| `storage` | Save your shelf and settings locally |
+| `tabs` | Read the current tab's URL and title; find or open Keep note tabs for sync |
 | `scripting` | Run the Keep append script inside your Keep tab |
 | `debugger` | Send trusted text input so Keep persists list items reliably |
 | `contextMenus` | Add the right-click **Save … to KeepShelf** entries |
@@ -516,85 +493,133 @@ Uninstalling the extension removes all local shelf data. Your Google Keep notes 
 
 ---
 
-## 🛠 Development
+## Development
 
-| Command | Purpose |
-|---------|---------|
-| `npm run build` | Compile TypeScript into `dist/` |
-| `npm run watch` | Rebuild on every file save |
-| `npm test` | Run parser and format tests |
-| `npx tsc --noEmit` | Type-check without building |
+```bash
+npm install
+npm run build     # compile into dist/
+npm run watch     # rebuild on save
+npm test          # run the test suite
+npx tsc --noEmit  # type-check
+```
 
-For the full developer guide, including local setup, icon generation, adding a new parser source, and publishing a release, see [DEVELOPER.md](DEVELOPER.md).
+| Area | Where |
+|------|-------|
+| Site parsers and formatting | `src/shared/` (`imdb.ts`, `letterboxd.ts`, `mal.ts`, `format.ts`, …) |
+| Personal data rules (status, tags, ratings, progress) | `src/shared/user-data.ts` |
+| Duplicates, random pick, stats (pure, unit-tested) | `src/shared/fuzzy.ts`, `random-pick.ts`, `stats.ts` |
+| Storage and backup import | `src/shared/storage.ts`, `import.ts` |
+| Keep sync | `src/shared/keep-*.ts` |
+| Background worker, shortcuts, context menus | `src/background/` |
+| Popup UI and stats charts | `src/popup/` |
+| Tests | `tests/*.test.mjs` |
+
+New logic is easiest to test when it is a pure function in `src/shared/`: add its name to the `entries` list in `scripts/build-test-parser.mjs` and import it from `dist-test/` in a test.
+
+For the full developer guide, including setup, icon generation, adding a new site parser and publishing a release, see [DEVELOPER.md](DEVELOPER.md).
 
 ---
 
-## ❓ FAQ
+## FAQ
 
 **Does KeepShelf work without Google Keep?**
 
-Yes. The local shelf works completely independently. Keep sync is optional and off by default.
+Yes. The local shelf is fully independent. Keep sync is optional and off by default.
 
-**Can I use a single Keep note for everything?**
+**Can I use one Keep note for everything?**
 
-Yes. Paste the same Keep URL into the Media, Books, and Tabs fields. All saves will go to one note.
+Yes. Paste the same Keep URL into the Media, Books and Tabs fields.
+
+**Do my tags, ratings and progress sync to Keep?**
+
+No. Only the formatted line is sent to Keep. Everything personal stays on your shelf and in your backups.
 
 **Why does Letterboxd show a different number than IMDb?**
 
-Letterboxd uses a community score on a roughly 5-point scale (`LB 4.23`). IMDb uses a 10-point scale (`IMDb 8.8`). KeepShelf labels the source so you can tell them apart at a glance.
+Letterboxd uses a community score on a roughly 5-point scale (`LB 4.23`), IMDb a 10-point scale (`IMDb 8.8`). KeepShelf labels the source so you can tell them apart. Sorting by source rating normalises them to a common scale.
+
+**How is "My rating" different from the rating on the row?**
+
+The source rating (IMDb, MAL, …) comes from the website. **My rating** is yours, from 1 to 10, and has its own sort.
+
+**What does "Pick something for me" choose from?**
+
+Planned items in the current view. If none are planned it suggests something in progress. It never suggests finished or dropped items.
 
 **Will my shelf survive an extension update?**
 
-Yes, as long as you reload the extension rather than removing and reinstalling it. Removing the extension clears `chrome.storage.local`.
+Yes, if you reload the extension rather than removing and reinstalling it. Removing it clears `chrome.storage.local`, so keep a backup.
+
+**Can I move my shelf to another computer?**
+
+Export a backup in Settings and import it on the other machine.
 
 **Does this work on Firefox?**
 
-KeepShelf is built for Chromium Manifest V3. Firefox would need a separate port.
+KeepShelf targets Chromium Manifest V3. Firefox would need a separate port.
 
 **Is there a Chrome Web Store listing?**
 
-Not yet. Download the latest release ZIP from the [Releases page](../../releases/latest) and load it unpacked. No Node.js or Git required.
+Not yet. Download the latest ZIP from the [Releases page](../../releases/latest) and load it unpacked.
 
-**Can I save a page that is not in the supported list?**
+**Can I save a page that is not supported?**
 
-Use the **Tabs** shelf: click **Save this tab** to bookmark the current URL regardless of the site. You can click it later to reopen the page.
+Yes. Use the **Tabs** shelf: **Save this tab** bookmarks any URL.
 
 **Why did my Keep line disappear after closing the note?**
 
-This happens when text is inserted without trusted browser input. Reload the extension at `chrome://extensions` and try saving again. The debugger-based input method will re-run.
+Text inserted without trusted browser input is discarded by Keep. Reload the extension at `chrome://extensions` and save again so the debugger-based input runs.
 
 ---
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 | Problem | What to try |
 |---------|-------------|
-| "Nothing detected on this page" | Check that the URL is in the supported list and the page has fully loaded |
+| "Nothing detected on this page" | Check the URL is on the supported list and the page has fully loaded |
 | Letterboxd or MAL save fails | Use the canonical title page (`/film/slug/` or `/anime/id/slug`), not a review or list URL |
-| Keep line vanishes after closing the note | Reload the extension; trusted input via the debugger API is needed for Keep to persist |
-| "URL looks incomplete" in Settings | Paste the full `#LIST/…` URL directly from your browser address bar |
-| Book saved without author (Google) | Scroll the Google knowledge panel to trigger the author field to load, then save again |
-| Keep Test fails | Make sure you are signed into Google in Chrome and the list note URL is a checklist note |
-| Extension icon still shows old version | Reload at `chrome://extensions`, or restart Chrome |
-| Changes not showing after `git pull` | Run `npm run build`, then click Reload at `chrome://extensions` |
-| "Already saved" on first save | The same title was saved in a previous session, so it is already on your shelf |
+| Keep line vanishes after closing the note | Reload the extension; trusted input via the debugger API is needed |
+| "URL looks incomplete" in Settings | Paste the full `#LIST/…` URL from the address bar |
+| Book saved without author (Google) | Scroll the knowledge panel to load the author, then save again |
+| Keep Test fails | Sign into Google in Chrome and make sure the note is a checklist |
+| "Already saved" on a first save | The same title is already on your shelf from an earlier session |
+| "Saved (similar to …)" | A near-match exists. Review it under Settings, Duplicates |
+| Tag or list dropdown is missing | They appear only when the current tab has tags or lists |
+| Nothing to pick | Everything in the current view is finished or dropped; clear a filter or add items |
+| Rating or progress is rejected | Ratings are whole numbers from 1 to 10, and progress cannot exceed the total |
+| Extension still shows an old version | Reload at `chrome://extensions`, or restart Chrome |
+| Changes missing after `git pull` | Run `npm run build`, then click Reload at `chrome://extensions` |
 
 ---
 
-## 🤝 Contributing
+## Roadmap
+
+Ideas under consideration, not promises:
+
+- Export to CSV and Markdown
+- Scheduled automatic backups
+- "Where to watch" streaming availability
+- Reminders for unreleased titles
+- More sources (TMDB, AniList, StoryGraph) and games or music as new types
+
+Have a suggestion? [Open an issue](../../issues).
+
+---
+
+## Contributing
 
 Issues and pull requests are welcome.
 
-1. Fork the repository
-2. Create a branch: `git checkout -b feature/my-change`
-3. Make your changes and add tests for any new parser logic
-4. Run `npm test` to confirm nothing regressed
-5. Open a pull request with a clear description of what changed and why
+1. Fork the repository.
+2. Create a branch: `git checkout -b feature/my-change`.
+3. Make your changes and add tests for new parser or shared logic.
+4. Run `npm test` and `npx tsc --noEmit` to confirm nothing regressed.
+5. Open a pull request describing what changed and why.
 
-For new site parsers, please include at least one saved HTML fixture and a corresponding test file.
+For new site parsers, include at least one saved HTML fixture and a matching test file.
 
 ---
 
-## 📄 License
+## License
 
-[MIT](LICENSE). Free to use, modify, and distribute.
+[MIT](LICENSE). Free to use, modify and distribute.
