@@ -5,6 +5,7 @@ import {
   clearAll,
   updateItem,
   importItems,
+  mergeItems,
   STORAGE_KEY,
 } from "../shared/storage.js";
 import {
@@ -16,6 +17,7 @@ import type { KeepSyncResult } from "../shared/keep-settings.js";
 import { isHttpUrl, isSaveableTabUrl, linkItem, noteItem, tabItem, type NewItem } from "../shared/items.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, MessageAction, MessageResponse, SavedItem, UserFields } from "../shared/types.js";
+import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
 
@@ -27,6 +29,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "update",
   "syncKeep",
   "import",
+  "merge",
   "clear",
   "setKeepSettings",
   "testKeepAppend",
@@ -63,9 +66,10 @@ async function syncAndRecord(item: SavedItem): Promise<KeepSyncResult> {
 }
 
 async function saveAndSync(partial: NewItem) {
+  const similar = findNearDuplicates(partial, await getAllItems()).map((i) => i.title);
   const { item, duplicate } = await saveItem(partial);
   const keep = await syncAndRecord(item);
-  return { ok: true as const, item, duplicate, keep };
+  return { ok: true as const, item, duplicate, keep, ...(!duplicate && similar.length ? { similar } : {}) };
 }
 
 async function saveTab(tab: chrome.tabs.Tab | undefined): Promise<MessageResponse> {
@@ -145,6 +149,10 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       const { items, added, skipped } = await importItems(message.items);
       return { ok: true, items, added, skipped };
     }
+    case "merge": {
+      const items = await mergeItems(message.keepId, message.removeIds);
+      return { ok: true, items };
+    }
     case "clear": {
       await clearAll();
       return { ok: true, items: [] };
@@ -195,7 +203,9 @@ async function savePageFromTab(tab: chrome.tabs.Tab): Promise<MessageResponse> {
 function describeQuickSave(response: MessageResponse): { ok: boolean; message: string } {
   if (!response.ok) return { ok: false, message: response.error };
   if (!("keep" in response)) return { ok: true, message: "Saved" };
-  const base = "duplicate" in response && response.duplicate ? "Already saved" : "Saved";
+  const similar = "similar" in response ? response.similar?.[0] : undefined;
+  const base =
+    "duplicate" in response && response.duplicate ? "Already saved" : similar ? `Saved (similar to "${similar}")` : "Saved";
   const keep = response.keep;
   if (keep?.status === "failed" || keep?.status === "missing_config") {
     return { ok: false, message: `${base}, but not added to Keep: ${keep.error ?? "unknown error"}` };

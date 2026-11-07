@@ -328,6 +328,21 @@
         </section>
 
         <section class="settings-section settings-section-divider">
+          <h2 class="section-title">Duplicates</h2>
+          <p class="settings-hint">
+            Finds titles saved twice under slightly different names, such as “The Office (US)” and “Office”.
+            Merging keeps the one you choose and combines tags, ratings, reviews and progress.
+          </p>
+          <div class="settings-button-row">
+            <button type="button" id="find-duplicates" class="btn btn-outline">
+              <span class="material-symbols-outlined btn-icon">content_copy</span>
+              Find duplicates
+            </button>
+          </div>
+          <div id="duplicates-result" class="dup-result"></div>
+        </section>
+
+        <section class="settings-section settings-section-divider">
           <h2 class="section-title">Quick save</h2>
           <p class="settings-hint">
             Right-click a page, link or selected text and choose “Save … to KeepShelf”, or press

@@ -27,3 +27,30 @@ test("notes dedupe by body text", () => {
     dedupeKey({ type: "note", title: "t2", body: " buy milk " })
   );
 });
+
+test("mergeItems folds user data into the keeper and removes the rest", async () => {
+  const { mergeItems, STORAGE_KEY } = await import("../dist-test/storage.js");
+  const base = { subtitle: "", googleQuery: "", sourceUrl: "", type: "movie" };
+  const store = {
+    [STORAGE_KEY]: [
+      { ...base, id: "a", title: "Dune", savedAt: 1, tags: ["x"] },
+      { ...base, id: "b", title: "Dune ", savedAt: 2, tags: ["y"], myRating: 9, status: "done", done: true, doneAt: 5 },
+      { ...base, id: "c", title: "Other", savedAt: 3 },
+    ],
+  };
+  globalThis.chrome = {
+    storage: {
+      local: {
+        get: async () => ({ ...store }),
+        set: async (value) => Object.assign(store, value),
+      },
+    },
+  };
+  const result = await mergeItems("a", ["b"]);
+  assert.deepEqual(result.map((i) => i.id), ["a", "c"]);
+  assert.deepEqual(result[0].tags, ["x", "y"]);
+  assert.equal(result[0].myRating, 9);
+  assert.equal(result[0].done, true);
+  await assert.rejects(() => mergeItems("missing", []));
+  delete globalThis.chrome;
+});

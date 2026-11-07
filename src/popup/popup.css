@@ -1176,3 +1176,43 @@ body.in-tab {
   max-height: calc(100vh - 24px);
   overflow-y: auto;
 }
+
+/* ── Duplicates ──────────────────────────────────────────── */
+
+.dup-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.dup-group {
+  padding: 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-xl);
+  background: var(--surface-container-low);
+}
+
+.dup-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dup-option span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dup-option small {
+  color: var(--on-surface-variant);
+  font-size: 11px;
+}
+
+.dup-group .settings-button-row {
+  margin-top: 6px;
+}

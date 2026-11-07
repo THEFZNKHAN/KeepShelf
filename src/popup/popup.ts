@@ -6,6 +6,7 @@ import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { normalizeTags, statusOf } from "../shared/user-data.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
@@ -909,7 +910,8 @@ async function saveCurrentPage(): Promise<void> {
       showSaveResult("Already saved", keep);
     } else {
       await loadItems();
-      showSaveResult("Saved", keep);
+      const similar = "similar" in saveResponse ? saveResponse.similar?.[0] : undefined;
+      showSaveResult(similar ? `Saved (similar to "${similar}", see Settings > Duplicates)` : "Saved", keep);
     }
   } finally {
     setSaveButtonBusy(false);
@@ -1201,6 +1203,112 @@ editFormEl.addEventListener("submit", async (e) => {
 
 document.getElementById("edit-cancel")!.addEventListener("click", closeEditDialog);
 editDialogEl.querySelector("[data-edit-dismiss]")!.addEventListener("click", closeEditDialog);
+
+/* ── Duplicates ──────────────────────────────────────────── */
+
+const duplicatesResultEl = document.getElementById("duplicates-result")!;
+const DISMISSED_KEY = "keepshelf.dismissedDuplicates";
+
+function groupKey(group: SavedItem[]): string {
+  return group.map((i) => i.id).sort().join("|");
+}
+
+function dismissedGroups(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(DISMISSED_KEY) ?? "[]") as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function dismissGroup(group: SavedItem[]): void {
+  const dismissed = dismissedGroups();
+  dismissed.add(groupKey(group));
+  localStorage.setItem(DISMISSED_KEY, JSON.stringify([...dismissed]));
+}
+
+function describeDuplicate(item: SavedItem): string {
+  const bits = [typeLabel(item.type), item.year ?? item.publishedYear, item.author, statusLabel(statusOf(item))];
+  if (item.myRating) bits.push(`★ ${item.myRating}/10`);
+  if (item.tags?.length) bits.push(item.tags.map((t) => `#${t}`).join(" "));
+  return bits.filter(Boolean).join(" · ");
+}
+
+function renderDuplicates(): void {
+  const dismissed = dismissedGroups();
+  const groups = findDuplicateGroups(allItems).filter((g) => !dismissed.has(groupKey(g)));
+  duplicatesResultEl.innerHTML = "";
+
+  if (groups.length === 0) {
+    const none = document.createElement("p");
+    none.className = "settings-hint";
+    none.textContent = "No likely duplicates found.";
+    duplicatesResultEl.append(none);
+    return;
+  }
+
+  for (const group of groups) {
+    const card = document.createElement("div");
+    card.className = "dup-group";
+    const radioName = `keep-${group[0].id}`;
+    const keeperId = pickKeeper(group).id;
+
+    for (const item of group) {
+      const label = document.createElement("label");
+      label.className = "dup-option";
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = radioName;
+      radio.value = item.id;
+      radio.checked = item.id === keeperId;
+      const text = document.createElement("span");
+      const title = document.createElement("strong");
+      title.textContent = item.title;
+      const detail = document.createElement("small");
+      detail.textContent = describeDuplicate(item);
+      text.append(title, detail);
+      label.append(radio, text);
+      card.append(label);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "settings-button-row";
+    const merge = document.createElement("button");
+    merge.type = "button";
+    merge.className = "btn btn-primary";
+    merge.textContent = "Keep selected, merge rest";
+    merge.addEventListener("click", () => {
+      const chosen = card.querySelector<HTMLInputElement>(`input[name="${radioName}"]:checked`)?.value ?? keeperId;
+      void mergeGroup(chosen, group.filter((i) => i.id !== chosen).map((i) => i.id));
+    });
+    const keepBoth = document.createElement("button");
+    keepBoth.type = "button";
+    keepBoth.className = "btn btn-outline";
+    keepBoth.textContent = "Not duplicates";
+    keepBoth.addEventListener("click", () => {
+      dismissGroup(group);
+      renderDuplicates();
+    });
+    actions.append(merge, keepBoth);
+    card.append(actions);
+    duplicatesResultEl.append(card);
+  }
+}
+
+async function mergeGroup(keepId: string, removeIds: string[]): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "merge", keepId, removeIds });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    render();
+    renderDuplicates();
+    showBackupStatus(`Merged ${removeIds.length + 1} items into one.`);
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Merge failed.", true);
+  }
+}
+
+document.getElementById("find-duplicates")!.addEventListener("click", renderDuplicates);
 
 /* ── Backup & import ─────────────────────────────────────── */
 

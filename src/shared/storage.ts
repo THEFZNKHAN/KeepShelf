@@ -1,3 +1,4 @@
+import { mergeUserData } from "./fuzzy.js";
 import type { ImportItem, SavedItem } from "./types.js";
 
 export const STORAGE_KEY = "trackbuddy_items";
@@ -64,6 +65,19 @@ export async function deleteItems(ids: string[]): Promise<SavedItem[]> {
   const items = (await getAllItems()).filter((i) => !idSet.has(i.id));
   await chrome.storage.local.set({ [STORAGE_KEY]: items });
   return items;
+}
+
+/** Folds the user data of `removeIds` into `keepId`, then deletes the others. */
+export async function mergeItems(keepId: string, removeIds: string[]): Promise<SavedItem[]> {
+  const items = await getAllItems();
+  const keeper = items.find((i) => i.id === keepId);
+  if (!keeper) throw new Error("That item no longer exists.");
+  const removing = new Set(removeIds.filter((id) => id !== keepId));
+  const others = items.filter((i) => removing.has(i.id));
+  const merged = { ...keeper, ...mergeUserData(keeper, others) };
+  const result = items.filter((i) => !removing.has(i.id)).map((i) => (i.id === keepId ? merged : i));
+  await chrome.storage.local.set({ [STORAGE_KEY]: result });
+  return result;
 }
 
 export async function clearAll(): Promise<void> {

@@ -79,6 +79,7 @@ export type MessageAction =
   | { action: "update"; id: string; changes: EditableFields & UserFields & { done?: boolean } }
   | { action: "syncKeep"; ids: string[] }
   | { action: "import"; items: ImportItem[] }
+  | { action: "merge"; keepId: string; removeIds: string[] }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
@@ -86,7 +87,7 @@ export type MessageAction =
   | { action: "getLastKeepResult" };
 
 export type MessageResponse =
-  | { ok: true; duplicate?: boolean; item?: SavedItem; keep?: KeepSyncResult }
+  | { ok: true; duplicate?: boolean; similar?: string[]; item?: SavedItem; keep?: KeepSyncResult }
   | { ok: true; items: SavedItem[]; synced?: number; failed?: number; added?: number; skipped?: number }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }
