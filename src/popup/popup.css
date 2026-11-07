@@ -1101,3 +1101,78 @@ body.in-tab {
   background: #93000a;
   border-color: #93000a;
 }
+
+/* ── Tags, lists, ratings and progress ───────────────────── */
+
+.organise-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.organise-select[hidden] {
+  display: none;
+}
+
+.item-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.item-meta-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.tag-chip {
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.tag-chip:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.edit-section {
+  margin: 6px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--outline-variant);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.edit-field select {
+  width: 100%;
+  padding: 5px 6px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  outline: none;
+}
+
+.edit-field select:focus {
+  border-color: var(--primary);
+}
+
+.edit-panel {
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}

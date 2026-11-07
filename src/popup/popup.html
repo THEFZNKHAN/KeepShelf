@@ -86,7 +86,9 @@
           <select id="status-filter" class="view-select" aria-label="Status filter">
             <option value="all">All</option>
             <option value="todo">To watch</option>
+            <option value="progress">In progress</option>
             <option value="done">Watched</option>
+            <option value="dropped">Dropped</option>
           </select>
           <select id="sort" class="view-select" aria-label="Sort">
             <option value="newest">Newest</option>
@@ -94,7 +96,13 @@
             <option value="title">Title A–Z</option>
             <option value="year">Year</option>
             <option value="rating">Rating</option>
+            <option value="myrating">My rating</option>
           </select>
+        </div>
+
+        <div class="view-row" id="organise-row" hidden>
+          <select id="tag-filter" class="view-select organise-select" aria-label="Filter by tag"></select>
+          <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
         </div>
 
         <div class="action-row">

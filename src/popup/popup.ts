@@ -5,13 +5,20 @@ import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
-import type { EditableFields, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import { normalizeTags, statusOf } from "../shared/user-data.js";
 
-type StatusFilter = "all" | "todo" | "done";
-type SortBy = "newest" | "oldest" | "title" | "year" | "rating";
+type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
+type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
-const STATUS_FILTERS: StatusFilter[] = ["all", "todo", "done"];
-const SORTS: SortBy[] = ["newest", "oldest", "title", "year", "rating"];
+const STATUS_FILTERS: StatusFilter[] = ["all", "todo", "progress", "done", "dropped"];
+const SORTS: SortBy[] = ["newest", "oldest", "title", "year", "rating", "myrating"];
+const FILTER_STATUS: Record<Exclude<StatusFilter, "all">, ItemStatus> = {
+  todo: "plan",
+  progress: "in_progress",
+  done: "done",
+  dropped: "dropped",
+};
 
 function storedChoice<T extends string>(key: string, allowed: T[], fallback: T): T {
   const value = localStorage.getItem(key) as T | null;
@@ -22,6 +29,8 @@ let allItems: SavedItem[] = [];
 let activeFilter: MediaType | "all" = "all";
 let activeTab: "media" | "books" | "tabs" = "media";
 let searchQuery = "";
+let tagFilter = "";
+let listFilter = "";
 let statusFilter = storedChoice<StatusFilter>("keepshelf.status", STATUS_FILTERS, "all");
 let sortBy = storedChoice<SortBy>("keepshelf.sort", SORTS, "newest");
 let keepSettings: KeepSettings = { mediaEnabled: false, booksEnabled: false, tabsEnabled: false };
@@ -72,6 +81,9 @@ const savePageBtnEl = document.getElementById("save-page") as HTMLButtonElement;
 const searchEl = document.getElementById("search") as HTMLInputElement;
 const statusFilterEl = document.getElementById("status-filter") as HTMLSelectElement;
 const sortEl = document.getElementById("sort") as HTMLSelectElement;
+const organiseRowEl = document.getElementById("organise-row")!;
+const tagFilterEl = document.getElementById("tag-filter") as HTMLSelectElement;
+const listFilterEl = document.getElementById("list-filter") as HTMLSelectElement;
 const syncSelectedEl = document.getElementById("sync-selected") as HTMLButtonElement;
 const editDialogEl = document.getElementById("edit-dialog")!;
 const editFormEl = document.getElementById("edit-form") as HTMLFormElement;
@@ -127,7 +139,7 @@ function tabItems(): SavedItem[] {
 }
 
 function searchText(item: SavedItem): string {
-  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body]
+  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, ...(item.tags ?? [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -159,6 +171,8 @@ function sortItems(items: SavedItem[]): SavedItem[] {
       return sorted.sort((a, b) => yearOf(b) - yearOf(a));
     case "rating":
       return sorted.sort((a, b) => ratingScore(b) - ratingScore(a));
+    case "myrating":
+      return sorted.sort((a, b) => (b.myRating ?? 0) - (a.myRating ?? 0));
     default:
       return sorted.sort((a, b) => b.savedAt - a.savedAt);
   }
@@ -170,11 +184,24 @@ function filteredItems(): SavedItem[] {
     items = items.filter((i) => i.type === activeFilter);
   }
   if (statusFilter !== "all") {
-    items = items.filter((i) => Boolean(i.done) === (statusFilter === "done"));
+    const wanted = FILTER_STATUS[statusFilter];
+    items = items.filter((i) => statusOf(i) === wanted);
   }
+  if (tagFilter) items = items.filter((i) => i.tags?.includes(tagFilter));
+  if (listFilter) items = items.filter((i) => i.list === listFilter);
   const query = searchQuery.trim().toLowerCase();
   if (query) items = items.filter((i) => searchText(i).includes(query));
   return sortItems(items);
+}
+
+function statusLabel(status: ItemStatus): string {
+  const labels = doneLabels();
+  switch (status) {
+    case "done": return labels.done;
+    case "in_progress": return "In progress";
+    case "dropped": return "Dropped";
+    default: return labels.todo;
+  }
 }
 
 function doneLabels(): { todo: string; done: string; markDone: string; markTodo: string } {
@@ -486,6 +513,75 @@ function createRowActions(item: SavedItem): HTMLElement {
   return actions;
 }
 
+function isTrackable(item: SavedItem): boolean {
+  return item.type !== "tab" && item.type !== "link" && item.type !== "note";
+}
+
+function progressText(item: SavedItem): string {
+  if (item.progressCurrent === undefined && item.progressTotal === undefined) return "";
+  const unit = item.type === "book" ? "p." : item.type === "movie" ? "" : "ep.";
+  const current = item.progressCurrent ?? 0;
+  const text = item.progressTotal !== undefined ? `${current}/${item.progressTotal}` : `${current}`;
+  return unit ? `${unit} ${text}` : text;
+}
+
+function createItemMeta(item: SavedItem): HTMLElement | undefined {
+  const status = statusOf(item);
+  const parts: string[] = [];
+  if (isTrackable(item) && (status === "in_progress" || status === "dropped")) parts.push(statusLabel(status));
+  const progress = progressText(item);
+  if (progress && isTrackable(item)) parts.push(progress);
+  if (item.myRating) parts.push(`★ ${item.myRating}/10`);
+  if (item.list) parts.push(item.list);
+  const tags = item.tags ?? [];
+  if (parts.length === 0 && tags.length === 0) return undefined;
+
+  const meta = document.createElement("div");
+  meta.className = "item-meta";
+  if (parts.length) {
+    const text = document.createElement("span");
+    text.className = "item-meta-text";
+    text.textContent = parts.join(" · ");
+    if (item.review) text.title = item.review;
+    meta.append(text);
+  }
+  for (const tag of tags) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "tag-chip";
+    chip.textContent = `#${tag}`;
+    chip.title = `Filter by #${tag}`;
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      tagFilter = tagFilter === tag ? "" : tag;
+      render();
+    });
+    meta.append(chip);
+  }
+  return meta;
+}
+
+function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], selected: string, prefix = ""): void {
+  el.innerHTML = "";
+  el.append(new Option(allLabel, ""));
+  for (const value of values) el.append(new Option(`${prefix}${value}`, value));
+  el.value = selected;
+}
+
+/** Tag and list filters only list what exists on the current shelf tab, and hide when there is nothing to pick. */
+function renderOrganiseFilters(): void {
+  const items = tabItems();
+  const tags = [...new Set(items.flatMap((i) => i.tags ?? []))].sort();
+  const lists = [...new Set(items.map((i) => i.list).filter((l): l is string => Boolean(l)))].sort();
+  if (!tags.includes(tagFilter)) tagFilter = "";
+  if (!lists.includes(listFilter)) listFilter = "";
+  fillSelect(tagFilterEl, "All tags", tags, tagFilter, "#");
+  fillSelect(listFilterEl, "All lists", lists, listFilter);
+  tagFilterEl.hidden = tags.length === 0;
+  listFilterEl.hidden = lists.length === 0;
+  organiseRowEl.hidden = tags.length === 0 && lists.length === 0;
+}
+
 function render(): void {
   const items = filteredItems();
   const tabCount = tabItems().length;
@@ -498,8 +594,9 @@ function render(): void {
 
   const labels = doneLabels();
   statusFilterEl.options[1].textContent = labels.todo;
-  statusFilterEl.options[2].textContent = labels.done;
+  statusFilterEl.options[3].textContent = labels.done;
   statusFilterEl.value = statusFilter;
+  renderOrganiseFilters();
   sortEl.value = sortBy;
 
   savePageBtnEl.textContent =
@@ -559,6 +656,9 @@ function render(): void {
 
       body.append(subtitle);
     }
+
+    const meta = createItemMeta(item);
+    if (meta) body.append(meta);
 
     li.append(typeIconEl, body, createRowActions(item), checkbox);
 
@@ -980,8 +1080,83 @@ function openEditDialog(item: SavedItem): void {
     if (pendingRow.childElementCount === 2) pendingRow = null;
   }
 
+  appendPersonalFields(item);
+
   editDialogEl.hidden = false;
   editFieldsEl.querySelector<HTMLElement>("input, textarea")?.focus();
+}
+
+function buildSelectField(name: string, label: string, options: Array<[string, string]>, value: string): HTMLElement {
+  const wrap = document.createElement("label");
+  wrap.className = "edit-field";
+  wrap.textContent = label;
+  const select = document.createElement("select");
+  select.name = name;
+  for (const [optionValue, text] of options) select.append(new Option(text, optionValue));
+  select.value = value;
+  wrap.append(select);
+  return wrap;
+}
+
+function buildTextField(name: string, label: string, value: string, type = "text", placeholder = ""): HTMLElement {
+  const wrap = document.createElement("label");
+  wrap.className = "edit-field";
+  wrap.textContent = label;
+  const input = document.createElement("input");
+  input.name = name;
+  input.type = type;
+  input.value = value;
+  if (type === "number") input.min = "0";
+  if (placeholder) input.placeholder = placeholder;
+  wrap.append(input);
+  return wrap;
+}
+
+function row(...fields: HTMLElement[]): HTMLElement {
+  const el = document.createElement("div");
+  el.className = "edit-row";
+  el.append(...fields);
+  return el;
+}
+
+function appendPersonalFields(item: SavedItem): void {
+  const heading = document.createElement("h3");
+  heading.className = "edit-section";
+  heading.textContent = "Your shelf";
+  editFieldsEl.append(heading);
+
+  if (isTrackable(item)) {
+    const statuses: ItemStatus[] = ["plan", "in_progress", "done", "dropped"];
+    const ratings: Array<[string, string]> = [["", "No rating"]];
+    for (let n = 10; n >= 1; n--) ratings.push([String(n), `${n}/10`]);
+    editFieldsEl.append(
+      row(
+        buildSelectField("status", "Status", statuses.map((s) => [s, statusLabel(s)]), statusOf(item)),
+        buildSelectField("myRating", "My rating", ratings, item.myRating ? String(item.myRating) : "")
+      ),
+      row(
+        buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
+        buildTextField("progressTotal", item.type === "book" ? "Total pages" : "Total episodes", String(item.progressTotal ?? ""), "number")
+      )
+    );
+  }
+
+  editFieldsEl.append(
+    buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "sci-fi, weekend"),
+    buildTextField("list", "List", item.list ?? "", "text", "e.g. Weekend watch")
+  );
+
+  if (isTrackable(item)) {
+    const label = document.createElement("label");
+    label.className = "edit-field";
+    label.textContent = "Review";
+    const area = document.createElement("textarea");
+    area.name = "review";
+    area.rows = 3;
+    area.value = item.review ?? "";
+    label.append(area);
+    editFieldsEl.append(label);
+  }
 }
 
 function closeEditDialog(): void {
@@ -992,9 +1167,27 @@ function closeEditDialog(): void {
 editFormEl.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!editingId) return;
-  const changes: EditableFields = {};
-  for (const el of editFieldsEl.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")) {
-    changes[el.name as keyof EditableFields] = el.value;
+  const changes: EditableFields & UserFields = {};
+  for (const el of editFieldsEl.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")) {
+    switch (el.name) {
+      case "tags":
+        changes.tags = normalizeTags(el.value);
+        break;
+      case "list":
+      case "review":
+        changes[el.name] = el.value;
+        break;
+      case "status":
+        changes.status = el.value as ItemStatus;
+        break;
+      case "myRating":
+      case "progressCurrent":
+      case "progressTotal":
+        changes[el.name] = el.value === "" ? null : Number(el.value);
+        break;
+      default:
+        changes[el.name as keyof EditableFields] = el.value;
+    }
   }
   const error = await updateItemFields(editingId, changes);
   if (error) {
@@ -1089,6 +1282,16 @@ statusFilterEl.addEventListener("change", () => {
   render();
 });
 
+tagFilterEl.addEventListener("change", () => {
+  tagFilter = tagFilterEl.value;
+  render();
+});
+
+listFilterEl.addEventListener("change", () => {
+  listFilter = listFilterEl.value;
+  render();
+});
+
 sortEl.addEventListener("change", () => {
   sortBy = sortEl.value as SortBy;
   localStorage.setItem("keepshelf.sort", sortBy);
@@ -1104,6 +1307,8 @@ shelfTabsEl.addEventListener("click", (e) => {
   if (!tab || tab === activeTab) return;
   activeTab = tab;
   activeFilter = "all";
+  tagFilter = "";
+  listFilter = "";
   shelfTabsEl.querySelectorAll(".shelf-tab").forEach((t) => {
     t.classList.toggle("active", t === btn);
   });
