@@ -178,7 +178,7 @@ Your own ratings and reviews, tags, custom lists, watch and read progress, a ran
 - Saving the same title, URL or note twice shows "Already saved" and skips it, locally and in Keep.
 - Near-matches such as "The Office (US)" and "Office" are flagged when you save, and a **Duplicates** panel in Settings lets you review and merge them.
 
-### Google Keep sync
+### Mirror to Google Keep
 
 Optionally append every save to your own Google Keep checklists. No Google Cloud project or OAuth app. See [Google Keep sync](#google-keep-sync).
 
