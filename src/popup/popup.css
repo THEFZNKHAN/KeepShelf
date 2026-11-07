@@ -1216,3 +1216,39 @@ body.in-tab {
 .dup-group .settings-button-row {
   margin-top: 6px;
 }
+
+/* ── Random pick ─────────────────────────────────────────── */
+
+.pick-panel {
+  text-align: center;
+}
+
+.pick-kicker {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.pick-leading {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.pick-leading .item-thumb {
+  width: 72px;
+  height: 108px;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+}
+
+.pick-leading .type-icon {
+  font-size: 40px;
+}
+
+.pick-open {
+  margin-top: 8px;
+}

@@ -7,6 +7,7 @@ import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
+import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import { normalizeTags, statusOf } from "../shared/user-data.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
@@ -179,12 +180,12 @@ function sortItems(items: SavedItem[]): SavedItem[] {
   }
 }
 
-function filteredItems(): SavedItem[] {
+function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
   let items = tabItems();
   if (activeTab === "media" && activeFilter !== "all") {
     items = items.filter((i) => i.type === activeFilter);
   }
-  if (statusFilter !== "all") {
+  if (statusFilter !== "all" && !options.ignoreStatus) {
     const wanted = FILTER_STATUS[statusFilter];
     items = items.filter((i) => statusOf(i) === wanted);
   }
@@ -1204,6 +1205,64 @@ editFormEl.addEventListener("submit", async (e) => {
 document.getElementById("edit-cancel")!.addEventListener("click", closeEditDialog);
 editDialogEl.querySelector("[data-edit-dismiss]")!.addEventListener("click", closeEditDialog);
 
+/* ── Random pick ─────────────────────────────────────────── */
+
+const pickDialogEl = document.getElementById("pick-dialog")!;
+const pickLeadingEl = document.getElementById("pick-leading")!;
+const pickTitleEl = document.getElementById("pick-title")!;
+const pickDetailEl = document.getElementById("pick-detail")!;
+const pickStartEl = document.getElementById("pick-start") as HTMLButtonElement;
+const pickOpenEl = document.getElementById("pick-open") as HTMLButtonElement;
+let pickedId: string | undefined;
+
+function showPick(item: SavedItem): void {
+  pickedId = item.id;
+  pickLeadingEl.replaceChildren(createLeadingEl(item));
+  pickTitleEl.textContent = itemTitle(item);
+  pickDetailEl.textContent = [itemSubtitle(item), item.genre, item.author].filter(Boolean).join(" · ");
+  const inProgress = statusOf(item) === "in_progress";
+  pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
+  pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
+  pickDialogEl.hidden = false;
+}
+
+function pickForMe(excludeId?: string): void {
+  const pool = filteredItems({ ignoreStatus: true });
+  const item = pickRandom(pool, { excludeId });
+  if (!item) {
+    showStatus(
+      pool.length === 0 ? "Nothing here to pick from." : "Nothing left to pick. Everything here is done or dropped.",
+      true
+    );
+    return;
+  }
+  const fallback = pickCandidates(pool).some((i) => statusOf(i) === "plan") ? "" : " (in progress)";
+  showPick(item);
+  if (fallback) pickDetailEl.textContent = `Nothing planned, so here is something already started. ${pickDetailEl.textContent}`;
+}
+
+function closePick(): void {
+  pickDialogEl.hidden = true;
+  pickedId = undefined;
+}
+
+document.getElementById("pick-random")!.addEventListener("click", () => pickForMe());
+document.getElementById("pick-again")!.addEventListener("click", () => pickForMe(pickedId));
+pickDialogEl.querySelector("[data-pick-dismiss]")!.addEventListener("click", closePick);
+pickStartEl.addEventListener("click", async () => {
+  const item = allItems.find((i) => i.id === pickedId);
+  if (!item) return;
+  const next: ItemStatus = statusOf(item) === "in_progress" ? "done" : "in_progress";
+  const error = await updateItemFields(item.id, { status: next });
+  closePick();
+  showStatus(error ?? (next === "done" ? "Marked as done." : "Marked as in progress."), Boolean(error));
+});
+pickOpenEl.addEventListener("click", () => {
+  const item = allItems.find((i) => i.id === pickedId);
+  const url = item?.url ?? item?.sourceUrl;
+  if (url) void chrome.tabs.create({ url });
+});
+
 /* ── Duplicates ──────────────────────────────────────────── */
 
 const duplicatesResultEl = document.getElementById("duplicates-result")!;
@@ -1513,6 +1572,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!confirmDialogEl.hidden) closeConfirmDialog(false);
   else if (!editDialogEl.hidden) closeEditDialog();
+  else if (!pickDialogEl.hidden) closePick();
 });
 
 document.getElementById("open-settings")!.addEventListener("click", openSettings);

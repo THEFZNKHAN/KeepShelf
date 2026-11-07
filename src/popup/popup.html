@@ -118,6 +118,15 @@
           <div class="action-group icon-actions">
             <button
               type="button"
+              id="pick-random"
+              class="icon-btn"
+              aria-label="Pick something for me"
+              title="Pick something for me"
+            >
+              <span class="material-symbols-outlined">casino</span>
+            </button>
+            <button
+              type="button"
               id="sync-selected"
               class="icon-btn"
               aria-label="Sync selected to Keep"
@@ -377,6 +386,21 @@
             Clear all
           </button>
         </div>
+      </div>
+    </div>
+
+    <div id="pick-dialog" class="confirm-dialog" hidden>
+      <div class="confirm-backdrop" data-pick-dismiss></div>
+      <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-heading">
+        <p class="pick-kicker" id="pick-heading">How about this?</p>
+        <div id="pick-leading" class="pick-leading"></div>
+        <h2 id="pick-title" class="confirm-title"></h2>
+        <p id="pick-detail" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button type="button" id="pick-again" class="btn btn-outline">Pick another</button>
+          <button type="button" id="pick-start" class="btn btn-primary">Start</button>
+        </div>
+        <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
       </div>
     </div>
 
