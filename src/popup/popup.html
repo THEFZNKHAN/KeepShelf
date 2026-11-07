@@ -35,6 +35,15 @@
           <span id="count" class="count-badge">0 saved</span>
           <button
             type="button"
+            id="open-stats"
+            class="icon-btn"
+            aria-label="Stats"
+            title="Stats"
+          >
+            <span class="material-symbols-outlined">insights</span>
+          </button>
+          <button
+            type="button"
             id="open-settings"
             class="icon-btn"
             aria-label="Settings"
@@ -221,6 +230,17 @@
     </div>
 
     <div id="item-tooltip" class="item-tooltip" role="tooltip" hidden></div>
+
+    <div id="stats-view" class="view settings-view" hidden>
+      <header class="top-bar">
+        <button type="button" id="close-stats" class="icon-btn" aria-label="Back">
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <h1 class="settings-title">Stats</h1>
+        <span class="top-bar-spacer"></span>
+      </header>
+      <div id="stats-body" class="settings-body stats-body"></div>
+    </div>
 
     <div id="settings-view" class="view settings-view" hidden>
       <header class="top-bar">

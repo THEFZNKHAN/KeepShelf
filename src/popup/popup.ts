@@ -6,6 +6,7 @@ import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import { normalizeTags, statusOf } from "../shared/user-data.js";
@@ -41,6 +42,7 @@ const isTabView = new URLSearchParams(location.search).get("view") === "settings
 
 const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
+const statsView = document.getElementById("stats-view")!;
 const listEl = document.getElementById("list")!;
 const emptyEl = document.getElementById("empty")!;
 const emptyHeadingEl = document.getElementById("empty-heading")!;
@@ -365,6 +367,21 @@ function openSettings(): void {
   if (tabsStatusTimerRef.value) clearTimeout(tabsStatusTimerRef.value);
   appView.hidden = true;
   settingsView.hidden = false;
+}
+
+function openStats(): void {
+  renderStats(document.getElementById("stats-body")!, allItems, {
+    showTooltip: showItemTooltip,
+    hideTooltip: hideItemTooltip,
+  });
+  appView.hidden = true;
+  statsView.hidden = false;
+}
+
+function closeStats(): void {
+  hideItemTooltip();
+  statsView.hidden = true;
+  appView.hidden = false;
 }
 
 function closeSettings(): void {
@@ -1573,8 +1590,11 @@ document.addEventListener("keydown", (event) => {
   if (!confirmDialogEl.hidden) closeConfirmDialog(false);
   else if (!editDialogEl.hidden) closeEditDialog();
   else if (!pickDialogEl.hidden) closePick();
+  else if (!statsView.hidden) closeStats();
 });
 
+document.getElementById("open-stats")!.addEventListener("click", openStats);
+document.getElementById("close-stats")!.addEventListener("click", closeStats);
 document.getElementById("open-settings")!.addEventListener("click", openSettings);
 document.getElementById("close-settings")!.addEventListener("click", closeSettings);
 
