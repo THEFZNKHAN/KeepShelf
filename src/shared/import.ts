@@ -1,5 +1,6 @@
 import { buildBookParsed } from "./book-jsonld.js";
 import type { ImportItem, MediaType, SavedItem } from "./types.js";
+import { sanitizeImportedUserData } from "./user-data.js";
 import { normalizeYear } from "./year.js";
 
 const MEDIA_TYPES = new Set<MediaType>(["movie", "series", "anime", "book", "tab", "link", "note"]);
@@ -131,8 +132,13 @@ export function fromBackupJson(text: string): ImportItem[] {
   if (!Array.isArray(list)) throw new Error("This JSON file isn't a KeepShelf backup.");
   return list.filter(isImportItem).map((raw) => {
     const { id: _id, ...rest } = raw as ImportItem & { id?: string };
+    const {
+      tags: _tags, list: _list, myRating: _rating, review: _review, status: _status,
+      progressCurrent: _current, progressTotal: _total, ...base
+    } = rest;
     return {
-      ...rest,
+      ...base,
+      ...sanitizeImportedUserData(rest as unknown as Record<string, unknown>),
       subtitle: typeof rest.subtitle === "string" ? rest.subtitle : "",
       googleQuery: typeof rest.googleQuery === "string" ? rest.googleQuery : rest.title,
       sourceUrl: typeof rest.sourceUrl === "string" ? rest.sourceUrl : "",

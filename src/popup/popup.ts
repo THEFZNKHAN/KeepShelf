@@ -5,7 +5,7 @@ import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
-import type { EditableFields, MediaType, SavedItem } from "../shared/types.js";
+import type { EditableFields, MediaType, SavedItem, UserFields } from "../shared/types.js";
 
 type StatusFilter = "all" | "todo" | "done";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating";
@@ -866,7 +866,7 @@ async function saveCurrentTab(): Promise<void> {
 
 async function updateItemFields(
   id: string,
-  changes: EditableFields & { done?: boolean }
+  changes: EditableFields & UserFields & { done?: boolean }
 ): Promise<string | undefined> {
   try {
     const response = await sendToBackground({ action: "update", id, changes });

@@ -15,7 +15,8 @@ import { syncItemToKeep, testKeepAppend, getLastKeepResult, clearLastKeepResult 
 import type { KeepSyncResult } from "../shared/keep-settings.js";
 import { isHttpUrl, isSaveableTabUrl, linkItem, noteItem, tabItem, type NewItem } from "../shared/items.js";
 import { requestPageData } from "../shared/page-data.js";
-import type { EditableFields, MessageAction, MessageResponse, SavedItem } from "../shared/types.js";
+import type { EditableFields, MessageAction, MessageResponse, SavedItem, UserFields } from "../shared/types.js";
+import { buildUserPatch } from "../shared/user-data.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
 
 // Storage writes are read-modify-write and Keep sync drives a single tab, so these must not overlap.
@@ -87,7 +88,7 @@ const EDITABLE_KEYS: Array<keyof EditableFields> = [
 
 function cleanChanges(
   item: SavedItem,
-  changes: EditableFields & { done?: boolean }
+  changes: EditableFields & UserFields & { done?: boolean }
 ): Partial<SavedItem> {
   const patch: Partial<SavedItem> = {};
   for (const key of EDITABLE_KEYS) {
@@ -103,11 +104,7 @@ function cleanChanges(
   if (item.type === "note" && patch.body) {
     patch.title = noteItem(patch.body).title;
   }
-  if (typeof changes.done === "boolean") {
-    patch.done = changes.done;
-    patch.doneAt = changes.done ? Date.now() : undefined;
-  }
-  return patch;
+  return { ...patch, ...buildUserPatch(item, changes) };
 }
 
 async function handleMessage(message: MessageAction): Promise<MessageResponse> {
