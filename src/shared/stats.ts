@@ -1,4 +1,5 @@
 import type { ItemStatus, MediaType, SavedItem } from "./types.js";
+import { genreText } from "./tmdb.js";
 import { statusOf } from "./user-data.js";
 
 export interface ShelfStats {
@@ -42,7 +43,7 @@ function topCounts(values: string[], limit: number): Array<{ name: string; count
 }
 
 function genresOf(item: SavedItem): string[] {
-  return (item.genre ?? "")
+  return genreText(item)
     .split(/[,/|]/)
     .map((g) => g.trim())
     .filter(Boolean)

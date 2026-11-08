@@ -52,7 +52,7 @@
 | **What it does** | Reads title metadata from supported pages and saves a clean, formatted entry to your local shelf with one click |
 | **Beyond saving** | Tags, custom lists, personal ratings and reviews, watch/read progress, a random "what next" picker, and a stats dashboard |
 | **Also works as** | A lightweight bookmark manager for tabs, links and notes |
-| **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes |
+| **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes, and optional TMDB lookups with your own free token |
 | **Who it is for** | Anyone keeping a watchlist, reading list, anime list or link collection without copy-pasting or tab-hoarding |
 | **Setup time** | About 2 minutes to load the extension, about 5 more to link Keep notes if you want sync |
 | **Cost** | Free and open source. No accounts, no API keys, no cloud backend |
@@ -66,6 +66,7 @@
 - [How it works](#how-it-works)
 - [Features](#features)
 - [Organise and track your shelf](#organise-and-track-your-shelf)
+- [TMDB info](#tmdb-info)
 - [Supported sources](#supported-sources)
 - [Tabs, links and notes](#tabs-links-and-notes)
 - [Output format](#output-format)
@@ -178,6 +179,10 @@ Your own ratings and reviews, tags, custom lists, watch and read progress, a ran
 - Saving the same title, URL or note twice shows "Already saved" and skips it, locally and in Keep.
 - Near-matches such as "The Office (US)" and "Office" are flagged when you save, and a **Duplicates** panel in Settings lets you review and merge them.
 
+### Genres, ratings and info from TMDB
+
+Add a free TMDB token and new movies, series and anime are enriched automatically with genres, TMDB rating, age rating, overview and poster. See [TMDB info](#tmdb-info).
+
 ### Mirror to Google Keep
 
 Optionally append every save to your own Google Keep checklists. No Google Cloud project or OAuth app. See [Google Keep sync](#google-keep-sync).
@@ -192,7 +197,7 @@ Export your whole shelf as JSON, import a KeepShelf backup, or bring in a Letter
 
 ### Privacy first
 
-Everything stays on your device unless you turn on Keep sync. No analytics, no external APIs, no third-party data collection.
+Everything stays on your device unless you turn on an optional feature: Keep sync, or TMDB lookups. No analytics and no third-party data collection.
 
 ---
 
@@ -202,7 +207,7 @@ All of this is stored on your shelf only. Your Keep lists are never changed by i
 
 ### Status and progress
 
-Every movie, series, anime and book has a status:
+Every movie, series, anime and book has a status. Each row also shows a small **Movie, Series, Anime or Book** badge on the Media tab, so you can tell them apart at a glance.
 
 | Status | Meaning |
 |--------|---------|
@@ -211,7 +216,7 @@ Every movie, series, anime and book has a status:
 | **Watched / Read** | Finished. The ✓ button on each row still toggles this |
 | **Dropped** | Gave up on it |
 
-For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
+For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Movies have no progress fields. The total episode count fills in automatically from TMDB or the source page, and you can still override it. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
 
 ### Personal rating and review
 
@@ -219,7 +224,7 @@ Rate anything from 1 to 10 and write a short review. Your rating is separate fro
 
 ### Tags and custom lists
 
-- **Tags** are free-form and comma separated, such as `sci-fi, weekend`. They are lowercased and de-duplicated. Click a tag chip on any row to filter by it.
+- **Tags** are free-form and comma separated, such as `weekend, rewatch`. They are lowercased and de-duplicated. **Genres work as tags automatically** (pick one in the tag filter, or search for it), so you only type the personal ones. Rows show up to three genres as plain text, and chips are kept for the tags you type. Click a tag chip on any row to filter by it.
 - **Lists** group items under a name of your choice, such as "Weekend watch" or "Book club". Use the **List** dropdown to focus on one.
 
 The tag and list dropdowns appear only when the current tab has any.
@@ -252,6 +257,38 @@ Click the **chart icon** in the popup header to see:
 - Breakdowns by **type**, **genre** and **tag**
 
 Hover or focus any bar for exact numbers, or expand **View as table**.
+
+---
+
+## TMDB info
+
+[TMDB](https://www.themoviedb.org) is optional and off until you add a token.
+
+**Set it up**
+1. Create a free account at themoviedb.org and request an API key under **Settings, API**.
+2. Copy the **API Read Access Token** (a long string starting with `eyJ`). The 32-character API key also works.
+3. In KeepShelf, open **Settings, TMDB**, paste it, click **Save**, then **Test**.
+4. Click **Fetch info for my shelf** to fill in what you already saved.
+
+**What you get** for movies, series and anime, filled in for you:
+- **Genres**, shown as a short line on each row and usable as tags in the filter (so you can filter by `drama` without typing anything). They also feed your [stats](#stats-dashboard).
+- **Runtime** for movies, **seasons** for series and **episode count** for anime, used in the row and in copied or Keep lines when the source page didn't give one.
+- **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total.
+- TMDB rating, age rating (US), overview, and a poster when the source page had none.
+
+Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered, because TMDB only has films and TV.
+
+**How matching works**
+- Pages from IMDb (and any item whose source URL has an IMDb id) match exactly.
+- Everything else is searched by title and year. KeepShelf only accepts a close title match and would rather show no match than a wrong one.
+- If a match is wrong, open the item's **Edit** dialog and click **Wrong match? Remove**. It won't be looked up again unless you click **Fetch info**.
+
+**Good to know**
+- Titles are sent to TMDB to look them up. Nothing else is, and your token never leaves your browser except in requests to TMDB.
+- TMDB's terms limit how long its data may be kept, so KeepShelf refreshes it after about 5 months and drops it after 6. Backups follow the same rule.
+- The IMDb, Letterboxd and other ratings still come from the page you saved. TMDB's rating is shown separately as `TMDB 8.4`.
+
+*This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.*
 
 ---
 
@@ -464,8 +501,9 @@ Importing from a file picker opens Settings in a full tab, because Chrome closes
 | Saved shelf items, including tags, ratings and reviews | `chrome.storage.local` (your device only) |
 | Keep settings (URLs, toggles) | `chrome.storage.local` (your device only) |
 | Keep list content | Your Google Keep account (only when sync is on) |
+| TMDB token and fetched TMDB info | `chrome.storage.local` (your device only; refreshed or dropped after about 6 months) |
 
-KeepShelf does **not** send your data to any external server. Keep sync talks only to `keep.google.com` inside your signed-in browser session. Poster thumbnails load directly from the source site's image server, without a referrer.
+KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, and TMDB lookups send item titles (and IMDb ids) to `api.themoviedb.org` using your own token. Poster thumbnails load directly from the source site's or TMDB's image server, without a referrer for source sites.
 
 Uninstalling the extension removes all local shelf data. KeepShelf only ever appends lines to your Keep notes. It never edits or deletes them.
 
@@ -490,6 +528,7 @@ Uninstalling the extension removes all local shelf data. KeepShelf only ever app
 | `rottentomatoes.com` | Parse Rotten Tomatoes movie and TV pages |
 | `trakt.tv`, `app.trakt.tv` | Parse Trakt movie and show pages |
 | `keep.google.com` | Append lines to your linked Keep notes |
+| `api.themoviedb.org` | Look up genres, ratings and info on TMDB (only used once you add a token) |
 
 ---
 
@@ -529,6 +568,10 @@ Yes. The local shelf is fully independent. Keep sync is optional and off by defa
 **Can I use one Keep note for everything?**
 
 Yes. Paste the same Keep URL into the Media, Books and Tabs fields.
+
+**Do I need TMDB?**
+
+No. It is optional. Without a token KeepShelf works exactly as before.
 
 **Do my tags, ratings and progress sync to Keep?**
 
@@ -585,6 +628,9 @@ Text inserted without trusted browser input is discarded by Keep. Reload the ext
 | "Already saved" on a first save | The same title is already on your shelf from an earlier session |
 | "Saved (similar to …)" | A near-match exists. Review it under Settings, Duplicates |
 | Tag or list dropdown is missing | They appear only when the current tab has tags or lists |
+| TMDB "rejected this token" | Paste the API Read Access Token from themoviedb.org/settings/api, with no spaces |
+| "No match found" on TMDB | Fix the title or year in Edit, then click Fetch info |
+| Wrong TMDB info on an item | Edit, then Wrong match? Remove |
 | Nothing to pick | Everything in the current view is finished or dropped; clear a filter or add items |
 | Rating or progress is rejected | Ratings are whole numbers from 1 to 10, and progress cannot exceed the total |
 | Extension still shows an old version | Reload at `chrome://extensions`, or restart Chrome |

@@ -43,6 +43,11 @@ export function normalizeCount(input: unknown, label: string): number | undefine
   return value;
 }
 
+/** Whether to offer the rating box when something is marked finished. Only things you watch or read are rated. */
+export function shouldAskForRating(item: Pick<SavedItem, "type">, enabled: boolean): boolean {
+  return enabled && (item.type === "movie" || item.type === "series" || item.type === "anime" || item.type === "book");
+}
+
 export function statusOf(item: Pick<SavedItem, "status" | "done">): ItemStatus {
   if (item.status) return item.status;
   return item.done ? "done" : "plan";

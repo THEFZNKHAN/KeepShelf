@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatDurationOrSeasons, formatItemLine, formatItemsList } from "../dist-test/format.js";
+import { clipText, formatDurationOrSeasons, formatItemLine, formatItemsList } from "../dist-test/format.js";
 
 const base = { id: "x", savedAt: 0, googleQuery: "", subtitle: "" };
 
@@ -86,4 +86,27 @@ test("items list joins lines with newlines", () => {
     { ...base, type: "note", title: "b", body: "b", sourceUrl: "" },
   ];
   assert.equal(formatItemsList(items), "a\nb");
+});
+
+test("clipText leaves short text alone and trims whitespace", () => {
+  assert.equal(clipText("  A short plot.  ", 100), "A short plot.");
+  assert.equal(clipText("x".repeat(50), 50), "x".repeat(50));
+});
+
+test("clipText cuts at a word boundary, drops trailing punctuation and adds an ellipsis", () => {
+  const out = clipText("The quick brown fox jumps over the lazy dog, again and again.", 30);
+  assert.equal(out, "The quick brown fox jumps over…");
+  assert.ok(out.length <= 31, "at most max characters plus the ellipsis");
+  assert.ok(!out.includes("  "));
+});
+
+test("clipText hard-cuts a single very long word instead of returning nothing", () => {
+  const out = clipText("a".repeat(100), 20);
+  assert.equal(out, `${"a".repeat(20)}…`);
+});
+
+test("clipText keeps paragraph breaks inside the kept text", () => {
+  const out = clipText("First paragraph here.\n\nSecond paragraph that is quite a bit longer than the limit allows.", 40);
+  assert.ok(out.startsWith("First paragraph here.\n\nSecond"));
+  assert.ok(out.endsWith("…"));
 });

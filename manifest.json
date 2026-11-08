@@ -15,6 +15,7 @@
     "https://letterboxd.com/*",
     "https://www.rottentomatoes.com/*",
     "https://trakt.tv/*",
+    "https://api.themoviedb.org/*",
     "https://app.trakt.tv/*"
   ],
   "action": {

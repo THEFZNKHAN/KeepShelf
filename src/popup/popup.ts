@@ -1,4 +1,4 @@
-import { formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
+import { clipText, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
 import { buildBackup, parseImportFile } from "../shared/import.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
@@ -6,10 +6,11 @@ import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
-import { normalizeTags, statusOf } from "../shared/user-data.js";
+import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
@@ -32,6 +33,7 @@ let allItems: SavedItem[] = [];
 let activeFilter: MediaType | "all" = "all";
 let activeTab: "media" | "books" | "tabs" = "media";
 let searchQuery = "";
+let tmdbConfigured = false;
 let tagFilter = "";
 let listFilter = "";
 let statusFilter = storedChoice<StatusFilter>("keepshelf.status", STATUS_FILTERS, "all");
@@ -97,6 +99,8 @@ const importFileEl = document.getElementById("import-file") as HTMLInputElement;
 const backupSettingsStatusEl = document.getElementById("backup-settings-status")!;
 const backupSettingsStatusTextEl = document.getElementById("backup-settings-status-text")!;
 const backupSettingsStatusIconEl = document.getElementById("backup-settings-status-icon")!;
+const keepSummaryEl = document.getElementById("keep-summary")!;
+const tmdbSummaryEl = document.getElementById("tmdb-summary")!;
 const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
 
 let confirmResolve: ((value: boolean) => void) | undefined;
@@ -111,15 +115,34 @@ function showItemTooltip(text: string, anchor: HTMLElement): void {
   itemTooltipEl.hidden = false;
   itemTooltipEl.classList.add("visible");
 
+  // Measure at natural size first, then fit it into whichever side of the anchor has more room.
+  itemTooltipEl.style.maxHeight = "";
+  itemTooltipEl.style.paddingBottom = "";
   const anchorRect = anchor.getBoundingClientRect();
   const tooltipRect = itemTooltipEl.getBoundingClientRect();
 
-  let top = anchorRect.bottom + 6;
+  const gap = 6;
+  const margin = 8;
+  const spaceBelow = window.innerHeight - anchorRect.bottom - gap - margin;
+  const spaceAbove = anchorRect.top - gap - margin;
+  const below = tooltipRect.height <= spaceBelow || spaceBelow >= spaceAbove;
+  let room = Math.max(40, below ? spaceBelow : spaceAbove);
+  if (tooltipRect.height > room) {
+    // Cut on a whole line so no text is sliced in half: 16px lines, 2px border and 8px top padding.
+    // Overflow clips at the padding edge, so the bottom padding goes too or it would show half a line.
+    const lines = Math.floor((room - 10) / 16);
+    if (lines >= 1) room = 10 + lines * 16;
+  }
+  const height = Math.min(tooltipRect.height, room);
+  if (tooltipRect.height > room) {
+    itemTooltipEl.style.maxHeight = `${Math.floor(room)}px`;
+    itemTooltipEl.style.paddingBottom = "0";
+  }
+
+  let top = below ? anchorRect.bottom + gap : anchorRect.top - height - gap;
+  top = Math.max(margin, top);
   let left = anchorRect.left;
 
-  if (top + tooltipRect.height > window.innerHeight - 8) {
-    top = anchorRect.top - tooltipRect.height - 6;
-  }
   if (left + tooltipRect.width > window.innerWidth - 8) {
     left = Math.max(8, window.innerWidth - tooltipRect.width - 8);
   }
@@ -134,7 +157,8 @@ function hideItemTooltip(): void {
   itemTooltipEl.hidden = true;
 }
 
-mainEl.addEventListener("scroll", hideItemTooltip, { passive: true });
+mainEl.addEventListener("scroll", () => cancelRowHover(), { passive: true });
+document.addEventListener("pointerdown", () => cancelRowHover(), true);
 
 function tabItems(): SavedItem[] {
   if (activeTab === "books") return allItems.filter((i) => i.type === "book");
@@ -143,7 +167,7 @@ function tabItems(): SavedItem[] {
 }
 
 function searchText(item: SavedItem): string {
-  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, ...(item.tags ?? [])]
+  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, genreText(item), ...(item.tags ?? [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -191,7 +215,7 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
     const wanted = FILTER_STATUS[statusFilter];
     items = items.filter((i) => statusOf(i) === wanted);
   }
-  if (tagFilter) items = items.filter((i) => i.tags?.includes(tagFilter));
+  if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
   if (listFilter) items = items.filter((i) => i.list === listFilter);
   const query = searchQuery.trim().toLowerCase();
   if (query) items = items.filter((i) => searchText(i).includes(query));
@@ -280,8 +304,9 @@ function itemSubtitle(item: SavedItem): string {
   }
 
   const parts: string[] = [];
-  if (item.durationOrSeasons) {
-    parts.push(formatDurationOrSeasons(item.durationOrSeasons));
+  const duration = durationText(item);
+  if (duration) {
+    parts.push(formatDurationOrSeasons(duration));
   }
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);
@@ -464,10 +489,11 @@ function updateEmptyState(): void {
 }
 
 function createLeadingEl(item: SavedItem): HTMLElement {
-  if (!item.imageUrl) return createTypeIconEl(item.type);
+  const imageUrl = item.imageUrl ?? tmdbPosterUrl(item);
+  if (!imageUrl) return createTypeIconEl(item.type);
   const img = document.createElement("img");
   img.className = "item-thumb";
-  img.src = item.imageUrl;
+  img.src = imageUrl;
   img.alt = "";
   img.loading = "lazy";
   img.referrerPolicy = "no-referrer";
@@ -518,7 +544,7 @@ function createRowActions(item: SavedItem): HTMLElement {
     createRowAction(
       "check_circle",
       item.done ? labels.markTodo : labels.markDone,
-      () => void updateItemFields(item.id, { done: !item.done }),
+      () => void toggleDone(item),
       item.done ? "is-done pinned" : ""
     )
   );
@@ -536,48 +562,144 @@ function isTrackable(item: SavedItem): boolean {
   return item.type !== "tab" && item.type !== "link" && item.type !== "note";
 }
 
-function progressText(item: SavedItem): string {
-  if (item.progressCurrent === undefined && item.progressTotal === undefined) return "";
-  const unit = item.type === "book" ? "p." : item.type === "movie" ? "" : "ep.";
-  const current = item.progressCurrent ?? 0;
-  const text = item.progressTotal !== undefined ? `${current}/${item.progressTotal}` : `${current}`;
-  return unit ? `${unit} ${text}` : text;
+/** Movies are watched in one go, so only series, anime and books have progress. */
+function tracksProgress(item: SavedItem): boolean {
+  return item.type === "series" || item.type === "anime" || item.type === "book";
 }
 
-function createItemMeta(item: SavedItem): HTMLElement | undefined {
+function progressText(item: SavedItem): string {
+  if (!tracksProgress(item)) return "";
+  // Only once you start tracking, so a fresh row isn't cluttered with "0/62".
+  if (item.progressCurrent === undefined && statusOf(item) !== "in_progress") return "";
+  const total = item.type === "book" ? item.progressTotal : totalEpisodes(item);
+  const current = item.progressCurrent ?? 0;
+  return `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
+}
+
+const MAX_CHIPS = 3;
+const HOVER_DELAY_MS = 350;
+
+/**
+ * The row tooltip is anchored to a row, so it must go away whenever that row can disappear or the user moves
+ * on: a redraw replaces the rows, a click can open a dialog, and the old row's mouseleave never fires once
+ * it has been replaced. One shared timer lets all of those cancel it.
+ */
+let rowHoverTimer: ReturnType<typeof setTimeout> | undefined;
+
+function cancelRowHover(): void {
+  clearTimeout(rowHoverTimer);
+  rowHoverTimer = undefined;
+  hideItemTooltip();
+}
+
+function anyDialogOpen(): boolean {
+  return [confirmDialogEl, editDialogEl, pickDialogEl, rateDialogEl].some((dialog) => !dialog.hidden);
+}
+const TOOLTIP_OVERVIEW_MAX = 320;
+const TOOLTIP_REVIEW_MAX = 200;
+
+/** What the row tooltip says: the full line if anything is cut off, then the description, then your review. */
+function hoverText(item: SavedItem, li: HTMLElement): string {
+  const parts: string[] = [];
+  const cutOff = [".item-title", ".item-facts"].some((sel) => {
+    const el = li.querySelector<HTMLElement>(sel);
+    return el ? isTextTruncated(el) : false;
+  });
+  if (cutOff) parts.push(formatItemLine(item));
+  // Long descriptions are clipped so the tooltip stays small enough to fit inside the popup.
+  if (item.tmdb?.overview) parts.push(clipText(item.tmdb.overview, TOOLTIP_OVERVIEW_MAX));
+  if (item.review) parts.push(`Your review: ${clipText(item.review, TOOLTIP_REVIEW_MAX)}`);
+  return parts.join("\n\n");
+}
+
+/** The small Movie / Series / Anime tag next to the title. A poster hides the type icon, so say what it is. */
+function createTypeBadge(item: SavedItem): HTMLElement | undefined {
+  if (activeTab !== "media" || !isTrackable(item)) return undefined;
+  const badge = document.createElement("span");
+  badge.className = `type-badge type-${item.type}`;
+  badge.textContent = typeLabel(item.type);
+  return badge;
+}
+
+/** Line 2: the facts about the title itself, such as "2h 28m | IMDb 8.8 · TMDB 8.4 · PG-13". Short, so it never needs cropping. */
+function factsText(item: SavedItem): string {
+  const parts = [itemSubtitle(item)];
+  if (isTrackable(item)) {
+    if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
+    if (item.tmdb?.certification) parts.push(item.tmdb.certification);
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+
+/** Line 3, first half: genres. A short line reads better than a chip each; the full set still works as tags in the filter. */
+function genreParts(item: SavedItem): string[] {
+  if (!isTrackable(item)) return [];
+  const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 3);
+  return genres.length ? [genres.join(" / ")] : [];
+}
+
+/** Line 3, second half: your own data, such as "In progress · ep. 12/37 · ★ 9 · Weekend list". */
+function personalParts(item: SavedItem): string[] {
   const status = statusOf(item);
   const parts: string[] = [];
   if (isTrackable(item) && (status === "in_progress" || status === "dropped")) parts.push(statusLabel(status));
   const progress = progressText(item);
-  if (progress && isTrackable(item)) parts.push(progress);
-  if (item.myRating) parts.push(`★ ${item.myRating}/10`);
+  if (progress) parts.push(progress);
+  if (item.myRating) parts.push(`★ ${item.myRating}`);
   if (item.list) parts.push(item.list);
-  const tags = item.tags ?? [];
-  if (parts.length === 0 && tags.length === 0) return undefined;
+  return parts;
+}
 
-  const meta = document.createElement("div");
-  meta.className = "item-meta";
-  if (parts.length) {
-    const text = document.createElement("span");
-    text.className = "item-meta-text";
-    text.textContent = parts.join(" · ");
-    if (item.review) text.title = item.review;
-    meta.append(text);
+function textPart(text: string, className: string, title?: string): HTMLElement {
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = text;
+  if (title) span.title = title;
+  return span;
+}
+
+/**
+ * Up to two lines under the title. The facts line is short and truncates only in extreme cases (a long URL).
+ * The details line wraps instead of cropping, so nothing is ever cut off.
+ */
+function createItemLines(item: SavedItem): HTMLElement[] {
+  const lines: HTMLElement[] = [];
+
+  const facts = factsText(item);
+  if (facts) {
+    const line = document.createElement("div");
+    line.className = "item-facts";
+    line.textContent = facts;
+    lines.push(line);
   }
-  for (const tag of tags) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "tag-chip";
-    chip.textContent = `#${tag}`;
-    chip.title = `Filter by #${tag}`;
-    chip.addEventListener("click", (e) => {
-      e.stopPropagation();
-      tagFilter = tagFilter === tag ? "" : tag;
-      render();
-    });
-    meta.append(chip);
+
+  const genres = genreParts(item);
+  const personal = personalParts(item);
+  const tags = item.tags ?? [];
+  if (genres.length || personal.length || tags.length) {
+    const line = document.createElement("div");
+    line.className = "item-details";
+    for (const g of genres) line.append(textPart(g, "item-part item-genres"));
+    for (const part of personal) line.append(textPart(part, "item-part item-personal"));
+    for (const tag of tags.slice(0, MAX_CHIPS)) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip";
+      chip.textContent = `#${tag}`;
+      chip.title = `Filter by #${tag}`;
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        tagFilter = tagFilter === tag ? "" : tag;
+        render();
+      });
+      line.append(chip);
+    }
+    if (tags.length > MAX_CHIPS) {
+      line.append(textPart(`+${tags.length - MAX_CHIPS}`, "item-part-more", tags.slice(MAX_CHIPS).map((t) => `#${t}`).join(" ")));
+    }
+    lines.push(line);
   }
-  return meta;
+  return lines;
 }
 
 function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], selected: string, prefix = ""): void {
@@ -590,7 +712,7 @@ function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], s
 /** Tag and list filters only list what exists on the current shelf tab, and hide when there is nothing to pick. */
 function renderOrganiseFilters(): void {
   const items = tabItems();
-  const tags = [...new Set(items.flatMap((i) => i.tags ?? []))].sort();
+  const tags = [...new Set(items.flatMap((i) => allTags(i)))].sort();
   const lists = [...new Set(items.map((i) => i.list).filter((l): l is string => Boolean(l)))].sort();
   if (!tags.includes(tagFilter)) tagFilter = "";
   if (!lists.includes(listFilter)) listFilter = "";
@@ -602,6 +724,7 @@ function renderOrganiseFilters(): void {
 }
 
 function render(): void {
+  cancelRowHover();
   const items = filteredItems();
   const tabCount = tabItems().length;
 
@@ -655,40 +778,32 @@ function render(): void {
     const body = document.createElement("div");
     body.className = "item-body";
 
+    const titleRow = document.createElement("div");
+    titleRow.className = "item-title-row";
+
     const title = document.createElement("h3");
     title.className = "item-title";
     title.textContent = itemTitle(item);
+    titleRow.append(title);
 
-    body.append(title);
+    const badge = createTypeBadge(item);
+    if (badge) titleRow.append(badge);
+    body.append(titleRow);
 
-    const subtitleText = itemSubtitle(item);
-    if (subtitleText) {
-      const subtitle = document.createElement("p");
-      subtitle.className = "item-subtitle";
-      subtitle.textContent = subtitleText;
-
-      subtitle.addEventListener("mouseenter", () => {
-        if (!isTextTruncated(subtitle)) return;
-        showItemTooltip(formatItemLine(item), li);
-      });
-      subtitle.addEventListener("mouseleave", hideItemTooltip);
-
-      body.append(subtitle);
-    }
-
-    const meta = createItemMeta(item);
-    if (meta) body.append(meta);
+    body.append(...createItemLines(item));
 
     li.append(typeIconEl, body, createRowActions(item), checkbox);
 
-    const fullLine = formatItemLine(item);
-
-    title.addEventListener("mouseenter", () => {
-      if (!isTextTruncated(title)) return;
-      showItemTooltip(fullLine, li);
+    // Rest the pointer on a row and it describes itself, so you don't have to open the item.
+    li.addEventListener("mouseenter", () => {
+      clearTimeout(rowHoverTimer);
+      rowHoverTimer = setTimeout(() => {
+        if (anyDialogOpen()) return;
+        const text = hoverText(item, li);
+        if (text) showItemTooltip(text, li);
+      }, HOVER_DELAY_MS);
     });
-    title.addEventListener("mouseleave", hideItemTooltip);
-    li.addEventListener("mouseleave", hideItemTooltip);
+    li.addEventListener("mouseleave", cancelRowHover);
 
     const isOpenable = (item.type === "tab" || item.type === "link") && !!item.url;
 
@@ -750,6 +865,15 @@ function renderKeepStatus(): void {
 
   keepTabsStatusEl.textContent = linkedText(keepSettings.tabsNoteId, keepSettings.tabsNoteUrl);
   keepTabsStatusEl.classList.toggle("linked", isLikelyValidKeepNoteId(keepSettings.tabsNoteId));
+
+  // The card header says at a glance how many lists are linked and on.
+  const active = [
+    [keepSettings.mediaEnabled, keepSettings.mediaNoteId],
+    [keepSettings.booksEnabled, keepSettings.booksNoteId],
+    [keepSettings.tabsEnabled, keepSettings.tabsNoteId],
+  ].filter(([on, id]) => on && isLikelyValidKeepNoteId(id as string | undefined)).length;
+  keepSummaryEl.textContent = active ? `${active} of 3 on` : "Not set up";
+  keepSummaryEl.classList.toggle("is-ok", active > 0);
 }
 
 async function loadKeepSettings(): Promise<void> {
@@ -1079,6 +1203,7 @@ function buildEditField(spec: EditFieldSpec, value: string): HTMLElement {
 }
 
 function openEditDialog(item: SavedItem): void {
+  cancelRowHover();
   editingId = item.id;
   editErrorEl.hidden = true;
   editFieldsEl.innerHTML = "";
@@ -1132,6 +1257,13 @@ function buildTextField(name: string, label: string, value: string, type = "text
   return wrap;
 }
 
+function buildHint(text: string): HTMLElement {
+  const hint = document.createElement("p");
+  hint.className = "edit-hint";
+  hint.textContent = text;
+  return hint;
+}
+
 function row(...fields: HTMLElement[]): HTMLElement {
   const el = document.createElement("div");
   el.className = "edit-row";
@@ -1154,15 +1286,29 @@ function appendPersonalFields(item: SavedItem): void {
         buildSelectField("status", "Status", statuses.map((s) => [s, statusLabel(s)]), statusOf(item)),
         buildSelectField("myRating", "My rating", ratings, item.myRating ? String(item.myRating) : "")
       ),
-      row(
-        buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
-        buildTextField("progressTotal", item.type === "book" ? "Total pages" : "Total episodes", String(item.progressTotal ?? ""), "number")
-      )
+      ...(tracksProgress(item)
+        ? [
+            row(
+              buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
+              buildTextField(
+                "progressTotal",
+                item.type === "book" ? "Total pages" : "Total episodes",
+                String(item.progressTotal ?? ""),
+                "number",
+                // Left empty, the total comes from TMDB or the page automatically.
+                item.type === "book" || totalEpisodes({ ...item, progressTotal: undefined }) === undefined
+                  ? ""
+                  : `${totalEpisodes({ ...item, progressTotal: undefined })} (auto)`
+              )
+            ),
+          ]
+        : [])
     );
   }
 
   editFieldsEl.append(
-    buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "sci-fi, weekend"),
+    buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "weekend, rewatch"),
+    ...(genreTags(item).length ? [buildHint(`Genres also work as tags in the filter, no typing needed: ${genreTags(item).join(", ")}`)] : []),
     buildTextField("list", "List", item.list ?? "", "text", "e.g. Weekend watch")
   );
 
@@ -1176,7 +1322,101 @@ function appendPersonalFields(item: SavedItem): void {
     area.value = item.review ?? "";
     label.append(area);
     editFieldsEl.append(label);
+    editFieldsEl.append(buildTmdbBlock(item.id));
   }
+}
+
+function tmdbSummary(item: SavedItem): string {
+  const info = item.tmdb;
+  if (!info) return "";
+  const bits = [
+    info.genres.join(", "),
+    info.rating ? `TMDB ${info.rating}/10 (${(info.votes ?? 0).toLocaleString()} votes)` : "",
+    info.certification,
+    info.runtimeMinutes ? `${info.runtimeMinutes} min` : "",
+    info.seasons ? `${info.seasons} season${info.seasons === 1 ? "" : "s"}` : "",
+    info.status,
+  ];
+  return bits.filter(Boolean).join(" · ");
+}
+
+/** Read-only TMDB details with Refresh and Remove match. Re-rendered in place so unsaved edits above are kept. */
+function buildTmdbBlock(itemId: string): HTMLElement {
+  const block = document.createElement("div");
+  block.className = "edit-tmdb";
+
+  const paint = (): void => {
+    const item = allItems.find((i) => i.id === itemId);
+    block.replaceChildren();
+    if (!item || !isEnrichable(item)) return;
+
+    const heading = document.createElement("h3");
+    heading.className = "edit-section";
+    heading.textContent = "From TMDB";
+    block.append(heading);
+
+    const text = document.createElement("p");
+    text.className = "edit-tmdb-text";
+    text.textContent = item.tmdb
+      ? tmdbSummary(item) || "Matched on TMDB."
+      : !tmdbConfigured
+        ? "Add a TMDB token in Settings to fetch genres, ratings and more."
+        : item.tmdbOptOut
+          ? "Match removed. Fetch again to look it up."
+          : "No match found yet.";
+    block.append(text);
+    if (item.tmdb?.overview) {
+      const overview = document.createElement("p");
+      overview.className = "edit-tmdb-overview";
+      overview.textContent = item.tmdb.overview;
+      block.append(overview);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "edit-tmdb-actions";
+    const fetchBtn = document.createElement("button");
+    fetchBtn.type = "button";
+    fetchBtn.className = "btn btn-outline";
+    fetchBtn.textContent = item.tmdb ? "Refresh" : "Fetch info";
+    fetchBtn.disabled = !tmdbConfigured;
+    fetchBtn.addEventListener("click", async () => {
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = "Fetching…";
+      try {
+        const response = await sendToBackground({ action: "enrich", ids: [itemId], force: true });
+        if (!response.ok) showStatus(response.error, true, 5000);
+        else if ("items" in response) {
+          allItems = response.items;
+          render();
+          if (!response.enriched) showStatus("No match found on TMDB.", true);
+        }
+      } catch (err) {
+        showStatus(err instanceof Error ? err.message : "Could not reach TMDB.", true);
+      }
+      paint();
+    });
+    actions.append(fetchBtn);
+
+    if (item.tmdb) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-outline";
+      removeBtn.textContent = "Wrong match? Remove";
+      removeBtn.addEventListener("click", async () => {
+        const response = await sendToBackground({ action: "removeTmdbMatch", id: itemId });
+        if (response.ok && "items" in response) {
+          allItems = response.items;
+          render();
+        }
+        paint();
+      });
+      actions.append(removeBtn);
+    }
+    block.append(actions);
+  };
+
+  paint();
+  return block;
 }
 
 function closeEditDialog(): void {
@@ -1222,21 +1462,248 @@ editFormEl.addEventListener("submit", async (e) => {
 document.getElementById("edit-cancel")!.addEventListener("click", closeEditDialog);
 editDialogEl.querySelector("[data-edit-dismiss]")!.addEventListener("click", closeEditDialog);
 
+/* ── Rate when finished ──────────────────────────────────── */
+
+const ASK_RATING_KEY = "keepshelf.askRating";
+const rateDialogEl = document.getElementById("rate-dialog")!;
+const rateFormEl = document.getElementById("rate-form") as HTMLFormElement;
+const rateKickerEl = document.getElementById("rate-kicker")!;
+const rateTitleEl = document.getElementById("rate-title")!;
+const rateScaleEl = document.getElementById("rate-scale")!;
+const rateCaptionEl = document.getElementById("rate-caption")!;
+const rateReviewEl = document.getElementById("rate-review") as HTMLTextAreaElement;
+const prefAskRatingEl = document.getElementById("pref-ask-rating") as HTMLInputElement;
+const generalSummaryEl = document.getElementById("general-summary")!;
+let ratingForId: string | undefined;
+let ratingValue: number | undefined;
+
+/** On unless the user switched it off in Settings. */
+function askRatingEnabled(): boolean {
+  try {
+    return localStorage.getItem(ASK_RATING_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function renderPrefs(): void {
+  const on = askRatingEnabled();
+  prefAskRatingEl.checked = on;
+  generalSummaryEl.textContent = on ? "Rating prompt on" : "Rating prompt off";
+  generalSummaryEl.classList.toggle("is-ok", on);
+}
+
+prefAskRatingEl.addEventListener("change", () => {
+  try {
+    localStorage.setItem(ASK_RATING_KEY, prefAskRatingEl.checked ? "on" : "off");
+  } catch {
+    /* the choice just won't be remembered */
+  }
+  renderPrefs();
+});
+
+function paintRatingScale(): void {
+  rateScaleEl.querySelectorAll<HTMLButtonElement>(".rate-btn").forEach((btn) => {
+    const selected = Number(btn.dataset.value) === ratingValue;
+    btn.classList.toggle("selected", selected);
+    btn.setAttribute("aria-checked", String(selected));
+  });
+  rateCaptionEl.textContent = ratingValue ? `★ ${ratingValue} / 10` : "Tap a number to rate it";
+}
+
+function selectRating(value: number): void {
+  // Tapping the chosen number again clears it, so a rating can be taken back.
+  ratingValue = ratingValue === value ? undefined : value;
+  paintRatingScale();
+}
+
+for (let n = 1; n <= 10; n++) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "rate-btn";
+  btn.dataset.value = String(n);
+  btn.textContent = String(n);
+  btn.setAttribute("role", "radio");
+  btn.setAttribute("aria-label", `${n} out of 10`);
+  btn.addEventListener("click", () => selectRating(n));
+  rateScaleEl.append(btn);
+}
+
+function openRateDialog(item: SavedItem): void {
+  cancelRowHover();
+  ratingForId = item.id;
+  ratingValue = item.myRating;
+  rateKickerEl.textContent = item.type === "book" ? "Finished reading" : "Finished watching";
+  rateTitleEl.textContent = itemTitle(item);
+  rateReviewEl.value = item.review ?? "";
+  paintRatingScale();
+  rateDialogEl.hidden = false;
+  // Focus the dialog, not a number: a ringed "1" would look like a rating already chosen.
+  // Number keys still work from here, and Tab moves on to the buttons.
+  (rateScaleEl.querySelector<HTMLElement>(".rate-btn.selected") ?? rateFormEl).focus();
+}
+
+function closeRateDialog(): void {
+  rateDialogEl.hidden = true;
+  ratingForId = undefined;
+  ratingValue = undefined;
+}
+
+/** Offers the rating box for an item that was just finished, unless the setting is off. */
+function maybeAskRating(id: string): void {
+  const item = allItems.find((i) => i.id === id);
+  if (item && shouldAskForRating(item, askRatingEnabled())) openRateDialog(item);
+}
+
+/** Marks an item finished (or not). Finishing is saved first, so closing the rating box never loses it. */
+async function toggleDone(item: SavedItem): Promise<void> {
+  const finishing = !item.done;
+  const error = await updateItemFields(item.id, { done: finishing });
+  if (error) {
+    showStatus(error, true);
+    return;
+  }
+  if (finishing) maybeAskRating(item.id);
+}
+
+rateFormEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = ratingForId;
+  const item = allItems.find((i) => i.id === id);
+  const rating = ratingValue;
+  const review = rateReviewEl.value.trim();
+  closeRateDialog();
+  if (!id || !item) return;
+  if (rating === item.myRating && review === (item.review ?? "")) return;
+  const error = await updateItemFields(id, { myRating: rating ?? null, review });
+  showStatus(error ?? "Saved your rating.", Boolean(error));
+});
+
+rateFormEl.addEventListener("keydown", (e) => {
+  // 1 to 9 pick that rating and 0 picks 10, unless you are typing a review.
+  if (e.target === rateReviewEl || e.ctrlKey || e.metaKey || e.altKey || !/^[0-9]$/.test(e.key)) return;
+  e.preventDefault();
+  selectRating(e.key === "0" ? 10 : Number(e.key));
+});
+
+document.getElementById("rate-skip")!.addEventListener("click", closeRateDialog);
+rateDialogEl.querySelector("[data-rate-dismiss]")!.addEventListener("click", closeRateDialog);
+renderPrefs();
+
+/* ── TMDB settings ───────────────────────────────────────── */
+
+const tmdbTokenEl = document.getElementById("tmdb-token") as HTMLInputElement;
+const tmdbTokenStatusEl = document.getElementById("tmdb-token-status")!;
+const tmdbSettingsStatusEl = document.getElementById("tmdb-settings-status")!;
+const tmdbSettingsStatusTextEl = document.getElementById("tmdb-settings-status-text")!;
+const tmdbSettingsStatusIconEl = document.getElementById("tmdb-settings-status-icon")!;
+const tmdbEnrichAllEl = document.getElementById("tmdb-enrich-all") as HTMLButtonElement;
+const tmdbStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+document.getElementById("tmdb-notice")!.textContent = TMDB_NOTICE;
+
+function showTmdbStatus(msg: string, err = false, ms = 6000): void {
+  showSectionStatus(tmdbSettingsStatusEl, tmdbSettingsStatusTextEl, tmdbSettingsStatusIconEl, tmdbStatusTimer, msg, err, ms);
+}
+
+function renderTmdbConfigured(): void {
+  tmdbTokenStatusEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
+  tmdbTokenEl.placeholder = tmdbConfigured ? "Saved. Paste to replace" : "API Read Access Token";
+  tmdbEnrichAllEl.disabled = !tmdbConfigured;
+  tmdbSummaryEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
+  tmdbSummaryEl.classList.toggle("is-ok", tmdbConfigured);
+}
+
+async function loadTmdbSettings(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "getTmdbSettings" });
+    if (response.ok && "tmdb" in response) tmdbConfigured = response.tmdb.configured;
+  } catch {
+    /* leave as not configured */
+  }
+  renderTmdbConfigured();
+}
+
+async function saveTmdbToken(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "setTmdbToken", token: tmdbTokenEl.value });
+    if (!response.ok) throw new Error(response.error);
+    if ("tmdb" in response) tmdbConfigured = response.tmdb.configured;
+    const cleared = tmdbTokenEl.value.trim() === "";
+    tmdbTokenEl.value = "";
+    renderTmdbConfigured();
+    showTmdbStatus(cleared ? "Token removed." : "Token saved. New saves will fetch TMDB info.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Could not save the token.", true);
+  }
+}
+
+async function testTmdbToken(): Promise<void> {
+  try {
+    const typed = tmdbTokenEl.value.trim();
+    const response = await sendToBackground({ action: "testTmdb", ...(typed ? { token: typed } : {}) });
+    if (!response.ok) throw new Error(response.error);
+    showTmdbStatus("message" in response ? response.message : "Connected to TMDB.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Test failed.", true);
+  }
+}
+
+async function enrichShelf(): Promise<void> {
+  const ids = allItems.filter((i) => isEnrichable(i) && !i.tmdb && !i.tmdbOptOut).map((i) => i.id);
+  if (ids.length === 0) {
+    showTmdbStatus("Every movie, series and anime already has TMDB info.");
+    return;
+  }
+  tmdbEnrichAllEl.disabled = true;
+  let enriched = 0;
+  let unmatched = 0;
+  try {
+    for (let i = 0; i < ids.length; i += 25) {
+      showTmdbStatus(`Fetching info… ${i}/${ids.length}`, false, 120000);
+      const response = await sendToBackground({ action: "enrich", ids: ids.slice(i, i + 25) });
+      if (!response.ok) throw new Error(response.error);
+      if ("items" in response) {
+        allItems = response.items;
+        enriched += response.enriched ?? 0;
+        unmatched += response.unmatched ?? 0;
+      }
+    }
+    render();
+    showTmdbStatus(`Added info to ${enriched} item${enriched === 1 ? "" : "s"}` + (unmatched ? `; ${unmatched} had no match.` : "."));
+  } catch (err) {
+    render();
+    showTmdbStatus(err instanceof Error ? err.message : "Fetching info failed.", true);
+  } finally {
+    tmdbEnrichAllEl.disabled = !tmdbConfigured;
+  }
+}
+
+document.getElementById("tmdb-save")!.addEventListener("click", () => void saveTmdbToken());
+document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
+tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
+
 /* ── Random pick ─────────────────────────────────────────── */
 
 const pickDialogEl = document.getElementById("pick-dialog")!;
 const pickLeadingEl = document.getElementById("pick-leading")!;
 const pickTitleEl = document.getElementById("pick-title")!;
 const pickDetailEl = document.getElementById("pick-detail")!;
+const pickOverviewEl = document.getElementById("pick-overview")!;
 const pickStartEl = document.getElementById("pick-start") as HTMLButtonElement;
 const pickOpenEl = document.getElementById("pick-open") as HTMLButtonElement;
 let pickedId: string | undefined;
 
 function showPick(item: SavedItem): void {
+  cancelRowHover();
   pickedId = item.id;
   pickLeadingEl.replaceChildren(createLeadingEl(item));
   pickTitleEl.textContent = itemTitle(item);
-  pickDetailEl.textContent = [itemSubtitle(item), item.genre, item.author].filter(Boolean).join(" · ");
+  pickDetailEl.textContent = [itemSubtitle(item), genreText(item), item.tmdb?.certification, item.author]
+    .filter(Boolean)
+    .join(" · ");
+  const overview = item.tmdb?.overview;
+  pickOverviewEl.textContent = overview && overview.length > 220 ? `${overview.slice(0, 217)}…` : (overview ?? "");
+  pickOverviewEl.hidden = !overview;
   const inProgress = statusOf(item) === "in_progress";
   pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
   pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
@@ -1273,6 +1740,7 @@ pickStartEl.addEventListener("click", async () => {
   const error = await updateItemFields(item.id, { status: next });
   closePick();
   showStatus(error ?? (next === "done" ? "Marked as done." : "Marked as in progress."), Boolean(error));
+  if (!error && next === "done") maybeAskRating(item.id);
 });
 pickOpenEl.addEventListener("click", () => {
   const item = allItems.find((i) => i.id === pickedId);
@@ -1589,6 +2057,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!confirmDialogEl.hidden) closeConfirmDialog(false);
   else if (!editDialogEl.hidden) closeEditDialog();
+  else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden) closePick();
   else if (!statsView.hidden) closeStats();
 });
@@ -1615,5 +2084,17 @@ if (isTabView) {
   openSettings();
 }
 
-void loadItems();
+void loadItems().then(async () => {
+  // Refreshes or drops TMDB data older than the retention limit; usually a no-op.
+  try {
+    const response = await sendToBackground({ action: "refreshStaleTmdb" });
+    if (response.ok && "items" in response) {
+      allItems = response.items;
+      render();
+    }
+  } catch {
+    /* not critical */
+  }
+});
 void loadKeepSettings();
+void loadTmdbSettings();

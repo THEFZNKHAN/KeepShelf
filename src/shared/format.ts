@@ -1,5 +1,6 @@
 import type { SavedItem } from "./types.js";
 import { isGenericBookSubtitle } from "./book.js";
+import { durationText } from "./tmdb.js";
 import { normalizeYear } from "./year.js";
 
 function formatBookRatingLabel(item: SavedItem): string | undefined {
@@ -34,6 +35,21 @@ export function formatDurationOrSeasons(value: string): string {
     return `S${seasonMatch[1].padStart(2, "0")}`;
   }
   return value;
+}
+
+/**
+ * Shortens long text to at most `max` characters, cutting at a word boundary and adding an ellipsis.
+ * Paragraph breaks are kept, so a clipped description still reads as paragraphs.
+ */
+export function clipText(text: string, max: number): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  // If the next character is whitespace the cut already ends a word; otherwise back up to the last space.
+  const endsWord = /\s/.test(clean[max] ?? "");
+  const lastSpace = cut.search(/\s\S*$/);
+  const base = endsWord || lastSpace <= max * 0.6 ? cut : cut.slice(0, lastSpace);
+  return `${base.replace(/[\s,.;:!?-]+$/, "")}…`;
 }
 
 export function formatItemLine(item: SavedItem): string {
@@ -72,8 +88,9 @@ export function formatItemLine(item: SavedItem): string {
     : item.title;
   parts.push(titleWithYear);
 
-  if (item.durationOrSeasons) {
-    parts.push(formatDurationOrSeasons(item.durationOrSeasons));
+  const duration = durationText(item);
+  if (duration) {
+    parts.push(formatDurationOrSeasons(duration));
   }
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);
