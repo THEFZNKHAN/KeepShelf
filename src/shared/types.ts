@@ -24,6 +24,9 @@ export interface SavedItem {
   doneAt?: number;
   status?: ItemStatus;
   tmdb?: TmdbInfo;
+  bookInfo?: BookInfo;
+  /** The user removed a wrong Open Library match, so don't look it up again automatically. */
+  bookInfoOptOut?: boolean;
   /** The user removed a wrong TMDB match, so don't look it up again automatically. */
   tmdbOptOut?: boolean;
   tags?: string[];
@@ -62,6 +65,24 @@ export interface TmdbInfo {
   episodes?: number;
   status?: string;
   posterPath?: string;
+  fetchedAt: number;
+}
+
+/** Details about a book from Open Library. Kept on the item once fetched, and shown only when present. */
+export interface BookInfo {
+  /** Open Library work id, such as "/works/OL17930368W". */
+  workKey: string;
+  /** Cleaned subjects, used as genres. */
+  subjects: string[];
+  /** The median page count across editions. */
+  pages?: number;
+  /** Open Library community rating, 1 to 5, with the number of ratings. */
+  rating?: number;
+  ratingsCount?: number;
+  description?: string;
+  /** When the work was first published. Never overwrites the edition year the user saved. */
+  firstPublishYear?: number;
+  coverId?: number;
   fetchedAt: number;
 }
 
@@ -109,6 +130,10 @@ export type MessageAction =
   | { action: "syncKeep"; ids: string[] }
   | { action: "import"; items: ImportItem[] }
   | { action: "merge"; keepId: string; removeIds: string[] }
+  | { action: "getBookInfoSettings" }
+  | { action: "setBookInfoEnabled"; enabled: boolean }
+  | { action: "enrichBooks"; ids?: string[]; force?: boolean }
+  | { action: "removeBookMatch"; id: string }
   | { action: "getTmdbSettings" }
   | { action: "setTmdbToken"; token: string }
   | { action: "testTmdb"; token?: string }
@@ -134,6 +159,7 @@ export type MessageResponse =
       unmatched?: number;
     }
   | { ok: true; tmdb: { configured: boolean } }
+  | { ok: true; bookInfo: { enabled: boolean } }
   | { ok: true; message: string }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }

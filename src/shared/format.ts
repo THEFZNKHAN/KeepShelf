@@ -1,5 +1,6 @@
 import type { SavedItem } from "./types.js";
 import { isGenericBookSubtitle } from "./book.js";
+import { bookRating } from "./openlibrary.js";
 import { durationText } from "./tmdb.js";
 import { normalizeYear } from "./year.js";
 
@@ -28,6 +29,24 @@ function formatRatingLabel(item: SavedItem): string | undefined {
 }
 
 export { formatRatingLabel, formatBookTitlePart };
+
+/**
+ * A rating out of 10, so IMDb, Letterboxd (/5), Goodreads (/5), Rotten Tomatoes (%), TMDB and Open Library (/5)
+ * sort together. The rating from the page you saved from wins; TMDB or Open Library fills in when it gave none.
+ */
+export function ratingScore(item: Pick<SavedItem, "imdbRating" | "sourceUrl" | "bookInfo" | "tmdb">): number {
+  const value = parseFloat(item.imdbRating ?? "");
+  if (!Number.isNaN(value)) {
+    const url = item.sourceUrl ?? "";
+    if (/letterboxd\.com|goodreads\.com|book-filter\.com/.test(url)) return value * 2;
+    if (url.includes("rottentomatoes.com")) return value / 10;
+    return value;
+  }
+  const olRating = bookRating(item.bookInfo);
+  if (olRating) return olRating * 2;
+  if (item.tmdb?.rating) return item.tmdb.rating;
+  return -1;
+}
 
 export function formatDurationOrSeasons(value: string): string {
   const seasonMatch = value.match(/^(\d+)\s*seasons?$/i);

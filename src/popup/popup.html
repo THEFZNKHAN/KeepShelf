@@ -110,7 +110,10 @@
         </div>
 
         <div class="view-row" id="organise-row" hidden>
-          <select id="tag-filter" class="view-select organise-select" aria-label="Filter by tag"></select>
+          <button type="button" id="tag-filter" class="view-select organise-select tag-button" aria-label="Filter by tag">
+            <span class="tag-button-label">All tags</span>
+            <span class="material-symbols-outlined">expand_more</span>
+          </button>
           <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
         </div>
 
@@ -387,6 +390,41 @@
             <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
           </div>
         </details>
+        <details class="s-card" id="card-bookinfo">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">menu_book</span>
+            <span class="s-card-title">Book info</span>
+            <span class="s-card-summary" id="bookinfo-summary">Off</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Fetch book details from Open Library</strong>
+                <span>
+                  Fills in page count, genres, a cover, a description and a community rating for your books. Titles and
+                  authors are sent to openlibrary.org to look them up. No account or key needed.
+                </span>
+              </div>
+              <label class="switch" title="Fetch book details from Open Library">
+                <input type="checkbox" id="pref-book-info" aria-label="Fetch book details from Open Library" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <button type="button" id="bookinfo-enrich-all" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
+              Fetch info for my books
+            </button>
+            <div id="bookinfo-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="bookinfo-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="bookinfo-settings-status-text"></span>
+              </div>
+            </div>
+            <p class="s-fine" id="bookinfo-notice"></p>
+          </div>
+        </details>
+
         <details class="s-card" id="card-backup">
           <summary>
             <span class="material-symbols-outlined s-card-icon">backup</span>

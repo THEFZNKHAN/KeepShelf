@@ -62,7 +62,7 @@
 | **What it does** | Reads title metadata from supported pages and saves a clean, formatted entry to your local shelf with one click |
 | **Beyond saving** | Tags, custom lists, personal ratings and reviews, watch/read progress, a random "what next" picker, and a stats dashboard |
 | **Also works as** | A lightweight bookmark manager for tabs, links and notes |
-| **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes, and optional TMDB lookups with your own free token |
+| **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes, optional TMDB lookups, and optional book details from Open Library with your own free token |
 | **Who it is for** | Anyone keeping a watchlist, reading list, anime list or link collection without copy-pasting or tab-hoarding |
 | **Setup time** | About 2 minutes to load the extension, about 5 more to link Keep notes if you want sync |
 | **Cost** | Free and open source. No accounts, no API keys, no cloud backend |
@@ -77,6 +77,7 @@
 - [Features](#features)
 - [Organise and track your shelf](#organise-and-track-your-shelf)
 - [TMDB info](#tmdb-info)
+- [Book info](#book-info)
 - [Supported sources](#supported-sources)
 - [Tabs, links and notes](#tabs-links-and-notes)
 - [Output format](#output-format)
@@ -193,6 +194,10 @@ Your own ratings and reviews, tags, custom lists, watch and read progress, a ran
 
 Add a free TMDB token and new movies, series and anime are enriched automatically with genres, TMDB rating, age rating, overview and poster. See [TMDB info](#tmdb-info).
 
+### Book details from Open Library
+
+Turn on book info and your books get page counts, genres, covers, descriptions and a community rating, with no account or key. See [Book info](#book-info).
+
 ### Mirror to Google Keep
 
 Optionally append every save to your own Google Keep checklists. No Google Cloud project or OAuth app. See [Google Keep sync](#google-keep-sync).
@@ -207,7 +212,7 @@ Export your whole shelf as JSON, import a KeepShelf backup, or bring in a Letter
 
 ### Privacy first
 
-Everything stays on your device unless you turn on an optional feature: Keep sync, or TMDB lookups. No analytics and no third-party data collection.
+Everything stays on your device unless you turn on an optional feature: Keep sync, TMDB lookups, or book info from Open Library. No analytics and no third-party data collection.
 
 ---
 
@@ -286,7 +291,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 - **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total.
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
 
-Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered, because TMDB only has films and TV.
+Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered by TMDB, which only has films and TV. Books have their own option, see [Book info](#book-info).
 
 **How matching works**
 - Pages from IMDb (and any item whose source URL has an IMDb id) match exactly.
@@ -299,6 +304,36 @@ Anything the page itself provided wins over TMDB, and anything you type wins ove
 - The IMDb, Letterboxd and other ratings still come from the page you saved. TMDB's rating is shown separately as `TMDB 8.4`.
 
 *This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.*
+
+---
+
+## Book info
+
+[Open Library](https://openlibrary.org) is the free book catalogue behind this. It is optional and **off until you turn it on**, and it needs **no account and no key**.
+
+**Set it up**
+1. Open **Settings, Book info** and switch on **Fetch book details from Open Library**.
+2. Click **Fetch info for my books** to fill in the ones you already saved. New books are looked up automatically as you save them.
+
+**What you get** for books, filled in for you:
+- **Page count**, and the **total pages** for progress fills in automatically, so it reads `p. 212/528` without typing the total.
+- **Genres** (from Open Library's subjects), shown as a short line and usable as tags in the filter.
+- A **cover**, a **description** (shown when you rest the pointer on a row, and in the random picker), and a **community rating** shown as `OL 4.1`.
+
+Anything the page gave you wins over Open Library, and anything you type wins over both. Your saved publication year is never overwritten, because Open Library reports when a book was *first* published.
+
+**How matching works**
+- Books are searched by **title and author**. A book is only matched if the author agrees and the title is a close match, so KeepShelf shows nothing rather than the wrong book. Items with no author are only matched when the title is unambiguous.
+- If a match is wrong, open the book's **Edit** dialog and click **Wrong match? Remove**. It won't be looked up again unless you click **Fetch info**.
+- Some books simply aren't in the catalogue (a manga volume, for example), and they stay as they are.
+
+**Good to know**
+- Book titles and authors are sent to `openlibrary.org` to look them up, and nothing else is. That is why it is off by default.
+- Open Library asks clients to stay at about one request per second, and each book needs two, so KeepShelf paces itself. A big shelf takes a little while, and a short batch of four books takes around ten seconds.
+- The community ratings come from a smaller group than Goodreads, so they are labelled `OL` and shown beside the rating from the page you saved from.
+- Subjects are crowdsourced, so KeepShelf keeps the first few, tidies them up and drops catalogue labels, but an odd one can still slip through. Edit the tags if one bothers you.
+
+*Book data from Open Library (openlibrary.org).*
 
 ---
 
@@ -512,8 +547,9 @@ Importing from a file picker opens Settings in a full tab, because Chrome closes
 | Keep settings (URLs, toggles) | `chrome.storage.local` (your device only) |
 | Keep list content | Your Google Keep account (only when sync is on) |
 | TMDB token and fetched TMDB info | `chrome.storage.local` (your device only; refreshed or dropped after about 6 months) |
+| Fetched book info (pages, genres, description, rating) | `chrome.storage.local` (your device only) |
 
-KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, and TMDB lookups send item titles (and IMDb ids) to `api.themoviedb.org` using your own token. Poster thumbnails load directly from the source site's or TMDB's image server, without a referrer for source sites.
+KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, TMDB lookups send item titles (and IMDb ids) to `api.themoviedb.org` using your own token, and book info sends book titles and authors to `openlibrary.org`. Posters and covers load directly from the source site's, TMDB's or Open Library's image server, without a referrer.
 
 Uninstalling the extension removes all local shelf data. KeepShelf only ever appends lines to your Keep notes. It never edits or deletes them.
 
@@ -539,6 +575,7 @@ Uninstalling the extension removes all local shelf data. KeepShelf only ever app
 | `trakt.tv`, `app.trakt.tv` | Parse Trakt movie and show pages |
 | `keep.google.com` | Append lines to your linked Keep notes |
 | `api.themoviedb.org` | Look up genres, ratings and info on TMDB (only used once you add a token) |
+| `openlibrary.org` | Look up book details on Open Library (only used once you turn on book info) |
 
 ---
 
@@ -557,6 +594,8 @@ npx tsc --noEmit  # type-check
 | Site parsers and formatting | `src/shared/` (`imdb.ts`, `letterboxd.ts`, `mal.ts`, `format.ts`, …) |
 | Personal data rules (status, tags, ratings, progress) | `src/shared/user-data.ts` |
 | Duplicates, random pick, stats (pure, unit-tested) | `src/shared/fuzzy.ts`, `random-pick.ts`, `stats.ts` |
+| TMDB lookups and cache rules | `src/shared/tmdb.ts`, `tmdb-settings.ts` |
+| Book info from Open Library (matching, rate pacing, cleaning) | `src/shared/openlibrary.ts`, `book-info-settings.ts` |
 | Storage and backup import | `src/shared/storage.ts`, `import.ts` |
 | Keep sync | `src/shared/keep-*.ts` |
 | Background worker, shortcuts, context menus | `src/background/` |
@@ -578,6 +617,10 @@ Yes. The local shelf is fully independent. Keep sync is optional and off by defa
 **Can I use one Keep note for everything?**
 
 Yes. Paste the same Keep URL into the Media, Books and Tabs fields.
+
+**Do I need an account or a key for book info?**
+
+No. Open Library needs neither. You only switch it on in Settings.
 
 **Do I need TMDB?**
 
@@ -638,6 +681,10 @@ Text inserted without trusted browser input is discarded by Keep. Reload the ext
 | "Already saved" on a first save | The same title is already on your shelf from an earlier session |
 | "Saved (similar to …)" | A near-match exists. Review it under Settings, Duplicates |
 | Tag or list dropdown is missing | They appear only when the current tab has tags or lists |
+| Book info does nothing | Turn it on under Settings, Book info, then click **Fetch info for my books** |
+| A book has "No match found yet" | Check the title and author in Edit (the author must be right), then click Fetch info |
+| Wrong book info on an item | Edit, then Wrong match? Remove |
+| "Open Library is limiting requests" | Wait a minute and try again. Fetching is paced, but a very large batch can still hit the limit |
 | TMDB "rejected this token" | Paste the API Read Access Token from themoviedb.org/settings/api, with no spaces |
 | "No match found" on TMDB | Fix the title or year in Edit, then click Fetch info |
 | Wrong TMDB info on an item | Edit, then Wrong match? Remove |
@@ -656,7 +703,7 @@ Ideas under consideration, not promises:
 - Scheduled automatic backups
 - "Where to watch" streaming availability
 - Reminders for unreleased titles
-- More sources (TMDB, AniList, StoryGraph) and games or music as new types
+- More sources (AniList, StoryGraph) and games or music as new types
 
 Have a suggestion? [Open an issue](../../issues).
 

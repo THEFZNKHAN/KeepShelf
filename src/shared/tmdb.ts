@@ -1,4 +1,5 @@
 import { normalizeTitle, similarity } from "./fuzzy.js";
+import { bookGenres } from "./openlibrary.js";
 import { normalizeTags } from "./user-data.js";
 import type { SavedItem, TmdbInfo, TmdbKind } from "./types.js";
 
@@ -253,8 +254,8 @@ export function sanitizeTmdb(raw: unknown, now = Date.now()): TmdbInfo | undefin
 }
 
 /** Genre text for an item: what the source page gave us, else TMDB's genres. */
-export function genreText(item: Pick<SavedItem, "genre" | "tmdb">): string {
-  return item.genre?.trim() || item.tmdb?.genres.join(", ") || "";
+export function genreText(item: Pick<SavedItem, "genre" | "tmdb" | "bookInfo">): string {
+  return item.genre?.trim() || item.tmdb?.genres.join(", ") || bookGenres(item.bookInfo).join(", ") || "";
 }
 
 export function formatMinutes(minutes: number): string {
@@ -291,14 +292,15 @@ export function totalEpisodes(item: Pick<SavedItem, "progressTotal" | "durationO
 }
 
 /** Genres as tags ("Sci-Fi & Fantasy" becomes sci-fi and fantasy), from the source page and from TMDB. */
-export function genreTags(item: Pick<SavedItem, "genre" | "tmdb">): string[] {
+export function genreTags(item: Pick<SavedItem, "genre" | "tmdb" | "bookInfo">): string[] {
   const fromPage = (item.genre ?? "").split(/[,/|]| & /);
   const fromTmdb = (item.tmdb?.genres ?? []).flatMap((g) => g.split(/ & /));
-  return normalizeTags([...fromPage, ...fromTmdb]);
+  const fromBook = bookGenres(item.bookInfo).flatMap((s) => s.split(/ & /));
+  return normalizeTags([...fromPage, ...fromTmdb, ...fromBook]);
 }
 
 /** The tags the user added plus the genre tags. Genre tags are derived, so they are never stored on the item. */
-export function allTags(item: Pick<SavedItem, "tags" | "genre" | "tmdb">): string[] {
+export function allTags(item: Pick<SavedItem, "tags" | "genre" | "tmdb" | "bookInfo">): string[] {
   return [...new Set([...(item.tags ?? []), ...genreTags(item)])];
 }
 

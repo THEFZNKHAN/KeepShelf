@@ -1880,3 +1880,138 @@ body.in-tab {
 .pref-row .switch {
   margin-top: 2px;
 }
+
+/* ── Tag picker: a scrollable dropdown that stays inside the popup ─────── */
+
+.tag-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 0 4px 0 8px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tag-button[hidden] {
+  display: none;
+}
+
+.tag-button-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tag-button .material-symbols-outlined {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: var(--on-surface-variant);
+}
+
+.tag-button[aria-expanded="true"] {
+  border-color: var(--primary);
+}
+
+.picker-panel {
+  position: fixed;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+
+.picker-panel[hidden] {
+  display: none;
+}
+
+.picker-search {
+  flex-shrink: 0;
+  height: 30px;
+  margin: 6px 6px 2px;
+  padding: 0 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.picker-search:focus {
+  border-color: var(--primary);
+}
+
+.picker-search[hidden] {
+  display: none;
+}
+
+.picker-list {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  overflow-y: auto;
+  outline: none;
+}
+
+.picker-group {
+  padding: 8px 10px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--on-surface);
+  cursor: pointer;
+}
+
+.picker-option.active {
+  background: var(--surface-container);
+}
+
+.picker-option[aria-selected="true"] {
+  font-weight: 700;
+}
+
+.picker-option[aria-selected="true"]::before {
+  content: "✓";
+  margin-right: -2px;
+  font-size: 11px;
+}
+
+.picker-option-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.picker-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+
+.picker-empty {
+  padding: 10px;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
