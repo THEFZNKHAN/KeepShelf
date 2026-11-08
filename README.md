@@ -367,7 +367,7 @@ Anything the page gave you wins over Open Library, and anything you type wins ov
 
 The **Tabs** shelf is a lightweight bookmark manager. Switch to the **Tabs** tab in the popup.
 
-- **Save this tab** bookmarks the page you are on, with its title and URL.
+- **Save tab** (the button at the top) bookmarks the page you are on, with its title and URL. It works on any website.
 - **Paste a URL** into the input box and click **Save** to store it as a link.
 - **Type any other text** and click **Save** to store it as a note.
 - **Click a saved tab or link** to reopen it in a new tab.
@@ -459,7 +459,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 ### Save a tab or bookmark
 
 1. Switch to the **Tabs** tab.
-2. Click **Save this tab**, or paste a URL or note and click **Save**.
+2. Click **Save tab** at the top, or paste a URL or note and click **Save**.
 
 ### Manage your shelf
 
@@ -660,7 +660,7 @@ Not yet. Download the latest ZIP from the [Releases page](../../releases/latest)
 
 **Can I save a page that is not supported?**
 
-Yes. Use the **Tabs** shelf: **Save this tab** bookmarks any URL.
+Yes. Use the **Tabs** shelf: **Save tab** bookmarks any URL.
 
 **Why did my Keep line disappear after closing the note?**
 

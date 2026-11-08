@@ -20,6 +20,17 @@ type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
 const STATUS_FILTERS: StatusFilter[] = ["all", "todo", "progress", "done", "dropped"];
 const SORTS: SortBy[] = ["newest", "oldest", "title", "year", "rating", "myrating"];
+const SORT_LABELS: Record<SortBy, string> = {
+  newest: "Newest",
+  oldest: "Oldest",
+  title: "Title A–Z",
+  year: "Year",
+  rating: "Rating",
+  myrating: "My rating",
+};
+// Saved tabs, links and notes have no year, rating or progress, so they only offer what applies to them.
+const TAB_SORTS: SortBy[] = ["newest", "oldest", "title"];
+const TAB_STATUSES: StatusFilter[] = ["all", "todo", "done"];
 const FILTER_STATUS: Record<Exclude<StatusFilter, "all">, ItemStatus> = {
   todo: "plan",
   progress: "in_progress",
@@ -91,6 +102,7 @@ const savePageBtnEl = document.getElementById("save-page") as HTMLButtonElement;
 const searchEl = document.getElementById("search") as HTMLInputElement;
 const statusFilterEl = document.getElementById("status-filter") as HTMLSelectElement;
 const sortEl = document.getElementById("sort") as HTMLSelectElement;
+const pickRandomBtnEl = document.getElementById("pick-random") as HTMLButtonElement;
 const organiseRowEl = document.getElementById("organise-row")!;
 const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
 const tagPicker = createTagPicker(tagFilterEl, (tag) => {
@@ -186,9 +198,26 @@ function yearOf(item: SavedItem): number {
   return Number.isNaN(year) ? -1 : year;
 }
 
+function availableSorts(): SortBy[] {
+  return activeTab === "tabs" ? TAB_SORTS : SORTS;
+}
+
+function availableStatuses(): StatusFilter[] {
+  return activeTab === "tabs" ? TAB_STATUSES : STATUS_FILTERS;
+}
+
+/** What is actually applied: a choice made on another shelf that doesn't exist here falls back, without being forgotten. */
+function effectiveSort(): SortBy {
+  return availableSorts().includes(sortBy) ? sortBy : "newest";
+}
+
+function effectiveStatus(): StatusFilter {
+  return availableStatuses().includes(statusFilter) ? statusFilter : "all";
+}
+
 function sortItems(items: SavedItem[]): SavedItem[] {
   const sorted = [...items];
-  switch (sortBy) {
+  switch (effectiveSort()) {
     case "oldest":
       return sorted.sort((a, b) => a.savedAt - b.savedAt);
     case "title":
@@ -209,8 +238,9 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
   if (activeTab === "media" && activeFilter !== "all") {
     items = items.filter((i) => i.type === activeFilter);
   }
-  if (statusFilter !== "all" && !options.ignoreStatus) {
-    const wanted = FILTER_STATUS[statusFilter];
+  const status = effectiveStatus();
+  if (status !== "all" && !options.ignoreStatus) {
+    const wanted = FILTER_STATUS[status];
     items = items.filter((i) => statusOf(i) === wanted);
   }
   if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
@@ -434,11 +464,11 @@ function updateEmptyState(): void {
   } else if (activeTab === "tabs") {
     emptyHeadingEl.textContent = "No tabs saved yet";
     emptyBodyEl.innerHTML =
-      "Paste a URL or write a note in the box above, or click <strong>Save this tab</strong> to save the current page.";
+      "Paste a URL or write a note in the box above, or click <strong>Save tab</strong> at the top to save the current page.";
     emptyHintsEl.innerHTML = `
       <div class="source-chip">
         <span class="material-symbols-outlined">tab</span>
-        Save this tab
+        Save tab
       </div>
       <div class="source-chip">
         <span class="material-symbols-outlined">link</span>
@@ -736,6 +766,14 @@ function renderOrganiseFilters(): void {
   organiseRowEl.hidden = tags.size === 0 && lists.length === 0;
 }
 
+function fillOptions(select: HTMLSelectElement, entries: Array<[string, string]>, value: string): void {
+  const same =
+    select.options.length === entries.length &&
+    entries.every(([v, text], i) => select.options[i].value === v && select.options[i].textContent === text);
+  if (!same) select.replaceChildren(...entries.map(([v, text]) => new Option(text, v)));
+  select.value = value;
+}
+
 function render(): void {
   cancelRowHover();
   const items = filteredItems();
@@ -748,11 +786,18 @@ function render(): void {
   tabsInputRowEl.hidden = activeTab !== "tabs";
 
   const labels = doneLabels();
-  statusFilterEl.options[1].textContent = labels.todo;
-  statusFilterEl.options[3].textContent = labels.done;
-  statusFilterEl.value = statusFilter;
+  const statusText: Record<StatusFilter, string> = {
+    all: "All",
+    todo: labels.todo,
+    progress: "In progress",
+    done: labels.done,
+    dropped: "Dropped",
+  };
+  fillOptions(statusFilterEl, availableStatuses().map((v) => [v, statusText[v]]), effectiveStatus());
   renderOrganiseFilters();
-  sortEl.value = sortBy;
+  fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
+  // Picking something to watch or read doesn't apply to bookmarks.
+  pickRandomBtnEl.hidden = activeTab === "tabs";
 
   savePageBtnEl.textContent =
     activeTab === "books" ? "Save book" :
@@ -1103,6 +1148,7 @@ async function saveTabInput(): Promise<void> {
 }
 
 async function saveCurrentTab(): Promise<void> {
+  setSaveButtonBusy(true);
   try {
     const response = await sendToBackground({ action: "saveTab" });
     if (!response?.ok) {
@@ -1118,6 +1164,8 @@ async function saveCurrentTab(): Promise<void> {
     }
   } catch (err) {
     showStatus(err instanceof Error ? err.message : "Failed to save tab.", true);
+  } finally {
+    setSaveButtonBusy(false);
   }
 }
 
@@ -2164,7 +2212,9 @@ filtersEl.addEventListener("click", (e) => {
 });
 
 document.getElementById("save-page")!.addEventListener("click", () => {
-  void saveCurrentPage();
+  // On the Tabs shelf the button saves the page you are on as a bookmark, whatever site it is.
+  // Elsewhere it reads a movie, series or book from the page.
+  void (activeTab === "tabs" ? saveCurrentTab() : saveCurrentPage());
 });
 
 document.getElementById("tab-input-save")!.addEventListener("click", () => {
@@ -2173,10 +2223,6 @@ document.getElementById("tab-input-save")!.addEventListener("click", () => {
 
 tabInputEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") void saveTabInput();
-});
-
-document.getElementById("tab-save-tab")!.addEventListener("click", () => {
-  void saveCurrentTab();
 });
 
 document.getElementById("copy-all")!.addEventListener("click", () => {
