@@ -1,0 +1,81 @@
+# FALLBACK ONLY. Releases are normally automatic: see release.yml and AGENTS.md.
+# This runs when someone pushes a v*.*.* tag by hand, and requires the tag to match the version
+# already written in manifest.json and package.json. Do not use it unless release.yml is broken.
+name: Release (manual tag)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check version matches tag
+        run: |
+          manifest="v$(node -p "require('./manifest.json').version")"
+          package="v$(node -p "require('./package.json').version")"
+          if [ "$manifest" != "$GITHUB_REF_NAME" ] || [ "$package" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest.json ($manifest) / package.json ($package)"
+            exit 1
+          fi
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Generate icons
+        run: |
+          pip install pillow --quiet
+          node scripts/generate-icons.mjs
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package extension ZIP
+        run: |
+          zip -r KeepShelf-${{ github.ref_name }}.zip \
+            manifest.json \
+            dist/ \
+            icons/ \
+            README.md \
+            LICENSE
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "KeepShelf ${{ github.ref_name }}"
+          files: KeepShelf-${{ github.ref_name }}.zip
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            > No Node.js or Git required. Just download, extract, and load.
+
+            1. Download **KeepShelf-${{ github.ref_name }}.zip** from the assets below.
+            2. Extract the ZIP to any permanent folder on your computer.
+            3. Open **chrome://extensions** in Chrome.
+            4. Enable **Developer mode** (toggle in the top-right corner).
+            5. Click **Load unpacked** and select the extracted folder.
+            6. Pin KeepShelf to your toolbar.
+
+            See the [full README](https://github.com/${{ github.repository }}#quick-start) for usage instructions and Google Keep sync setup.

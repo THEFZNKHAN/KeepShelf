@@ -1,78 +1,137 @@
+# Automatic releases. Every push to main that changes the extension is tested, given the next version
+# number, tagged, built and published. Nobody edits version numbers or pushes tags by hand.
+# The rules for contributors and agents are in AGENTS.md ("Releases and versioning").
 name: Release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    branches: [main]
+    # Changes that cannot affect the extension do not make a release.
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - ".gitignore"
+      - "tests/**"
+      - ".github/**"
+  # "Run workflow" button on the Actions tab: release now and choose the size of the bump.
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (auto reads #minor / #major from commit messages since the last release)"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   contents: write
 
+# One release at a time, so two merges can never fight over the same version number.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  build-and-release:
+  release:
+    # The bump commit is pushed to main, so never run this from another branch.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout (full history, needed for tags and commit messages)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Already released?
+        id: guard
+        run: |
+          if git tag --points-at HEAD | grep -q '^v[0-9]'; then
+            echo "HEAD is already tagged ($(git tag --points-at HEAD | tr '\n' ' ')). Nothing to release."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node.js
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: "npm"
 
       - name: Install dependencies
+        if: steps.guard.outputs.skip != 'true'
         run: npm ci
 
-      - name: Check version matches tag
-        run: |
-          manifest="v$(node -p "require('./manifest.json').version")"
-          package="v$(node -p "require('./package.json').version")"
-          if [ "$manifest" != "$GITHUB_REF_NAME" ] || [ "$package" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match manifest.json ($manifest) / package.json ($package)"
-            exit 1
-          fi
-
       - name: Type-check
+        if: steps.guard.outputs.skip != 'true'
         run: npx tsc --noEmit
 
       - name: Run tests
+        if: steps.guard.outputs.skip != 'true'
         run: npm test
 
+      - name: Work out and write the next version
+        if: steps.guard.outputs.skip != 'true'
+        id: version
+        env:
+          BUMP: ${{ inputs.bump || 'auto' }}
+        run: |
+          VERSION="$(node scripts/release-version.mjs --bump="$BUMP" --write)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Releasing v$VERSION"
+
       - name: Generate icons
+        if: steps.guard.outputs.skip != 'true'
         run: |
           pip install pillow --quiet
           node scripts/generate-icons.mjs
 
       - name: Build extension
+        if: steps.guard.outputs.skip != 'true'
         run: npm run build
 
       - name: Package extension ZIP
+        if: steps.guard.outputs.skip != 'true'
         run: |
-          zip -r KeepShelf-${{ github.ref_name }}.zip \
+          zip -r "KeepShelf-v${{ steps.version.outputs.version }}.zip" \
             manifest.json \
             dist/ \
             icons/ \
             README.md \
             LICENSE
 
+      # Only after tests, build and packaging have all passed, so a failure never leaves a stray tag.
+      - name: Commit the version, tag it and push
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json package.json
+          [ -f package-lock.json ] && git add package-lock.json
+          git commit -m "chore(release): v${VERSION} [skip ci]"
+          git tag "v${VERSION}"
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/v${VERSION}"
+
       - name: Create GitHub Release
+        if: steps.guard.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          name: "KeepShelf ${{ github.ref_name }}"
-          files: KeepShelf-${{ github.ref_name }}.zip
+          tag_name: v${{ steps.version.outputs.version }}
+          name: "KeepShelf v${{ steps.version.outputs.version }}"
+          files: KeepShelf-v${{ steps.version.outputs.version }}.zip
           generate_release_notes: true
           body: |
             ## Install
 
             > No Node.js or Git required. Just download, extract, and load.
 
-            1. Download **KeepShelf-${{ github.ref_name }}.zip** from the assets below.
+            1. Download **KeepShelf-v${{ steps.version.outputs.version }}.zip** from the assets below.
             2. Extract the ZIP to any permanent folder on your computer.
             3. Open **chrome://extensions** in Chrome.
             4. Enable **Developer mode** (toggle in the top-right corner).
             5. Click **Load unpacked** and select the extracted folder.
             6. Pin KeepShelf to your toolbar.
 
-            See the [full README](https://github.com/${{ github.repository }}#-quick-start) for usage instructions and Google Keep sync setup.
+            See the [full README](https://github.com/${{ github.repository }}#quick-start) for usage instructions and Google Keep sync setup.
