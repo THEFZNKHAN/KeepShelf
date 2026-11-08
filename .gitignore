@@ -3,3 +3,7 @@ dist/
 dist-test/
 *.log
 tests/fixtures/
+
+# Local secrets (TMDB token for dev testing). Never commit.
+.env
+.env.*
