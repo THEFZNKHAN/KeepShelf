@@ -1,4 +1,7 @@
-name: Release
+# FALLBACK ONLY. Releases are normally automatic: see release.yml and AGENTS.md.
+# This runs when someone pushes a v*.*.* tag by hand, and requires the tag to match the version
+# already written in manifest.json and package.json. Do not use it unless release.yml is broken.
+name: Release (manual tag)
 
 on:
   push:
@@ -75,4 +78,4 @@ jobs:
             5. Click **Load unpacked** and select the extracted folder.
             6. Pin KeepShelf to your toolbar.
 
-            See the [full README](https://github.com/${{ github.repository }}#-quick-start) for usage instructions and Google Keep sync setup.
+            See the [full README](https://github.com/${{ github.repository }}#quick-start) for usage instructions and Google Keep sync setup.
