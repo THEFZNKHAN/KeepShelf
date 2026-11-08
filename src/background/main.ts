@@ -86,15 +86,18 @@ async function tmdbClient() {
 }
 
 /** Best-effort TMDB lookup after a save. A failure never blocks the save or the Keep sync. */
-async function enrichQuietly(item: SavedItem): Promise<void> {
-  if (!isEnrichable(item) || item.tmdb || item.tmdbOptOut) return;
+async function enrichQuietly(item: SavedItem): Promise<SavedItem> {
+  if (!isEnrichable(item) || item.tmdb || item.tmdbOptOut) return item;
   try {
     const client = await tmdbClient();
-    if (!client) return;
+    if (!client) return item;
     const info = await lookupInfo(client, item);
-    if (info) await updateItem(item.id, { tmdb: info });
+    if (!info) return item;
+    const items = await updateItem(item.id, { tmdb: info });
+    return items.find((i) => i.id === item.id) ?? item;
   } catch {
     /* offline, rate limited or a bad token: the item is still saved */
+    return item;
   }
 }
 
@@ -147,9 +150,10 @@ async function refreshStaleTmdb(): Promise<SavedItem[]> {
 async function saveAndSync(partial: NewItem) {
   const similar = findNearDuplicates(partial, await getAllItems()).map((i) => i.title);
   const { item, duplicate } = await saveItem(partial);
-  if (!duplicate) await enrichQuietly(item);
-  const keep = await syncAndRecord(item);
-  return { ok: true as const, item, duplicate, keep, ...(!duplicate && similar.length ? { similar } : {}) };
+  // Keep gets the enriched item, so a runtime or episode count found on TMDB lands in the Keep line too.
+  const saved = duplicate ? item : await enrichQuietly(item);
+  const keep = await syncAndRecord(saved);
+  return { ok: true as const, item: saved, duplicate, keep, ...(!duplicate && similar.length ? { similar } : {}) };
 }
 
 async function saveTab(tab: chrome.tabs.Tab | undefined): Promise<MessageResponse> {

@@ -207,7 +207,7 @@ All of this is stored on your shelf only. Your Keep lists are never changed by i
 
 ### Status and progress
 
-Every movie, series, anime and book has a status:
+Every movie, series, anime and book has a status. Each row also shows a small **Movie, Series, Anime or Book** badge on the Media tab, so you can tell them apart at a glance.
 
 | Status | Meaning |
 |--------|---------|
@@ -216,7 +216,7 @@ Every movie, series, anime and book has a status:
 | **Watched / Read** | Finished. The ✓ button on each row still toggles this |
 | **Dropped** | Gave up on it |
 
-For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
+For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Movies have no progress fields. The total episode count fills in automatically from TMDB or the source page, and you can still override it. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
 
 ### Personal rating and review
 
@@ -224,7 +224,7 @@ Rate anything from 1 to 10 and write a short review. Your rating is separate fro
 
 ### Tags and custom lists
 
-- **Tags** are free-form and comma separated, such as `sci-fi, weekend`. They are lowercased and de-duplicated. Click a tag chip on any row to filter by it.
+- **Tags** are free-form and comma separated, such as `weekend, rewatch`. They are lowercased and de-duplicated. **Genres are added as tags automatically** (shown as outlined chips), so you only type the personal ones. Click a tag chip on any row to filter by it.
 - **Lists** group items under a name of your choice, such as "Weekend watch" or "Book club". Use the **List** dropdown to focus on one.
 
 The tag and list dropdowns appear only when the current tab has any.
@@ -270,7 +270,13 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 3. In KeepShelf, open **Settings, TMDB**, paste it, click **Save**, then **Test**.
 4. Click **Fetch info for my shelf** to fill in what you already saved.
 
-**What you get** for movies, series and anime: genres, TMDB rating, age rating (US), overview, runtime or seasons, and a poster when the source page had none. Genres also feed your [stats](#stats-dashboard). Books are not covered, because TMDB only has films and TV.
+**What you get** for movies, series and anime, filled in for you:
+- **Genres, added as tags** automatically (so you can filter by `#drama` without typing anything), and they feed your [stats](#stats-dashboard).
+- **Runtime** for movies, **seasons** for series and **episode count** for anime, used in the row and in copied or Keep lines when the source page didn't give one.
+- **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total.
+- TMDB rating, age rating (US), overview, and a poster when the source page had none.
+
+Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered, because TMDB only has films and TV.
 
 **How matching works**
 - Pages from IMDb (and any item whose source URL has an IMDb id) match exactly.

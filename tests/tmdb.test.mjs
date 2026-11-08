@@ -171,3 +171,60 @@ test("genreText prefers the source page, then TMDB; poster urls come from TMDB p
   assert.equal(tmdbPosterUrl({ tmdb: { posterPath: "/a.jpg" } }), "https://image.tmdb.org/t/p/w92/a.jpg");
   assert.equal(tmdbPosterUrl({}), undefined);
 });
+
+import { allTags, durationText, formatMinutes, genreTags, tmdbDuration, totalEpisodes } from "../dist-test/tmdb.js";
+import { formatItemLine } from "../dist-test/format.js";
+
+test("formatMinutes writes runtimes like the page parsers do", () => {
+  assert.equal(formatMinutes(148), "2h 28m");
+  assert.equal(formatMinutes(120), "2h");
+  assert.equal(formatMinutes(47), "47m");
+});
+
+test("tmdbDuration: movies get a runtime, anime episodes, series seasons", () => {
+  assert.equal(tmdbDuration({ type: "movie", tmdb: { kind: "movie", runtimeMinutes: 148 } }), "2h 28m");
+  assert.equal(tmdbDuration({ type: "anime", tmdb: { kind: "tv", episodes: 37, seasons: 1 } }), "37 eps");
+  assert.equal(tmdbDuration({ type: "series", tmdb: { kind: "tv", seasons: 5, episodes: 62 } }), "5 seasons");
+  assert.equal(tmdbDuration({ type: "series", tmdb: { kind: "tv", seasons: 1 } }), "1 season");
+  assert.equal(tmdbDuration({ type: "anime", tmdb: { kind: "movie", runtimeMinutes: 125 } }), "2h 5m", "an anime film uses its runtime");
+  assert.equal(tmdbDuration({ type: "movie" }), undefined);
+  assert.equal(tmdbDuration({ type: "movie", tmdb: { kind: "movie" } }), undefined);
+});
+
+test("the page's own value wins over TMDB's", () => {
+  const tmdb = { kind: "movie", runtimeMinutes: 100 };
+  assert.equal(durationText({ type: "movie", durationOrSeasons: "2h 28m", tmdb }), "2h 28m");
+  assert.equal(durationText({ type: "movie", durationOrSeasons: " ", tmdb }), "1h 40m");
+  assert.equal(durationText({ type: "movie" }), undefined);
+});
+
+test("copied and Keep lines get the TMDB runtime when the page had none", () => {
+  const base = { id: "1", title: "Inception", year: "2010", type: "movie", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1 };
+  assert.equal(formatItemLine(base), "Inception (2010)");
+  assert.equal(formatItemLine({ ...base, tmdb: { id: 1, kind: "movie", genres: [], runtimeMinutes: 148, fetchedAt: 1 } }), "Inception (2010) | 2h 28m");
+  assert.equal(
+    formatItemLine({ ...base, type: "anime", title: "Death Note", year: "2006", tmdb: { id: 2, kind: "tv", genres: [], episodes: 37, fetchedAt: 1 } }),
+    "Death Note (2006) | 37 eps (A)"
+  );
+  assert.equal(
+    formatItemLine({ ...base, type: "series", title: "Dark", year: "2017", tmdb: { id: 3, kind: "tv", genres: [], seasons: 3, fetchedAt: 1 } }),
+    "Dark (2017) | S03"
+  );
+});
+
+test("totalEpisodes: your number, then TMDB, then the page", () => {
+  assert.equal(totalEpisodes({ progressTotal: 10, tmdb: { episodes: 62 }, durationOrSeasons: "37 eps" }), 10);
+  assert.equal(totalEpisodes({ tmdb: { episodes: 62 }, durationOrSeasons: "37 eps" }), 62);
+  assert.equal(totalEpisodes({ durationOrSeasons: "37 eps" }), 37);
+  assert.equal(totalEpisodes({ durationOrSeasons: "1 ep" }), 1);
+  assert.equal(totalEpisodes({ durationOrSeasons: "2h 28m" }), undefined);
+  assert.equal(totalEpisodes({}), undefined);
+});
+
+test("genres become tags automatically, merged with the ones you typed", () => {
+  assert.deepEqual(genreTags({ tmdb: { genres: ["Sci-Fi & Fantasy", "Action & Adventure", "Drama"] } }), ["sci-fi", "fantasy", "action", "adventure", "drama"]);
+  assert.deepEqual(genreTags({ genre: "Crime / Fantasy" }), ["crime", "fantasy"]);
+  assert.deepEqual(genreTags({ genre: "Drama", tmdb: { genres: ["Drama", "Crime"] } }), ["drama", "crime"], "no duplicates");
+  assert.deepEqual(allTags({ tags: ["weekend", "drama"], tmdb: { genres: ["Drama", "Crime"] } }), ["weekend", "drama", "crime"]);
+  assert.deepEqual(allTags({}), []);
+});

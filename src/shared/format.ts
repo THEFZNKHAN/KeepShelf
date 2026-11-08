@@ -1,5 +1,6 @@
 import type { SavedItem } from "./types.js";
 import { isGenericBookSubtitle } from "./book.js";
+import { durationText } from "./tmdb.js";
 import { normalizeYear } from "./year.js";
 
 function formatBookRatingLabel(item: SavedItem): string | undefined {
@@ -72,8 +73,9 @@ export function formatItemLine(item: SavedItem): string {
     : item.title;
   parts.push(titleWithYear);
 
-  if (item.durationOrSeasons) {
-    parts.push(formatDurationOrSeasons(item.durationOrSeasons));
+  const duration = durationText(item);
+  if (duration) {
+    parts.push(formatDurationOrSeasons(duration));
   }
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);

@@ -1,4 +1,5 @@
 import { normalizeTitle, similarity } from "./fuzzy.js";
+import { normalizeTags } from "./user-data.js";
 import type { SavedItem, TmdbInfo, TmdbKind } from "./types.js";
 
 export const TMDB_API = "https://api.themoviedb.org/3";
@@ -254,6 +255,51 @@ export function sanitizeTmdb(raw: unknown, now = Date.now()): TmdbInfo | undefin
 /** Genre text for an item: what the source page gave us, else TMDB's genres. */
 export function genreText(item: Pick<SavedItem, "genre" | "tmdb">): string {
   return item.genre?.trim() || item.tmdb?.genres.join(", ") || "";
+}
+
+export function formatMinutes(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (!hours) return `${rest}m`;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+}
+
+/**
+ * Runtime, season count or episode count from TMDB, written the way the page parsers write
+ * `durationOrSeasons` ("2h 28m", "5 seasons", "37 eps"), so the rest of the app treats them the same.
+ * It is computed on the fly and never stored, so it disappears together with the TMDB data.
+ */
+export function tmdbDuration(item: Pick<SavedItem, "type" | "tmdb">): string | undefined {
+  const info = item.tmdb;
+  if (!info) return undefined;
+  if (info.kind === "movie") return info.runtimeMinutes ? formatMinutes(info.runtimeMinutes) : undefined;
+  if (item.type === "anime") return info.episodes ? `${info.episodes} eps` : undefined;
+  return info.seasons ? `${info.seasons} season${info.seasons === 1 ? "" : "s"}` : undefined;
+}
+
+/** What the page said, or else what TMDB says. */
+export function durationText(item: Pick<SavedItem, "type" | "durationOrSeasons" | "tmdb">): string | undefined {
+  return item.durationOrSeasons?.trim() || tmdbDuration(item);
+}
+
+/** Total episodes: the user's own number, else TMDB's, else "37 eps" from the page. */
+export function totalEpisodes(item: Pick<SavedItem, "progressTotal" | "durationOrSeasons" | "tmdb">): number | undefined {
+  if (item.progressTotal !== undefined) return item.progressTotal;
+  if (item.tmdb?.episodes) return item.tmdb.episodes;
+  const fromPage = /(\d+)\s*eps?\b/i.exec(item.durationOrSeasons ?? "");
+  return fromPage ? Number(fromPage[1]) : undefined;
+}
+
+/** Genres as tags ("Sci-Fi & Fantasy" becomes sci-fi and fantasy), from the source page and from TMDB. */
+export function genreTags(item: Pick<SavedItem, "genre" | "tmdb">): string[] {
+  const fromPage = (item.genre ?? "").split(/[,/|]| & /);
+  const fromTmdb = (item.tmdb?.genres ?? []).flatMap((g) => g.split(/ & /));
+  return normalizeTags([...fromPage, ...fromTmdb]);
+}
+
+/** The tags the user added plus the genre tags. Genre tags are derived, so they are never stored on the item. */
+export function allTags(item: Pick<SavedItem, "tags" | "genre" | "tmdb">): string[] {
+  return [...new Set([...(item.tags ?? []), ...genreTags(item)])];
 }
 
 export function tmdbPosterUrl(item: Pick<SavedItem, "tmdb">, size = "w92"): string | undefined {

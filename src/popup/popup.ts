@@ -6,7 +6,7 @@ import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
-import { genreText, isEnrichable, tmdbPosterUrl, TMDB_NOTICE } from "../shared/tmdb.js";
+import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
@@ -193,7 +193,7 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
     const wanted = FILTER_STATUS[statusFilter];
     items = items.filter((i) => statusOf(i) === wanted);
   }
-  if (tagFilter) items = items.filter((i) => i.tags?.includes(tagFilter));
+  if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
   if (listFilter) items = items.filter((i) => i.list === listFilter);
   const query = searchQuery.trim().toLowerCase();
   if (query) items = items.filter((i) => searchText(i).includes(query));
@@ -282,8 +282,9 @@ function itemSubtitle(item: SavedItem): string {
   }
 
   const parts: string[] = [];
-  if (item.durationOrSeasons) {
-    parts.push(formatDurationOrSeasons(item.durationOrSeasons));
+  const duration = durationText(item);
+  if (duration) {
+    parts.push(formatDurationOrSeasons(duration));
   }
   const rating = formatRatingLabel(item);
   if (rating) parts.push(rating);
@@ -539,33 +540,50 @@ function isTrackable(item: SavedItem): boolean {
   return item.type !== "tab" && item.type !== "link" && item.type !== "note";
 }
 
-function progressText(item: SavedItem): string {
-  if (item.progressCurrent === undefined && item.progressTotal === undefined) return "";
-  const unit = item.type === "book" ? "p." : item.type === "movie" ? "" : "ep.";
-  const current = item.progressCurrent ?? 0;
-  const text = item.progressTotal !== undefined ? `${current}/${item.progressTotal}` : `${current}`;
-  return unit ? `${unit} ${text}` : text;
+/** Movies are watched in one go, so only series, anime and books have progress. */
+function tracksProgress(item: SavedItem): boolean {
+  return item.type === "series" || item.type === "anime" || item.type === "book";
 }
+
+function progressText(item: SavedItem): string {
+  if (!tracksProgress(item)) return "";
+  // Only once you start tracking, so a fresh row isn't cluttered with "0/62".
+  if (item.progressCurrent === undefined && statusOf(item) !== "in_progress") return "";
+  const total = item.type === "book" ? item.progressTotal : totalEpisodes(item);
+  const current = item.progressCurrent ?? 0;
+  return `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
+}
+
+const MAX_CHIPS = 6;
 
 function createItemMeta(item: SavedItem): HTMLElement | undefined {
   const status = statusOf(item);
   const parts: string[] = [];
   if (isTrackable(item) && (status === "in_progress" || status === "dropped")) parts.push(statusLabel(status));
   const progress = progressText(item);
-  if (progress && isTrackable(item)) parts.push(progress);
+  if (progress) parts.push(progress);
   if (item.myRating) parts.push(`★ ${item.myRating}/10`);
   if (item.list) parts.push(item.list);
   if (isTrackable(item)) {
-    const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 2);
-    if (genres.length) parts.push(genres.join(" / "));
     if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
     if (item.tmdb?.certification) parts.push(item.tmdb.certification);
   }
-  const tags = item.tags ?? [];
-  if (parts.length === 0 && tags.length === 0) return undefined;
+  // Genres show up as tags automatically; the ones you typed come first.
+  const manual = item.tags ?? [];
+  const auto = genreTags(item).filter((t) => !manual.includes(t));
+  const chips = [...manual.map((tag) => ({ tag, auto: false })), ...auto.map((tag) => ({ tag, auto: true }))];
+  // The Media tab mixes movies, series and anime, and a poster hides the type icon, so say what it is.
+  const showType = activeTab === "media" && isTrackable(item);
+  if (!showType && parts.length === 0 && chips.length === 0) return undefined;
 
   const meta = document.createElement("div");
   meta.className = "item-meta";
+  if (showType) {
+    const badge = document.createElement("span");
+    badge.className = `type-badge type-${item.type}`;
+    badge.textContent = typeLabel(item.type);
+    meta.append(badge);
+  }
   if (parts.length) {
     const text = document.createElement("span");
     text.className = "item-meta-text";
@@ -574,18 +592,25 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
     if (hover) text.title = hover;
     meta.append(text);
   }
-  for (const tag of tags) {
+  for (const { tag, auto: isAuto } of chips.slice(0, MAX_CHIPS)) {
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = "tag-chip";
+    chip.className = isAuto ? "tag-chip tag-chip-auto" : "tag-chip";
     chip.textContent = `#${tag}`;
-    chip.title = `Filter by #${tag}`;
+    chip.title = isAuto ? `Genre tag. Filter by #${tag}` : `Filter by #${tag}`;
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       tagFilter = tagFilter === tag ? "" : tag;
       render();
     });
     meta.append(chip);
+  }
+  if (chips.length > MAX_CHIPS) {
+    const more = document.createElement("span");
+    more.className = "item-meta-text";
+    more.textContent = `+${chips.length - MAX_CHIPS}`;
+    more.title = chips.slice(MAX_CHIPS).map((c) => `#${c.tag}`).join(" ");
+    meta.append(more);
   }
   return meta;
 }
@@ -600,7 +625,7 @@ function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], s
 /** Tag and list filters only list what exists on the current shelf tab, and hide when there is nothing to pick. */
 function renderOrganiseFilters(): void {
   const items = tabItems();
-  const tags = [...new Set(items.flatMap((i) => i.tags ?? []))].sort();
+  const tags = [...new Set(items.flatMap((i) => allTags(i)))].sort();
   const lists = [...new Set(items.map((i) => i.list).filter((l): l is string => Boolean(l)))].sort();
   if (!tags.includes(tagFilter)) tagFilter = "";
   if (!lists.includes(listFilter)) listFilter = "";
@@ -1142,6 +1167,13 @@ function buildTextField(name: string, label: string, value: string, type = "text
   return wrap;
 }
 
+function buildHint(text: string): HTMLElement {
+  const hint = document.createElement("p");
+  hint.className = "edit-hint";
+  hint.textContent = text;
+  return hint;
+}
+
 function row(...fields: HTMLElement[]): HTMLElement {
   const el = document.createElement("div");
   el.className = "edit-row";
@@ -1164,15 +1196,29 @@ function appendPersonalFields(item: SavedItem): void {
         buildSelectField("status", "Status", statuses.map((s) => [s, statusLabel(s)]), statusOf(item)),
         buildSelectField("myRating", "My rating", ratings, item.myRating ? String(item.myRating) : "")
       ),
-      row(
-        buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
-        buildTextField("progressTotal", item.type === "book" ? "Total pages" : "Total episodes", String(item.progressTotal ?? ""), "number")
-      )
+      ...(tracksProgress(item)
+        ? [
+            row(
+              buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
+              buildTextField(
+                "progressTotal",
+                item.type === "book" ? "Total pages" : "Total episodes",
+                String(item.progressTotal ?? ""),
+                "number",
+                // Left empty, the total comes from TMDB or the page automatically.
+                item.type === "book" || totalEpisodes({ ...item, progressTotal: undefined }) === undefined
+                  ? ""
+                  : `${totalEpisodes({ ...item, progressTotal: undefined })} (auto)`
+              )
+            ),
+          ]
+        : [])
     );
   }
 
   editFieldsEl.append(
-    buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "sci-fi, weekend"),
+    buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "weekend, rewatch"),
+    ...(genreTags(item).length ? [buildHint(`Genres are added as tags automatically: ${genreTags(item).join(", ")}`)] : []),
     buildTextField("list", "List", item.list ?? "", "text", "e.g. Weekend watch")
   );
 
