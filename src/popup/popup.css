@@ -661,6 +661,7 @@ body {
   line-height: 16px;
   font-weight: 500;
   white-space: pre-line;
+  overflow: hidden;
   overflow-wrap: anywhere;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   pointer-events: none;

@@ -1,4 +1,4 @@
-import { formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
+import { clipText, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
 import { buildBackup, parseImportFile } from "../shared/import.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
@@ -115,15 +115,34 @@ function showItemTooltip(text: string, anchor: HTMLElement): void {
   itemTooltipEl.hidden = false;
   itemTooltipEl.classList.add("visible");
 
+  // Measure at natural size first, then fit it into whichever side of the anchor has more room.
+  itemTooltipEl.style.maxHeight = "";
+  itemTooltipEl.style.paddingBottom = "";
   const anchorRect = anchor.getBoundingClientRect();
   const tooltipRect = itemTooltipEl.getBoundingClientRect();
 
-  let top = anchorRect.bottom + 6;
+  const gap = 6;
+  const margin = 8;
+  const spaceBelow = window.innerHeight - anchorRect.bottom - gap - margin;
+  const spaceAbove = anchorRect.top - gap - margin;
+  const below = tooltipRect.height <= spaceBelow || spaceBelow >= spaceAbove;
+  let room = Math.max(40, below ? spaceBelow : spaceAbove);
+  if (tooltipRect.height > room) {
+    // Cut on a whole line so no text is sliced in half: 16px lines, 2px border and 8px top padding.
+    // Overflow clips at the padding edge, so the bottom padding goes too or it would show half a line.
+    const lines = Math.floor((room - 10) / 16);
+    if (lines >= 1) room = 10 + lines * 16;
+  }
+  const height = Math.min(tooltipRect.height, room);
+  if (tooltipRect.height > room) {
+    itemTooltipEl.style.maxHeight = `${Math.floor(room)}px`;
+    itemTooltipEl.style.paddingBottom = "0";
+  }
+
+  let top = below ? anchorRect.bottom + gap : anchorRect.top - height - gap;
+  top = Math.max(margin, top);
   let left = anchorRect.left;
 
-  if (top + tooltipRect.height > window.innerHeight - 8) {
-    top = anchorRect.top - tooltipRect.height - 6;
-  }
   if (left + tooltipRect.width > window.innerWidth - 8) {
     left = Math.max(8, window.innerWidth - tooltipRect.width - 8);
   }
@@ -558,6 +577,8 @@ function progressText(item: SavedItem): string {
 
 const MAX_CHIPS = 3;
 const HOVER_DELAY_MS = 350;
+const TOOLTIP_OVERVIEW_MAX = 320;
+const TOOLTIP_REVIEW_MAX = 200;
 
 /** What the row tooltip says: the full line if anything is cut off, then the description, then your review. */
 function hoverText(item: SavedItem, li: HTMLElement): string {
@@ -567,8 +588,9 @@ function hoverText(item: SavedItem, li: HTMLElement): string {
     return el ? isTextTruncated(el) : false;
   });
   if (cutOff) parts.push(formatItemLine(item));
-  if (item.tmdb?.overview) parts.push(item.tmdb.overview);
-  if (item.review) parts.push(`Your review: ${item.review}`);
+  // Long descriptions are clipped so the tooltip stays small enough to fit inside the popup.
+  if (item.tmdb?.overview) parts.push(clipText(item.tmdb.overview, TOOLTIP_OVERVIEW_MAX));
+  if (item.review) parts.push(`Your review: ${clipText(item.review, TOOLTIP_REVIEW_MAX)}`);
   return parts.join("\n\n");
 }
 

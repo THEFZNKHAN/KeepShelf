@@ -37,6 +37,21 @@ export function formatDurationOrSeasons(value: string): string {
   return value;
 }
 
+/**
+ * Shortens long text to at most `max` characters, cutting at a word boundary and adding an ellipsis.
+ * Paragraph breaks are kept, so a clipped description still reads as paragraphs.
+ */
+export function clipText(text: string, max: number): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  // If the next character is whitespace the cut already ends a word; otherwise back up to the last space.
+  const endsWord = /\s/.test(clean[max] ?? "");
+  const lastSpace = cut.search(/\s\S*$/);
+  const base = endsWord || lastSpace <= max * 0.6 ? cut : cut.slice(0, lastSpace);
+  return `${base.replace(/[\s,.;:!?-]+$/, "")}…`;
+}
+
 export function formatItemLine(item: SavedItem): string {
   if (item.type === "tab" || item.type === "link") {
     return item.url ? `${item.title} | ${item.url}` : item.title;
