@@ -1114,27 +1114,7 @@ body.in-tab {
   min-width: 0;
 }
 
-.item-sub {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.item-sub-text {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  font-size: 11.5px;
-  line-height: 16px;
-  font-weight: 500;
-  color: var(--on-surface-variant);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.item-sub .tag-chip,
-.item-sub .item-meta-text {
+.item-meta-text {
   flex-shrink: 0;
 }
 
@@ -1549,4 +1529,58 @@ body.in-tab {
   margin: -4px 0 0;
   font-size: 10.5px;
   color: var(--on-surface-variant);
+}
+
+/* ── Compact card: title / facts / details ───────────────── */
+
+.item-facts {
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.item-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px 5px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.item-part {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.item-genres {
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+/* Your own data stands out from the facts about the title. */
+.item-personal {
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.item-part + .item-part::before {
+  content: "·";
+  margin-right: 5px;
+  font-weight: 400;
+  color: var(--outline);
+}
+
+.item-part-more {
+  font-size: 10.5px;
+  color: var(--on-surface-variant);
+}
+
+.item-details .tag-chip {
+  flex-shrink: 0;
 }

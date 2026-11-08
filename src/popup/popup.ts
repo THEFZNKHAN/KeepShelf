@@ -554,7 +554,7 @@ function progressText(item: SavedItem): string {
   return `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
 }
 
-const MAX_CHIPS = 2;
+const MAX_CHIPS = 3;
 
 /** The small Movie / Series / Anime tag next to the title. A poster hides the type icon, so say what it is. */
 function createTypeBadge(item: SavedItem): HTMLElement | undefined {
@@ -565,68 +565,90 @@ function createTypeBadge(item: SavedItem): HTMLElement | undefined {
   return badge;
 }
 
-/** Everything after the subtitle on the second line, such as "In progress · ep. 3/12 · ★ 8/10 · Drama / Crime · TMDB 8.4". */
-function metaParts(item: SavedItem): string[] {
+/** Line 2: the facts about the title itself, such as "2h 28m | IMDb 8.8 · TMDB 8.4 · PG-13". Short, so it never needs cropping. */
+function factsText(item: SavedItem): string {
+  const parts = [itemSubtitle(item)];
+  if (isTrackable(item)) {
+    if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
+    if (item.tmdb?.certification) parts.push(item.tmdb.certification);
+  }
+  return parts.filter(Boolean).join(" · ");
+}
+
+/** Line 3, first half: genres. A short line reads better than a chip each; the full set still works as tags in the filter. */
+function genreParts(item: SavedItem): string[] {
+  if (!isTrackable(item)) return [];
+  const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 3);
+  return genres.length ? [genres.join(" / ")] : [];
+}
+
+/** Line 3, second half: your own data, such as "In progress · ep. 12/37 · ★ 9 · Weekend list". */
+function personalParts(item: SavedItem): string[] {
   const status = statusOf(item);
   const parts: string[] = [];
   if (isTrackable(item) && (status === "in_progress" || status === "dropped")) parts.push(statusLabel(status));
   const progress = progressText(item);
   if (progress) parts.push(progress);
-  if (item.myRating) parts.push(`★ ${item.myRating}/10`);
+  if (item.myRating) parts.push(`★ ${item.myRating}`);
   if (item.list) parts.push(item.list);
-  if (isTrackable(item)) {
-    // A short genre line reads better than a chip per genre. The full set still works as tags in the filter.
-    const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 3);
-    if (genres.length) parts.push(genres.join(" / "));
-    if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
-    if (item.tmdb?.certification) parts.push(item.tmdb.certification);
-  }
   return parts;
 }
 
-/** One compact line under the title: subtitle and details as text, then a couple of your own tag chips. */
-function createItemSub(item: SavedItem, li: HTMLElement): HTMLElement | undefined {
-  const text = [itemSubtitle(item), ...metaParts(item)].filter(Boolean).join(" · ");
+function textPart(text: string, className: string, title?: string): HTMLElement {
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = text;
+  if (title) span.title = title;
+  return span;
+}
+
+/**
+ * Up to two lines under the title. The facts line is short and truncates only in extreme cases (a long URL).
+ * The details line wraps instead of cropping, so nothing is ever cut off.
+ */
+function createItemLines(item: SavedItem, li: HTMLElement): HTMLElement[] {
+  const lines: HTMLElement[] = [];
+
+  const facts = factsText(item);
+  if (facts) {
+    const line = document.createElement("div");
+    line.className = "item-facts";
+    line.textContent = facts;
+    line.addEventListener("mouseenter", () => {
+      if (isTextTruncated(line)) showItemTooltip(facts, li);
+    });
+    line.addEventListener("mouseleave", hideItemTooltip);
+    lines.push(line);
+  }
+
+  const genres = genreParts(item);
+  const personal = personalParts(item);
   const tags = item.tags ?? [];
-  if (!text && tags.length === 0) return undefined;
-
-  const sub = document.createElement("div");
-  sub.className = "item-sub";
-
-  if (text) {
-    const span = document.createElement("span");
-    span.className = "item-sub-text";
-    span.textContent = text;
+  if (genres.length || personal.length || tags.length) {
+    const line = document.createElement("div");
+    line.className = "item-details";
+    for (const g of genres) line.append(textPart(g, "item-part item-genres"));
     const hover = [item.review, item.tmdb?.overview].filter(Boolean).join("\n\n");
-    if (hover) span.title = hover;
-    span.addEventListener("mouseenter", () => {
-      if (isTextTruncated(span)) showItemTooltip(text, li);
-    });
-    span.addEventListener("mouseleave", hideItemTooltip);
-    sub.append(span);
+    for (const part of personal) line.append(textPart(part, "item-part item-personal", part.startsWith("★") ? hover || undefined : undefined));
+    for (const tag of tags.slice(0, MAX_CHIPS)) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "tag-chip";
+      chip.textContent = `#${tag}`;
+      chip.title = `Filter by #${tag}`;
+      chip.addEventListener("click", (e) => {
+        e.stopPropagation();
+        tagFilter = tagFilter === tag ? "" : tag;
+        render();
+      });
+      line.append(chip);
+    }
+    if (tags.length > MAX_CHIPS) {
+      line.append(textPart(`+${tags.length - MAX_CHIPS}`, "item-part-more", tags.slice(MAX_CHIPS).map((t) => `#${t}`).join(" ")));
+    }
+    lines.push(line);
   }
-
-  for (const tag of tags.slice(0, MAX_CHIPS)) {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "tag-chip";
-    chip.textContent = `#${tag}`;
-    chip.title = `Filter by #${tag}`;
-    chip.addEventListener("click", (e) => {
-      e.stopPropagation();
-      tagFilter = tagFilter === tag ? "" : tag;
-      render();
-    });
-    sub.append(chip);
-  }
-  if (tags.length > MAX_CHIPS) {
-    const more = document.createElement("span");
-    more.className = "item-meta-text";
-    more.textContent = `+${tags.length - MAX_CHIPS}`;
-    more.title = tags.slice(MAX_CHIPS).map((t) => `#${t}`).join(" ");
-    sub.append(more);
-  }
-  return sub;
+  return lines;
 }
 
 function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], selected: string, prefix = ""): void {
@@ -716,8 +738,7 @@ function render(): void {
     if (badge) titleRow.append(badge);
     body.append(titleRow);
 
-    const sub = createItemSub(item, li);
-    if (sub) body.append(sub);
+    body.append(...createItemLines(item, li));
 
     li.append(typeIconEl, body, createRowActions(item), checkbox);
 
