@@ -132,7 +132,6 @@ export type MessageResponse =
       skipped?: number;
       enriched?: number;
       unmatched?: number;
-      remaining?: number;
     }
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; message: string }

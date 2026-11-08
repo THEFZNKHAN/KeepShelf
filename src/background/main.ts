@@ -17,6 +17,17 @@ import type { KeepSyncResult } from "../shared/keep-settings.js";
 import { isHttpUrl, isSaveableTabUrl, linkItem, noteItem, tabItem, type NewItem } from "../shared/items.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, MessageAction, MessageResponse, SavedItem, UserFields } from "../shared/types.js";
+import { getTmdbAuth, setTmdbToken } from "../shared/tmdb-settings.js";
+import {
+  TmdbError,
+  createTmdbClient,
+  fetchDetails,
+  isEnrichable,
+  isStale,
+  lookupInfo,
+  mustPurge,
+  parseTmdbToken,
+} from "../shared/tmdb.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
@@ -30,6 +41,10 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "syncKeep",
   "import",
   "merge",
+  "setTmdbToken",
+  "enrich",
+  "removeTmdbMatch",
+  "refreshStaleTmdb",
   "clear",
   "setKeepSettings",
   "testKeepAppend",
@@ -65,9 +80,74 @@ async function syncAndRecord(item: SavedItem): Promise<KeepSyncResult> {
   return keep;
 }
 
+async function tmdbClient() {
+  const auth = await getTmdbAuth();
+  return auth ? createTmdbClient(auth) : undefined;
+}
+
+/** Best-effort TMDB lookup after a save. A failure never blocks the save or the Keep sync. */
+async function enrichQuietly(item: SavedItem): Promise<void> {
+  if (!isEnrichable(item) || item.tmdb || item.tmdbOptOut) return;
+  try {
+    const client = await tmdbClient();
+    if (!client) return;
+    const info = await lookupInfo(client, item);
+    if (info) await updateItem(item.id, { tmdb: info });
+  } catch {
+    /* offline, rate limited or a bad token: the item is still saved */
+  }
+}
+
+async function enrichItems(ids: string[], force: boolean): Promise<MessageResponse> {
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  let enriched = 0;
+  let unmatched = 0;
+  let failed = 0;
+  for (const id of ids) {
+    const item = (await getAllItems()).find((i) => i.id === id);
+    if (!item || !isEnrichable(item)) continue;
+    if (item.tmdb && !force) continue;
+    try {
+      const info = item.tmdb && force ? await fetchDetails(client, item.tmdb.kind, item.tmdb.id) : await lookupInfo(client, item);
+      if (info) {
+        await updateItem(id, { tmdb: info, tmdbOptOut: undefined });
+        enriched++;
+      } else {
+        unmatched++;
+      }
+    } catch (err) {
+      // A rejected token or rate limit will fail every remaining item the same way, so stop.
+      if (err instanceof TmdbError && (err.status === 401 || err.status === 429)) {
+        return { ok: false, error: err.message };
+      }
+      failed++;
+    }
+  }
+  return { ok: true, items: await getAllItems(), enriched, unmatched, failed };
+}
+
+/** TMDB data may only be cached for six months: refresh it when old, and drop it if it can't be refreshed in time. */
+async function refreshStaleTmdb(): Promise<SavedItem[]> {
+  const now = Date.now();
+  const client = await tmdbClient();
+  for (const item of await getAllItems()) {
+    const info = item.tmdb;
+    if (!info || !isStale(info, now)) continue;
+    try {
+      if (!client) throw new Error("no token");
+      await updateItem(item.id, { tmdb: await fetchDetails(client, info.kind, info.id, now) });
+    } catch {
+      if (mustPurge(info, now)) await updateItem(item.id, { tmdb: undefined });
+    }
+  }
+  return getAllItems();
+}
+
 async function saveAndSync(partial: NewItem) {
   const similar = findNearDuplicates(partial, await getAllItems()).map((i) => i.title);
   const { item, duplicate } = await saveItem(partial);
+  if (!duplicate) await enrichQuietly(item);
   const keep = await syncAndRecord(item);
   return { ok: true as const, item, duplicate, keep, ...(!duplicate && similar.length ? { similar } : {}) };
 }
@@ -153,6 +233,34 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       const items = await mergeItems(message.keepId, message.removeIds);
       return { ok: true, items };
     }
+    case "getTmdbSettings": {
+      return { ok: true, tmdb: { configured: Boolean(await getTmdbAuth()) } };
+    }
+    case "setTmdbToken": {
+      const configured = await setTmdbToken(message.token);
+      return { ok: true, tmdb: { configured } };
+    }
+    case "testTmdb": {
+      const auth = message.token?.trim() ? parseTmdbToken(message.token) : await getTmdbAuth();
+      if (!auth) return { ok: false, error: message.token?.trim() ? "That doesn't look like a TMDB token." : "No TMDB token saved yet." };
+      try {
+        await createTmdbClient(auth).get("/configuration");
+        return { ok: true, message: "Connected to TMDB." };
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "Could not reach TMDB." };
+      }
+    }
+    case "enrich": {
+      const ids = message.ids ?? (await getAllItems()).filter((i) => isEnrichable(i) && !i.tmdb && !i.tmdbOptOut).map((i) => i.id);
+      return enrichItems(ids, Boolean(message.force));
+    }
+    case "removeTmdbMatch": {
+      const items = await updateItem(message.id, { tmdb: undefined, tmdbOptOut: true });
+      return { ok: true, items };
+    }
+    case "refreshStaleTmdb": {
+      return { ok: true, items: await refreshStaleTmdb() };
+    }
     case "clear": {
       await clearAll();
       return { ok: true, items: [] };
@@ -184,6 +292,10 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
 const MENU_SAVE_PAGE = "keepshelf-save-page";
 const MENU_SAVE_LINK = "keepshelf-save-link";
 const MENU_SAVE_NOTE = "keepshelf-save-note";
+
+chrome.runtime.onStartup.addListener(() => {
+  void runSerial(refreshStaleTmdb).catch(() => undefined);
+});
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
