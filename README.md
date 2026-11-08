@@ -37,11 +37,21 @@
 ## Screenshots
 
 <p align="center">
-  <img width="200" height="300" alt="Home Page" src="https://github.com/user-attachments/assets/db1ec11d-92e5-4ec3-9a53-c576b38fee79" />
-  <img width="200" height="300" alt="Empty Home Page" src="https://github.com/user-attachments/assets/eeae2dcc-2b1d-4f50-8fb6-f4afc2500816" />
-  <img width="200" height="300" alt="Filter Page" src="https://github.com/user-attachments/assets/d48b9250-10d5-40ff-aeee-f74e5d690f87" />
-  <img width="200" height="300" alt="Setting Page" src="https://github.com/user-attachments/assets/6e43b1f7-e20a-4797-9a4a-3e4f9658aec0" />
+  <img width="250" alt="Your shelf: posters, genres, ratings and progress at a glance" src="https://github.com/user-attachments/assets/8a34d4e7-989c-4116-83f8-377d1fb94778" />
+  <img width="250" alt="Rate and review when you finish something" src="https://github.com/user-attachments/assets/6797c494-bcab-4dac-bc25-7ef55b24d58e" />
+  <img width="250" alt="Filter by status, tag or list and sort by your rating" src="https://github.com/user-attachments/assets/00450844-8e71-4378-9cf0-9ad44674ca33" />
 </p>
+<p align="center">
+  <img width="250" alt="Edit: status, rating, progress, tags, list and review" src="https://github.com/user-attachments/assets/2923b692-a79a-497c-a5f6-d4ad7cd4ed7a" />
+  <img width="250" alt="Pick something for me" src="https://github.com/user-attachments/assets/48b7a548-ce2a-444a-8af4-c8cbcac43943" />
+  <img width="250" alt="Stats dashboard" src="https://github.com/user-attachments/assets/38e13d82-0314-40e6-98b6-b1b24b36f225" />
+</p>
+<p align="center">
+  <img width="250" alt="Books with reading progress" src="https://github.com/user-attachments/assets/a537019c-49b1-4b87-a02b-7d2251df8f08" />
+  <img width="250" alt="Settings: Google Keep" src="https://github.com/user-attachments/assets/22f49f8f-e745-4563-933f-4f97e6d6c82f" />
+  <img width="250" alt="Settings: TMDB" src="https://github.com/user-attachments/assets/db2e6d94-0bff-49df-96c0-6cd19f642202" />
+</p>
+
 
 ---
 
