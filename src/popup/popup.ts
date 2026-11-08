@@ -557,6 +557,20 @@ function progressText(item: SavedItem): string {
 }
 
 const MAX_CHIPS = 3;
+const HOVER_DELAY_MS = 350;
+
+/** What the row tooltip says: the full line if anything is cut off, then the description, then your review. */
+function hoverText(item: SavedItem, li: HTMLElement): string {
+  const parts: string[] = [];
+  const cutOff = [".item-title", ".item-facts"].some((sel) => {
+    const el = li.querySelector<HTMLElement>(sel);
+    return el ? isTextTruncated(el) : false;
+  });
+  if (cutOff) parts.push(formatItemLine(item));
+  if (item.tmdb?.overview) parts.push(item.tmdb.overview);
+  if (item.review) parts.push(`Your review: ${item.review}`);
+  return parts.join("\n\n");
+}
 
 /** The small Movie / Series / Anime tag next to the title. A poster hides the type icon, so say what it is. */
 function createTypeBadge(item: SavedItem): HTMLElement | undefined {
@@ -608,7 +622,7 @@ function textPart(text: string, className: string, title?: string): HTMLElement 
  * Up to two lines under the title. The facts line is short and truncates only in extreme cases (a long URL).
  * The details line wraps instead of cropping, so nothing is ever cut off.
  */
-function createItemLines(item: SavedItem, li: HTMLElement): HTMLElement[] {
+function createItemLines(item: SavedItem): HTMLElement[] {
   const lines: HTMLElement[] = [];
 
   const facts = factsText(item);
@@ -616,10 +630,6 @@ function createItemLines(item: SavedItem, li: HTMLElement): HTMLElement[] {
     const line = document.createElement("div");
     line.className = "item-facts";
     line.textContent = facts;
-    line.addEventListener("mouseenter", () => {
-      if (isTextTruncated(line)) showItemTooltip(facts, li);
-    });
-    line.addEventListener("mouseleave", hideItemTooltip);
     lines.push(line);
   }
 
@@ -630,8 +640,7 @@ function createItemLines(item: SavedItem, li: HTMLElement): HTMLElement[] {
     const line = document.createElement("div");
     line.className = "item-details";
     for (const g of genres) line.append(textPart(g, "item-part item-genres"));
-    const hover = [item.review, item.tmdb?.overview].filter(Boolean).join("\n\n");
-    for (const part of personal) line.append(textPart(part, "item-part item-personal", part.startsWith("★") ? hover || undefined : undefined));
+    for (const part of personal) line.append(textPart(part, "item-part item-personal"));
     for (const tag of tags.slice(0, MAX_CHIPS)) {
       const chip = document.createElement("button");
       chip.type = "button";
@@ -740,18 +749,25 @@ function render(): void {
     if (badge) titleRow.append(badge);
     body.append(titleRow);
 
-    body.append(...createItemLines(item, li));
+    body.append(...createItemLines(item));
 
     li.append(typeIconEl, body, createRowActions(item), checkbox);
 
-    const fullLine = formatItemLine(item);
-
-    title.addEventListener("mouseenter", () => {
-      if (!isTextTruncated(title)) return;
-      showItemTooltip(fullLine, li);
+    // Rest the pointer on a row and it describes itself, so you don't have to open the item.
+    let hoverTimer: ReturnType<typeof setTimeout> | undefined;
+    const stopHover = (): void => {
+      clearTimeout(hoverTimer);
+      hideItemTooltip();
+    };
+    li.addEventListener("mouseenter", () => {
+      clearTimeout(hoverTimer);
+      hoverTimer = setTimeout(() => {
+        const text = hoverText(item, li);
+        if (text) showItemTooltip(text, li);
+      }, HOVER_DELAY_MS);
     });
-    title.addEventListener("mouseleave", hideItemTooltip);
-    li.addEventListener("mouseleave", hideItemTooltip);
+    li.addEventListener("mouseleave", stopHover);
+    li.addEventListener("click", stopHover);
 
     const isOpenable = (item.type === "tab" || item.type === "link") && !!item.url;
 
