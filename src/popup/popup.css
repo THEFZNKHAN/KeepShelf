@@ -1533,9 +1533,7 @@ body.in-tab {
   color: var(--on-surface);
 }
 
-.item-part + .item-part::before {
-  content: "·";
-  margin-right: 5px;
+.item-dot {
   font-weight: 400;
   color: var(--outline);
 }

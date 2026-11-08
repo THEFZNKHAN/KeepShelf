@@ -679,8 +679,17 @@ function createItemLines(item: SavedItem): HTMLElement[] {
   if (genres.length || personal.length || tags.length) {
     const line = document.createElement("div");
     line.className = "item-details";
-    for (const g of genres) line.append(textPart(g, "item-part item-genres"));
-    for (const part of personal) line.append(textPart(part, "item-part item-personal"));
+    // The "·" between parts belongs to the end of the part before it, joined by a non-breaking space, so a
+    // wrapped line can never start with a stray dot.
+    const detailParts = [
+      ...genres.map((text) => ({ text, className: "item-part item-genres" })),
+      ...personal.map((text) => ({ text, className: "item-part item-personal" })),
+    ];
+    detailParts.forEach(({ text, className }, i) => {
+      const part = textPart(text, className);
+      if (i < detailParts.length - 1) part.append(textPart("\u00A0·", "item-dot"));
+      line.append(part);
+    });
     for (const tag of tags.slice(0, MAX_CHIPS)) {
       const chip = document.createElement("button");
       chip.type = "button";
@@ -1702,7 +1711,7 @@ function showPick(item: SavedItem): void {
     .filter(Boolean)
     .join(" · ");
   const overview = item.tmdb?.overview;
-  pickOverviewEl.textContent = overview && overview.length > 220 ? `${overview.slice(0, 217)}…` : (overview ?? "");
+  pickOverviewEl.textContent = overview ? clipText(overview, 220) : "";
   pickOverviewEl.hidden = !overview;
   const inProgress = statusOf(item) === "in_progress";
   pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
