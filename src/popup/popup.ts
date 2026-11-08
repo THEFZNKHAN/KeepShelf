@@ -565,13 +565,14 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
   if (item.myRating) parts.push(`★ ${item.myRating}/10`);
   if (item.list) parts.push(item.list);
   if (isTrackable(item)) {
+    // A short genre line reads better than a chip per genre. The full set still works as tags in the filter.
+    const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 3);
+    if (genres.length) parts.push(genres.join(" / "));
     if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
     if (item.tmdb?.certification) parts.push(item.tmdb.certification);
   }
-  // Genres show up as tags automatically; the ones you typed come first.
-  const manual = item.tags ?? [];
-  const auto = genreTags(item).filter((t) => !manual.includes(t));
-  const chips = [...manual.map((tag) => ({ tag, auto: false })), ...auto.map((tag) => ({ tag, auto: true }))];
+  // Chips are only for tags you typed yourself.
+  const chips = (item.tags ?? []).map((tag) => ({ tag }));
   // The Media tab mixes movies, series and anime, and a poster hides the type icon, so say what it is.
   const showType = activeTab === "media" && isTrackable(item);
   if (!showType && parts.length === 0 && chips.length === 0) return undefined;
@@ -592,12 +593,12 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
     if (hover) text.title = hover;
     meta.append(text);
   }
-  for (const { tag, auto: isAuto } of chips.slice(0, MAX_CHIPS)) {
+  for (const { tag } of chips.slice(0, MAX_CHIPS)) {
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = isAuto ? "tag-chip tag-chip-auto" : "tag-chip";
+    chip.className = "tag-chip";
     chip.textContent = `#${tag}`;
-    chip.title = isAuto ? `Genre tag. Filter by #${tag}` : `Filter by #${tag}`;
+    chip.title = `Filter by #${tag}`;
     chip.addEventListener("click", (e) => {
       e.stopPropagation();
       tagFilter = tagFilter === tag ? "" : tag;
@@ -1218,7 +1219,7 @@ function appendPersonalFields(item: SavedItem): void {
 
   editFieldsEl.append(
     buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "weekend, rewatch"),
-    ...(genreTags(item).length ? [buildHint(`Genres are added as tags automatically: ${genreTags(item).join(", ")}`)] : []),
+    ...(genreTags(item).length ? [buildHint(`Genres also work as tags in the filter, no typing needed: ${genreTags(item).join(", ")}`)] : []),
     buildTextField("list", "List", item.list ?? "", "text", "e.g. Weekend watch")
   );
 

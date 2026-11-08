@@ -224,7 +224,7 @@ Rate anything from 1 to 10 and write a short review. Your rating is separate fro
 
 ### Tags and custom lists
 
-- **Tags** are free-form and comma separated, such as `weekend, rewatch`. They are lowercased and de-duplicated. **Genres are added as tags automatically** (shown as outlined chips), so you only type the personal ones. Click a tag chip on any row to filter by it.
+- **Tags** are free-form and comma separated, such as `weekend, rewatch`. They are lowercased and de-duplicated. **Genres work as tags automatically** (pick one in the tag filter, or search for it), so you only type the personal ones. Rows show up to three genres as plain text, and chips are kept for the tags you type. Click a tag chip on any row to filter by it.
 - **Lists** group items under a name of your choice, such as "Weekend watch" or "Book club". Use the **List** dropdown to focus on one.
 
 The tag and list dropdowns appear only when the current tab has any.
@@ -271,7 +271,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 4. Click **Fetch info for my shelf** to fill in what you already saved.
 
 **What you get** for movies, series and anime, filled in for you:
-- **Genres, added as tags** automatically (so you can filter by `#drama` without typing anything), and they feed your [stats](#stats-dashboard).
+- **Genres**, shown as a short line on each row and usable as tags in the filter (so you can filter by `drama` without typing anything). They also feed your [stats](#stats-dashboard).
 - **Runtime** for movies, **seasons** for series and **episode count** for anime, used in the row and in copied or Keep lines when the source page didn't give one.
 - **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total.
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
