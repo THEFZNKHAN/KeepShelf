@@ -17,6 +17,8 @@ import type { KeepSyncResult } from "../shared/keep-settings.js";
 import { isHttpUrl, isSaveableTabUrl, linkItem, noteItem, tabItem, type NewItem } from "../shared/items.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, MessageAction, MessageResponse, SavedItem, UserFields } from "../shared/types.js";
+import { isBookInfoEnabled, setBookInfoEnabled } from "../shared/book-info-settings.js";
+import { OpenLibraryError, createOpenLibraryClient, isBookItem, lookupBook } from "../shared/openlibrary.js";
 import { getTmdbAuth, setTmdbToken } from "../shared/tmdb-settings.js";
 import {
   TmdbError,
@@ -42,6 +44,9 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "import",
   "merge",
   "setTmdbToken",
+  "setBookInfoEnabled",
+  "enrichBooks",
+  "removeBookMatch",
   "enrich",
   "removeTmdbMatch",
   "refreshStaleTmdb",
@@ -101,6 +106,56 @@ async function enrichQuietly(item: SavedItem): Promise<SavedItem> {
   }
 }
 
+// One client for the life of the worker, because it remembers when the last request went out
+// and keeps every Open Library request at least a second apart.
+let openLibraryClient: ReturnType<typeof createOpenLibraryClient> | undefined;
+function bookClient() {
+  return (openLibraryClient ??= createOpenLibraryClient());
+}
+
+/** Best-effort Open Library lookup after a save, only when the user has turned book info on. */
+async function enrichBookQuietly(item: SavedItem): Promise<SavedItem> {
+  if (!isBookItem(item) || item.bookInfo || item.bookInfoOptOut) return item;
+  try {
+    if (!(await isBookInfoEnabled())) return item;
+    const info = await lookupBook(bookClient(), item);
+    if (!info) return item;
+    const items = await updateItem(item.id, { bookInfo: info });
+    return items.find((i) => i.id === item.id) ?? item;
+  } catch {
+    /* offline or rate limited: the book is still saved */
+    return item;
+  }
+}
+
+async function enrichBooks(ids: string[], force: boolean): Promise<MessageResponse> {
+  if (!(await isBookInfoEnabled())) return { ok: false, error: "Turn on book info in Settings first." };
+  let enriched = 0;
+  let unmatched = 0;
+  let failed = 0;
+  for (const id of ids) {
+    const item = (await getAllItems()).find((i) => i.id === id);
+    if (!item || !isBookItem(item)) continue;
+    if (item.bookInfo && !force) continue;
+    try {
+      const info = await lookupBook(bookClient(), item);
+      if (info) {
+        await updateItem(id, { bookInfo: info, bookInfoOptOut: undefined });
+        enriched++;
+      } else {
+        unmatched++;
+      }
+    } catch (err) {
+      // Being rate limited fails every remaining book the same way, so stop.
+      if (err instanceof OpenLibraryError && (err.status === 429 || err.status === 403)) {
+        return { ok: false, error: err.message };
+      }
+      failed++;
+    }
+  }
+  return { ok: true, items: await getAllItems(), enriched, unmatched, failed };
+}
+
 async function enrichItems(ids: string[], force: boolean): Promise<MessageResponse> {
   const client = await tmdbClient();
   if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
@@ -151,7 +206,7 @@ async function saveAndSync(partial: NewItem) {
   const similar = findNearDuplicates(partial, await getAllItems()).map((i) => i.title);
   const { item, duplicate } = await saveItem(partial);
   // Keep gets the enriched item, so a runtime or episode count found on TMDB lands in the Keep line too.
-  const saved = duplicate ? item : await enrichQuietly(item);
+  const saved = duplicate ? item : await enrichBookQuietly(await enrichQuietly(item));
   const keep = await syncAndRecord(saved);
   return { ok: true as const, item: saved, duplicate, keep, ...(!duplicate && similar.length ? { similar } : {}) };
 }
@@ -235,6 +290,20 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "merge": {
       const items = await mergeItems(message.keepId, message.removeIds);
+      return { ok: true, items };
+    }
+    case "getBookInfoSettings": {
+      return { ok: true, bookInfo: { enabled: await isBookInfoEnabled() } };
+    }
+    case "setBookInfoEnabled": {
+      return { ok: true, bookInfo: { enabled: await setBookInfoEnabled(message.enabled) } };
+    }
+    case "enrichBooks": {
+      const ids = message.ids ?? (await getAllItems()).filter((i) => isBookItem(i) && !i.bookInfo && !i.bookInfoOptOut).map((i) => i.id);
+      return enrichBooks(ids, Boolean(message.force));
+    }
+    case "removeBookMatch": {
+      const items = await updateItem(message.id, { bookInfo: undefined, bookInfoOptOut: true });
       return { ok: true, items };
     }
     case "getTmdbSettings": {

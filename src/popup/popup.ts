@@ -1,4 +1,4 @@
-import { clipText, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
+import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
 import { buildBackup, parseImportFile } from "../shared/import.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
@@ -7,6 +7,9 @@ import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
+import { groupTags } from "../shared/tag-filter.js";
+import { createTagPicker } from "./tag-picker.js";
+import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, totalPages } from "../shared/openlibrary.js";
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
@@ -34,6 +37,7 @@ let activeFilter: MediaType | "all" = "all";
 let activeTab: "media" | "books" | "tabs" = "media";
 let searchQuery = "";
 let tmdbConfigured = false;
+let bookInfoEnabled = false;
 let tagFilter = "";
 let listFilter = "";
 let statusFilter = storedChoice<StatusFilter>("keepshelf.status", STATUS_FILTERS, "all");
@@ -88,7 +92,11 @@ const searchEl = document.getElementById("search") as HTMLInputElement;
 const statusFilterEl = document.getElementById("status-filter") as HTMLSelectElement;
 const sortEl = document.getElementById("sort") as HTMLSelectElement;
 const organiseRowEl = document.getElementById("organise-row")!;
-const tagFilterEl = document.getElementById("tag-filter") as HTMLSelectElement;
+const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
+const tagPicker = createTagPicker(tagFilterEl, (tag) => {
+  tagFilter = tag;
+  render();
+});
 const listFilterEl = document.getElementById("list-filter") as HTMLSelectElement;
 const syncSelectedEl = document.getElementById("sync-selected") as HTMLButtonElement;
 const editDialogEl = document.getElementById("edit-dialog")!;
@@ -167,20 +175,10 @@ function tabItems(): SavedItem[] {
 }
 
 function searchText(item: SavedItem): string {
-  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, genreText(item), ...(item.tags ?? [])]
+  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, genreText(item), ...genreTags(item), ...(item.tags ?? [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
-}
-
-/** Ratings out of 10 so IMDb, Letterboxd (/5), Goodreads (/5) and Rotten Tomatoes (%) sort together. */
-function ratingScore(item: SavedItem): number {
-  const value = parseFloat(item.imdbRating ?? "");
-  if (Number.isNaN(value)) return -1;
-  const url = item.sourceUrl ?? "";
-  if (/letterboxd\.com|goodreads\.com|book-filter\.com/.test(url)) return value * 2;
-  if (url.includes("rottentomatoes.com")) return value / 10;
-  return value;
 }
 
 function yearOf(item: SavedItem): number {
@@ -488,8 +486,8 @@ function updateEmptyState(): void {
   }
 }
 
-function createLeadingEl(item: SavedItem): HTMLElement {
-  const imageUrl = item.imageUrl ?? tmdbPosterUrl(item);
+function createLeadingEl(item: SavedItem, coverSize: "S" | "M" = "S"): HTMLElement {
+  const imageUrl = item.imageUrl ?? tmdbPosterUrl(item) ?? bookCoverUrl(item, coverSize);
   if (!imageUrl) return createTypeIconEl(item.type);
   const img = document.createElement("img");
   img.className = "item-thumb";
@@ -571,7 +569,7 @@ function progressText(item: SavedItem): string {
   if (!tracksProgress(item)) return "";
   // Only once you start tracking, so a fresh row isn't cluttered with "0/62".
   if (item.progressCurrent === undefined && statusOf(item) !== "in_progress") return "";
-  const total = item.type === "book" ? item.progressTotal : totalEpisodes(item);
+  const total = item.type === "book" ? totalPages(item) : totalEpisodes(item);
   const current = item.progressCurrent ?? 0;
   return `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
 }
@@ -607,7 +605,8 @@ function hoverText(item: SavedItem, li: HTMLElement): string {
   });
   if (cutOff) parts.push(formatItemLine(item));
   // Long descriptions are clipped so the tooltip stays small enough to fit inside the popup.
-  if (item.tmdb?.overview) parts.push(clipText(item.tmdb.overview, TOOLTIP_OVERVIEW_MAX));
+  const description = item.tmdb?.overview ?? item.bookInfo?.description;
+  if (description) parts.push(clipText(description, TOOLTIP_OVERVIEW_MAX));
   if (item.review) parts.push(`Your review: ${clipText(item.review, TOOLTIP_REVIEW_MAX)}`);
   return parts.join("\n\n");
 }
@@ -627,6 +626,9 @@ function factsText(item: SavedItem): string {
   if (isTrackable(item)) {
     if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
     if (item.tmdb?.certification) parts.push(item.tmdb.certification);
+    if (item.bookInfo?.pages) parts.push(`${item.bookInfo.pages} pages`);
+    const olRating = bookRating(item.bookInfo);
+    if (olRating) parts.push(`OL ${olRating.toFixed(1)}`);
   }
   return parts.filter(Boolean).join(" · ");
 }
@@ -721,15 +723,17 @@ function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], s
 /** Tag and list filters only list what exists on the current shelf tab, and hide when there is nothing to pick. */
 function renderOrganiseFilters(): void {
   const items = tabItems();
-  const tags = [...new Set(items.flatMap((i) => allTags(i)))].sort();
+  const everyTag = new Set(items.flatMap((i) => allTags(i)));
   const lists = [...new Set(items.map((i) => i.list).filter((l): l is string => Boolean(l)))].sort();
-  if (!tags.includes(tagFilter)) tagFilter = "";
+  if (!everyTag.has(tagFilter)) tagFilter = "";
   if (!lists.includes(listFilter)) listFilter = "";
-  fillSelect(tagFilterEl, "All tags", tags, tagFilter, "#");
+  // The picker lists every tag, scrolls, and can be searched, so nothing is hidden or capped.
+  tagPicker.setOptions(groupTags(items), tagFilter);
   fillSelect(listFilterEl, "All lists", lists, listFilter);
-  tagFilterEl.hidden = tags.length === 0;
+  const tags = everyTag;
+  tagFilterEl.hidden = tags.size === 0;
   listFilterEl.hidden = lists.length === 0;
-  organiseRowEl.hidden = tags.length === 0 && lists.length === 0;
+  organiseRowEl.hidden = tags.size === 0 && lists.length === 0;
 }
 
 function render(): void {
@@ -1305,9 +1309,7 @@ function appendPersonalFields(item: SavedItem): void {
                 String(item.progressTotal ?? ""),
                 "number",
                 // Left empty, the total comes from TMDB or the page automatically.
-                item.type === "book" || totalEpisodes({ ...item, progressTotal: undefined }) === undefined
-                  ? ""
-                  : `${totalEpisodes({ ...item, progressTotal: undefined })} (auto)`
+                autoTotalLabel(item)
               )
             ),
           ]
@@ -1332,7 +1334,105 @@ function appendPersonalFields(item: SavedItem): void {
     label.append(area);
     editFieldsEl.append(label);
     editFieldsEl.append(buildTmdbBlock(item.id));
+    editFieldsEl.append(buildBookBlock(item.id));
   }
+}
+
+/** The placeholder in the Total field when you leave it empty: what Open Library, TMDB or the page says. */
+function autoTotalLabel(item: SavedItem): string {
+  const auto = item.type === "book" ? item.bookInfo?.pages : totalEpisodes({ ...item, progressTotal: undefined });
+  return auto === undefined ? "" : `${auto} (auto)`;
+}
+
+function bookSummary(item: SavedItem): string {
+  const info = item.bookInfo;
+  if (!info) return "";
+  const bits = [
+    info.subjects.slice(0, 3).join(", "),
+    info.pages ? `${info.pages} pages` : "",
+    bookRating(info) ? `OL ${bookRating(info)!.toFixed(1)}/5 (${(info.ratingsCount ?? 0).toLocaleString()} ratings)` : "",
+    info.firstPublishYear ? `first published ${info.firstPublishYear}` : "",
+  ];
+  return bits.filter(Boolean).join(" · ");
+}
+
+/** Read-only Open Library details with Refresh and Remove match, for books. Re-rendered in place like the TMDB block. */
+function buildBookBlock(itemId: string): HTMLElement {
+  const block = document.createElement("div");
+  block.className = "edit-tmdb";
+
+  const paint = (): void => {
+    const item = allItems.find((i) => i.id === itemId);
+    block.replaceChildren();
+    if (!item || !isBookItem(item)) return;
+
+    const heading = document.createElement("h3");
+    heading.className = "edit-section";
+    heading.textContent = "From Open Library";
+    block.append(heading);
+
+    const text = document.createElement("p");
+    text.className = "edit-tmdb-text";
+    text.textContent = item.bookInfo
+      ? bookSummary(item) || "Matched on Open Library."
+      : !bookInfoEnabled
+        ? "Turn on book info in Settings to fetch pages, genres, a cover and more."
+        : item.bookInfoOptOut
+          ? "Match removed. Fetch again to look it up."
+          : "No match found yet.";
+    block.append(text);
+    if (item.bookInfo?.description) {
+      const description = document.createElement("p");
+      description.className = "edit-tmdb-overview";
+      description.textContent = item.bookInfo.description;
+      block.append(description);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "edit-tmdb-actions";
+    const fetchBtn = document.createElement("button");
+    fetchBtn.type = "button";
+    fetchBtn.className = "btn btn-outline";
+    fetchBtn.textContent = item.bookInfo ? "Refresh" : "Fetch info";
+    fetchBtn.disabled = !bookInfoEnabled;
+    fetchBtn.addEventListener("click", async () => {
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = "Fetching…";
+      try {
+        const response = await sendToBackground({ action: "enrichBooks", ids: [itemId], force: true });
+        if (!response.ok) showStatus(response.error, true, 5000);
+        else if ("items" in response) {
+          allItems = response.items;
+          render();
+          if (!response.enriched) showStatus("No match found on Open Library.", true);
+        }
+      } catch (err) {
+        showStatus(err instanceof Error ? err.message : "Could not reach Open Library.", true);
+      }
+      paint();
+    });
+    actions.append(fetchBtn);
+
+    if (item.bookInfo) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-outline";
+      removeBtn.textContent = "Wrong match? Remove";
+      removeBtn.addEventListener("click", async () => {
+        const response = await sendToBackground({ action: "removeBookMatch", id: itemId });
+        if (response.ok && "items" in response) {
+          allItems = response.items;
+          render();
+        }
+        paint();
+      });
+      actions.append(removeBtn);
+    }
+    block.append(actions);
+  };
+
+  paint();
+  return block;
 }
 
 function tmdbSummary(item: SavedItem): string {
@@ -1691,6 +1791,84 @@ document.getElementById("tmdb-save")!.addEventListener("click", () => void saveT
 document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
 tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
 
+/* ── Book info settings ──────────────────────────────────── */
+
+const prefBookInfoEl = document.getElementById("pref-book-info") as HTMLInputElement;
+const bookInfoSummaryEl = document.getElementById("bookinfo-summary")!;
+const bookInfoEnrichAllEl = document.getElementById("bookinfo-enrich-all") as HTMLButtonElement;
+const bookInfoSettingsStatusEl = document.getElementById("bookinfo-settings-status")!;
+const bookInfoSettingsStatusTextEl = document.getElementById("bookinfo-settings-status-text")!;
+const bookInfoSettingsStatusIconEl = document.getElementById("bookinfo-settings-status-icon")!;
+const bookInfoStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+document.getElementById("bookinfo-notice")!.textContent = OPENLIBRARY_NOTICE;
+
+function showBookInfoStatus(msg: string, err = false, ms = 6000): void {
+  showSectionStatus(bookInfoSettingsStatusEl, bookInfoSettingsStatusTextEl, bookInfoSettingsStatusIconEl, bookInfoStatusTimer, msg, err, ms);
+}
+
+function renderBookInfoEnabled(): void {
+  prefBookInfoEl.checked = bookInfoEnabled;
+  bookInfoSummaryEl.textContent = bookInfoEnabled ? "On" : "Off";
+  bookInfoSummaryEl.classList.toggle("is-ok", bookInfoEnabled);
+  bookInfoEnrichAllEl.disabled = !bookInfoEnabled;
+}
+
+async function loadBookInfoSettings(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "getBookInfoSettings" });
+    if (response.ok && "bookInfo" in response) bookInfoEnabled = response.bookInfo.enabled;
+  } catch {
+    /* leave it off */
+  }
+  renderBookInfoEnabled();
+}
+
+prefBookInfoEl.addEventListener("change", async () => {
+  const wanted = prefBookInfoEl.checked;
+  try {
+    const response = await sendToBackground({ action: "setBookInfoEnabled", enabled: wanted });
+    if (!response.ok) throw new Error(response.error);
+    if ("bookInfo" in response) bookInfoEnabled = response.bookInfo.enabled;
+    showBookInfoStatus(bookInfoEnabled ? "Book info is on. New books will be looked up automatically." : "Book info is off.");
+  } catch (err) {
+    showBookInfoStatus(err instanceof Error ? err.message : "Could not change the setting.", true);
+  }
+  renderBookInfoEnabled();
+});
+
+/** Books are fetched a few at a time. Open Library allows about one request a second, and each book needs two. */
+async function enrichBookShelf(): Promise<void> {
+  const ids = allItems.filter((i) => isBookItem(i) && !i.bookInfo && !i.bookInfoOptOut).map((i) => i.id);
+  if (ids.length === 0) {
+    showBookInfoStatus("Every book already has its info.");
+    return;
+  }
+  bookInfoEnrichAllEl.disabled = true;
+  let enriched = 0;
+  let unmatched = 0;
+  try {
+    for (let i = 0; i < ids.length; i += 4) {
+      showBookInfoStatus(`Fetching book info… ${i}/${ids.length}`, false, 120000);
+      const response = await sendToBackground({ action: "enrichBooks", ids: ids.slice(i, i + 4) });
+      if (!response.ok) throw new Error(response.error);
+      if ("items" in response) {
+        allItems = response.items;
+        enriched += response.enriched ?? 0;
+        unmatched += response.unmatched ?? 0;
+      }
+    }
+    render();
+    showBookInfoStatus(`Added info to ${enriched} book${enriched === 1 ? "" : "s"}` + (unmatched ? `; ${unmatched} had no match.` : "."));
+  } catch (err) {
+    render();
+    showBookInfoStatus(err instanceof Error ? err.message : "Fetching book info failed.", true);
+  } finally {
+    bookInfoEnrichAllEl.disabled = !bookInfoEnabled;
+  }
+}
+
+bookInfoEnrichAllEl.addEventListener("click", () => void enrichBookShelf());
+
 /* ── Random pick ─────────────────────────────────────────── */
 
 const pickDialogEl = document.getElementById("pick-dialog")!;
@@ -1705,12 +1883,12 @@ let pickedId: string | undefined;
 function showPick(item: SavedItem): void {
   cancelRowHover();
   pickedId = item.id;
-  pickLeadingEl.replaceChildren(createLeadingEl(item));
+  pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
-  pickDetailEl.textContent = [itemSubtitle(item), genreText(item), item.tmdb?.certification, item.author]
+  pickDetailEl.textContent = [itemSubtitle(item), genreText(item).split(/,\s*/).slice(0, 3).join(", "), item.tmdb?.certification, item.author]
     .filter(Boolean)
     .join(" · ");
-  const overview = item.tmdb?.overview;
+  const overview = item.tmdb?.overview ?? item.bookInfo?.description;
   pickOverviewEl.textContent = overview ? clipText(overview, 220) : "";
   pickOverviewEl.hidden = !overview;
   const inProgress = statusOf(item) === "in_progress";
@@ -1943,11 +2121,6 @@ statusFilterEl.addEventListener("change", () => {
   render();
 });
 
-tagFilterEl.addEventListener("change", () => {
-  tagFilter = tagFilterEl.value;
-  render();
-});
-
 listFilterEl.addEventListener("change", () => {
   listFilter = listFilterEl.value;
   render();
@@ -2069,6 +2242,7 @@ document.addEventListener("keydown", (event) => {
   else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden) closePick();
   else if (!statsView.hidden) closeStats();
+  else if (tagPicker.isOpen()) tagPicker.close();
 });
 
 document.getElementById("open-stats")!.addEventListener("click", openStats);
@@ -2107,3 +2281,4 @@ void loadItems().then(async () => {
 });
 void loadKeepSettings();
 void loadTmdbSettings();
+void loadBookInfoSettings();

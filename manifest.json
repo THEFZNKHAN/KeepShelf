@@ -16,6 +16,7 @@
     "https://www.rottentomatoes.com/*",
     "https://trakt.tv/*",
     "https://api.themoviedb.org/*",
+    "https://openlibrary.org/*",
     "https://app.trakt.tv/*"
   ],
   "action": {

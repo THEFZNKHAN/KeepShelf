@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { clipText, formatDurationOrSeasons, formatItemLine, formatItemsList } from "../dist-test/format.js";
+import { clipText, formatDurationOrSeasons, formatItemLine, formatItemsList, ratingScore } from "../dist-test/format.js";
 
 const base = { id: "x", savedAt: 0, googleQuery: "", subtitle: "" };
 
@@ -109,4 +109,18 @@ test("clipText keeps paragraph breaks inside the kept text", () => {
   const out = clipText("First paragraph here.\n\nSecond paragraph that is quite a bit longer than the limit allows.", 40);
   assert.ok(out.startsWith("First paragraph here.\n\nSecond"));
   assert.ok(out.endsWith("…"));
+});
+
+test("ratingScore puts every source on a scale of ten", () => {
+  assert.equal(ratingScore({ imdbRating: "8.8", sourceUrl: "https://www.imdb.com/title/tt1" }), 8.8);
+  assert.equal(ratingScore({ imdbRating: "4.5", sourceUrl: "https://www.goodreads.com/book/show/1" }), 9);
+  assert.equal(ratingScore({ imdbRating: "4.25", sourceUrl: "https://letterboxd.com/film/x/" }), 8.5);
+  assert.equal(ratingScore({ imdbRating: "86", sourceUrl: "https://www.rottentomatoes.com/m/x" }), 8.6);
+});
+
+test("ratingScore falls back to the Open Library or TMDB rating when the page gave none", () => {
+  assert.equal(ratingScore({ bookInfo: { workKey: "/works/OL1W", subjects: [], rating: 4.6, ratingsCount: 50, fetchedAt: 1 } }), 9.2);
+  assert.equal(ratingScore({ tmdb: { id: 1, kind: "movie", genres: [], rating: 8.4, fetchedAt: 1 } }), 8.4);
+  assert.equal(ratingScore({ imdbRating: "7", sourceUrl: "", bookInfo: { workKey: "/works/OL1W", subjects: [], rating: 4.6, ratingsCount: 50, fetchedAt: 1 } }), 7, "the page's own rating still wins");
+  assert.equal(ratingScore({}), -1, "unrated items sort last");
 });
