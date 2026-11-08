@@ -554,9 +554,19 @@ function progressText(item: SavedItem): string {
   return `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
 }
 
-const MAX_CHIPS = 6;
+const MAX_CHIPS = 2;
 
-function createItemMeta(item: SavedItem): HTMLElement | undefined {
+/** The small Movie / Series / Anime tag next to the title. A poster hides the type icon, so say what it is. */
+function createTypeBadge(item: SavedItem): HTMLElement | undefined {
+  if (activeTab !== "media" || !isTrackable(item)) return undefined;
+  const badge = document.createElement("span");
+  badge.className = `type-badge type-${item.type}`;
+  badge.textContent = typeLabel(item.type);
+  return badge;
+}
+
+/** Everything after the subtitle on the second line, such as "In progress · ep. 3/12 · ★ 8/10 · Drama / Crime · TMDB 8.4". */
+function metaParts(item: SavedItem): string[] {
   const status = statusOf(item);
   const parts: string[] = [];
   if (isTrackable(item) && (status === "in_progress" || status === "dropped")) parts.push(statusLabel(status));
@@ -571,29 +581,32 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
     if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
     if (item.tmdb?.certification) parts.push(item.tmdb.certification);
   }
-  // Chips are only for tags you typed yourself.
-  const chips = (item.tags ?? []).map((tag) => ({ tag }));
-  // The Media tab mixes movies, series and anime, and a poster hides the type icon, so say what it is.
-  const showType = activeTab === "media" && isTrackable(item);
-  if (!showType && parts.length === 0 && chips.length === 0) return undefined;
+  return parts;
+}
 
-  const meta = document.createElement("div");
-  meta.className = "item-meta";
-  if (showType) {
-    const badge = document.createElement("span");
-    badge.className = `type-badge type-${item.type}`;
-    badge.textContent = typeLabel(item.type);
-    meta.append(badge);
-  }
-  if (parts.length) {
-    const text = document.createElement("span");
-    text.className = "item-meta-text";
-    text.textContent = parts.join(" · ");
+/** One compact line under the title: subtitle and details as text, then a couple of your own tag chips. */
+function createItemSub(item: SavedItem, li: HTMLElement): HTMLElement | undefined {
+  const text = [itemSubtitle(item), ...metaParts(item)].filter(Boolean).join(" · ");
+  const tags = item.tags ?? [];
+  if (!text && tags.length === 0) return undefined;
+
+  const sub = document.createElement("div");
+  sub.className = "item-sub";
+
+  if (text) {
+    const span = document.createElement("span");
+    span.className = "item-sub-text";
+    span.textContent = text;
     const hover = [item.review, item.tmdb?.overview].filter(Boolean).join("\n\n");
-    if (hover) text.title = hover;
-    meta.append(text);
+    if (hover) span.title = hover;
+    span.addEventListener("mouseenter", () => {
+      if (isTextTruncated(span)) showItemTooltip(text, li);
+    });
+    span.addEventListener("mouseleave", hideItemTooltip);
+    sub.append(span);
   }
-  for (const { tag } of chips.slice(0, MAX_CHIPS)) {
+
+  for (const tag of tags.slice(0, MAX_CHIPS)) {
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = "tag-chip";
@@ -604,16 +617,16 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
       tagFilter = tagFilter === tag ? "" : tag;
       render();
     });
-    meta.append(chip);
+    sub.append(chip);
   }
-  if (chips.length > MAX_CHIPS) {
+  if (tags.length > MAX_CHIPS) {
     const more = document.createElement("span");
     more.className = "item-meta-text";
-    more.textContent = `+${chips.length - MAX_CHIPS}`;
-    more.title = chips.slice(MAX_CHIPS).map((c) => `#${c.tag}`).join(" ");
-    meta.append(more);
+    more.textContent = `+${tags.length - MAX_CHIPS}`;
+    more.title = tags.slice(MAX_CHIPS).map((t) => `#${t}`).join(" ");
+    sub.append(more);
   }
-  return meta;
+  return sub;
 }
 
 function fillSelect(el: HTMLSelectElement, allLabel: string, values: string[], selected: string, prefix = ""): void {
@@ -691,29 +704,20 @@ function render(): void {
     const body = document.createElement("div");
     body.className = "item-body";
 
+    const titleRow = document.createElement("div");
+    titleRow.className = "item-title-row";
+
     const title = document.createElement("h3");
     title.className = "item-title";
     title.textContent = itemTitle(item);
+    titleRow.append(title);
 
-    body.append(title);
+    const badge = createTypeBadge(item);
+    if (badge) titleRow.append(badge);
+    body.append(titleRow);
 
-    const subtitleText = itemSubtitle(item);
-    if (subtitleText) {
-      const subtitle = document.createElement("p");
-      subtitle.className = "item-subtitle";
-      subtitle.textContent = subtitleText;
-
-      subtitle.addEventListener("mouseenter", () => {
-        if (!isTextTruncated(subtitle)) return;
-        showItemTooltip(formatItemLine(item), li);
-      });
-      subtitle.addEventListener("mouseleave", hideItemTooltip);
-
-      body.append(subtitle);
-    }
-
-    const meta = createItemMeta(item);
-    if (meta) body.append(meta);
+    const sub = createItemSub(item, li);
+    if (sub) body.append(sub);
 
     li.append(typeIconEl, body, createRowActions(item), checkbox);
 
