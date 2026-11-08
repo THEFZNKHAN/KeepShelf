@@ -99,6 +99,8 @@ const importFileEl = document.getElementById("import-file") as HTMLInputElement;
 const backupSettingsStatusEl = document.getElementById("backup-settings-status")!;
 const backupSettingsStatusTextEl = document.getElementById("backup-settings-status-text")!;
 const backupSettingsStatusIconEl = document.getElementById("backup-settings-status-icon")!;
+const keepSummaryEl = document.getElementById("keep-summary")!;
+const tmdbSummaryEl = document.getElementById("tmdb-summary")!;
 const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
 
 let confirmResolve: ((value: boolean) => void) | undefined;
@@ -811,6 +813,15 @@ function renderKeepStatus(): void {
 
   keepTabsStatusEl.textContent = linkedText(keepSettings.tabsNoteId, keepSettings.tabsNoteUrl);
   keepTabsStatusEl.classList.toggle("linked", isLikelyValidKeepNoteId(keepSettings.tabsNoteId));
+
+  // The card header says at a glance how many lists are linked and on.
+  const active = [
+    [keepSettings.mediaEnabled, keepSettings.mediaNoteId],
+    [keepSettings.booksEnabled, keepSettings.booksNoteId],
+    [keepSettings.tabsEnabled, keepSettings.tabsNoteId],
+  ].filter(([on, id]) => on && isLikelyValidKeepNoteId(id as string | undefined)).length;
+  keepSummaryEl.textContent = active ? `${active} of 3 on` : "Not set up";
+  keepSummaryEl.classList.toggle("is-ok", active > 0);
 }
 
 async function loadKeepSettings(): Promise<void> {
@@ -1415,8 +1426,10 @@ function showTmdbStatus(msg: string, err = false, ms = 6000): void {
 
 function renderTmdbConfigured(): void {
   tmdbTokenStatusEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
-  tmdbTokenEl.placeholder = tmdbConfigured ? "Token saved. Paste a new one to replace it." : "API Read Access Token";
+  tmdbTokenEl.placeholder = tmdbConfigured ? "Saved. Paste to replace" : "API Read Access Token";
   tmdbEnrichAllEl.disabled = !tmdbConfigured;
+  tmdbSummaryEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
+  tmdbSummaryEl.classList.toggle("is-ok", tmdbConfigured);
 }
 
 async function loadTmdbSettings(): Promise<void> {
