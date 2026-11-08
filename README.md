@@ -608,7 +608,7 @@ Have a suggestion? [Open an issue](../../issues).
 
 ## Contributing
 
-Issues and pull requests are welcome.
+Issues and pull requests are welcome. Please read [AGENTS.md](AGENTS.md) first. It has the project rules, including that versions and releases are automatic: never edit version numbers or push tags by hand.
 
 1. Fork the repository.
 2. Create a branch: `git checkout -b feature/my-change`.

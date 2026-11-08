@@ -1,6 +1,8 @@
 # Developer Guide
 
-Everything a contributor or maintainer needs to know: local setup, project structure, icon generation, adding new parsers, running tests, and publishing releases.
+Everything a contributor or maintainer needs to know: local setup, project structure, icon generation, adding new parsers, running tests, and how releases work.
+
+> **Contributors and agents:** read [AGENTS.md](AGENTS.md) first. It has the rules, including the one that versions and tags are automatic and must never be edited or pushed by hand.
 
 ---
 
@@ -14,9 +16,8 @@ Everything a contributor or maintainer needs to know: local setup, project struc
 - [Generating icons](#generating-icons)
 - [Running tests](#running-tests)
 - [Adding a new parser source](#adding-a-new-parser-source)
-- [Publishing a release](#publishing-a-release)
+- [Releases and versioning](#releases-and-versioning)
 - [How the release workflow works](#how-the-release-workflow-works)
-- [Versioning convention](#versioning-convention)
 
 ---
 
@@ -73,7 +74,8 @@ After any source change, run `npm run build` (or keep `npm run watch` running), 
 KeepShelf/
 ├── .github/
 │   └── workflows/
-│       └── release.yml        # Auto-build and publish on version tag
+│       ├── release.yml            # Automatic: test, bump version, tag, build, publish
+│       └── release-manual-tag.yml # Fallback only: release from a hand-pushed tag
 ├── src/
 │   ├── background/
 │   │   ├── main.ts            # Service worker: message routing, storage, Keep sync, context menus, shortcut
@@ -288,82 +290,69 @@ Add `"mysource"` to the entry list in `scripts/build-test-parser.mjs`, then add 
 
 ---
 
-## Publishing a release
+## Releases and versioning
 
-Releases are fully automated via GitHub Actions. You only need to push a version tag.
+Releases are automatic. **You do not edit versions or push tags.** The full rules are in [AGENTS.md](AGENTS.md).
 
-### Step 1: Update the version number
+In short: merge to `main`, and GitHub Actions tests it, picks the next version, tags it and publishes the release with a ZIP.
 
-In `manifest.json`, bump the `"version"` field:
+| Put this in a commit message on `main` | Bump | Example |
+|---|---|---|
+| nothing | patch | `1.1.0` to `1.1.1` |
+| `#minor` | minor | `1.1.0` to `1.2.0` |
+| `#major` | major | `1.1.0` to `2.0.0` |
 
-```json
-{
-  "version": "1.1.0"
-}
-```
+- **Patch:** bug fixes, parser fixes, CSS tweaks. **Minor:** new feature, parser or setting. **Major:** breaking change
+  to the saved data format.
+- Docs-only, tests-only and workflow-only changes do not release. Add `[skip ci]` to a commit message to skip a release.
+- To choose the bump by hand, open **Actions, Release, Run workflow** and pick `patch`, `minor` or `major`.
+- Preview the next version without changing anything: `node scripts/release-version.mjs`.
 
-In `package.json`, bump `"version"` to match:
+After a release you will see a `chore(release): vX.Y.Z [skip ci]` commit on `main`, a `vX.Y.Z` tag, and a release with
+`KeepShelf-vX.Y.Z.zip` attached.
 
-```json
-{
-  "version": "1.1.0"
-}
-```
+### Requirements for it to work
 
-Commit the change:
-
-```bash
-git add manifest.json package.json
-git commit -m "chore: bump version to 1.1.0"
-git push origin main
-```
-
-### Step 2: Tag the release
-
-```bash
-git tag v1.1.0
-git push origin v1.1.0
-```
-
-That is the only step you need. Pushing the tag triggers the release workflow automatically.
-
-### Step 3: Verify on GitHub
-
-Go to your repo on GitHub and open the **Releases** tab in the right sidebar. Within a minute or two you will see `KeepShelf v1.1.0` with:
-
-- Auto-generated release notes listing commits since the last tag.
-- `KeepShelf-v1.1.0.zip` attached as a downloadable asset.
-- Install instructions in the release body.
+- `package-lock.json` must be committed (the workflow runs `npm ci`).
+- GitHub Actions must be allowed to push to `main`. If `main` has branch protection, add a bypass for GitHub Actions.
+- In the repo settings, Actions workflow permissions must allow read and write (the workflow also requests
+  `contents: write` itself).
 
 ---
 
 ## How the release workflow works
 
-The workflow lives at `.github/workflows/release.yml` and triggers on any tag that matches `v*.*.*`.
+`.github/workflows/release.yml` runs on every push to `main` (except the ignored paths above) and on the manual
+"Run workflow" button. Only one run happens at a time.
 
 ```
-push tag v1.1.0
+push to main
     |
     v
 GitHub Actions (ubuntu-latest)
     |
-    +-- actions/checkout@v4          clone repo at that tag
-    +-- actions/setup-node@v4        Node 20 with npm cache
-    +-- npm ci                       install exact deps from package-lock.json
-    +-- version check                fail if tag != manifest.json / package.json version
-    +-- npx tsc --noEmit             type-check
-    +-- npm test                     run tests/*.test.mjs
-    +-- pip install pillow           Python image library
-    +-- node scripts/generate-icons  produce icon16/32/48/128.png
-    +-- npm run build                compile TypeScript → dist/
-    +-- zip ...                      package manifest.json + dist/ + icons/ + README + LICENSE
-    +-- softprops/action-gh-release  create release, attach ZIP, write install body
+    +-- checkout (full history)          tags and commit messages are needed
+    +-- already tagged?                  stop if HEAD already has a v* tag
+    +-- npm ci                           install exact deps from package-lock.json
+    +-- npx tsc --noEmit                 type-check
+    +-- npm test                         run tests/*.test.mjs
+    +-- scripts/release-version.mjs      next version = max(latest tag, files) + bump; writes the files
+    +-- pip install pillow + generate    produce icon16/32/48/128.png
+    +-- npm run build                    compile TypeScript into dist/
+    +-- zip                              manifest.json + dist/ + icons/ + README + LICENSE
+    +-- commit, tag, push (atomic)       "chore(release): vX.Y.Z [skip ci]" and the tag, to main
+    +-- softprops/action-gh-release      create the release, attach the ZIP
 ```
+
+Everything that can fail (install, type-check, tests, build, packaging) runs **before** anything is pushed, so a
+failed run leaves no stray tag or version commit.
+
+The version logic is in `scripts/lib/version.mjs` and is unit-tested in `tests/version.test.mjs`.
 
 The ZIP contains everything Chrome needs to load the extension unpacked:
 
 ```
-KeepShelf-v1.1.0.zip
+KeepShelf-vX.Y.Z.zip
 ├── manifest.json
 ├── dist/
 │   ├── background.js
@@ -383,16 +372,8 @@ KeepShelf-v1.1.0.zip
 
 End users download this ZIP, extract it anywhere permanent, and load that folder via `chrome://extensions > Load unpacked`. No Node.js, Git, or terminal required on their side.
 
----
+### The fallback workflow
 
-## Versioning convention
-
-Follow [Semantic Versioning](https://semver.org/):
-
-| Change type | Version bump | Example |
-|-------------|-------------|---------|
-| New site parser, new feature | Minor | `1.0.0` to `1.1.0` |
-| Bug fix, parser fix, CSS tweak | Patch | `1.1.0` to `1.1.1` |
-| Breaking storage format change | Major | `1.x.x` to `2.0.0` |
-
-Tag format must be `vMAJOR.MINOR.PATCH` (e.g. `v1.1.0`) for the workflow to trigger.
+`.github/workflows/release-manual-tag.yml` is the old process: it runs when someone pushes a `v*.*.*` tag by hand and
+requires the tag to equal the version already in `manifest.json` and `package.json`. It exists only as an emergency
+fallback if `release.yml` is broken. Do not use it otherwise, because mixing the two can create duplicate releases.
