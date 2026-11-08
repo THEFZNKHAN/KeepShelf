@@ -252,6 +252,29 @@
       </header>
 
       <div class="settings-body">
+        <details class="s-card" id="card-general">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">tune</span>
+            <span class="s-card-title">General</span>
+            <span class="s-card-summary" id="general-summary">Rating prompt on</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Ask for a rating when I finish something</strong>
+                <span>
+                  Shows a quick rating and review box when you mark a movie, series, anime or book as watched or read.
+                  You can always skip it.
+                </span>
+              </div>
+              <label class="switch" title="Ask for a rating when I finish something">
+                <input type="checkbox" id="pref-ask-rating" aria-label="Ask for a rating when I finish something" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+          </div>
+        </details>
         <details class="s-card" id="card-keep">
           <summary>
             <span class="material-symbols-outlined s-card-icon">cloud_sync</span>
@@ -475,6 +498,24 @@
         </div>
         <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
       </div>
+    </div>
+
+    <div id="rate-dialog" class="confirm-dialog" hidden>
+      <div class="confirm-backdrop" data-rate-dismiss></div>
+      <form id="rate-form" class="confirm-panel rate-panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="rate-title">
+        <p class="rate-kicker" id="rate-kicker">Finished watching</p>
+        <h2 id="rate-title" class="confirm-title"></h2>
+        <div id="rate-scale" class="rate-scale" role="radiogroup" aria-label="Your rating out of 10"></div>
+        <p id="rate-caption" class="rate-caption">Tap a number to rate it</p>
+        <label class="edit-field">
+          Review (optional)
+          <textarea id="rate-review" rows="3" placeholder="What did you think?"></textarea>
+        </label>
+        <div class="confirm-actions">
+          <button type="button" id="rate-skip" class="btn btn-outline">Skip</button>
+          <button type="submit" id="rate-save" class="btn btn-primary">Save</button>
+        </div>
+      </form>
     </div>
 
     <div id="edit-dialog" class="confirm-dialog" hidden>

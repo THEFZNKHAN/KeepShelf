@@ -915,7 +915,8 @@ body.in-tab {
 .confirm-dialog {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  /* Above the hover tooltip (200), so a tooltip can never sit on top of a dialog. */
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1773,4 +1774,111 @@ body.in-tab {
 .switch input:focus-visible + .switch-track {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
+}
+
+/* ── Rate when finished ──────────────────────────────────── */
+
+.rate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.rate-panel:focus {
+  outline: none;
+}
+
+.rate-kicker {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.rate-panel .confirm-title {
+  margin: 0;
+}
+
+.rate-scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.rate-btn {
+  height: 34px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.rate-btn:hover {
+  background: var(--surface-container-high);
+}
+
+.rate-btn.selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.rate-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.rate-caption {
+  margin: -4px 0 0;
+  min-height: 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.rate-panel .edit-field {
+  text-align: left;
+}
+
+.rate-panel .confirm-actions {
+  margin-top: 2px;
+}
+
+/* ── Settings: preference row ────────────────────────────── */
+
+.pref-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pref-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pref-text strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.pref-text span {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+}
+
+.pref-row .switch {
+  margin-top: 2px;
 }

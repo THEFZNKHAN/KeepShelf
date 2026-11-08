@@ -10,7 +10,7 @@ import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUr
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
-import { normalizeTags, statusOf } from "../shared/user-data.js";
+import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
@@ -157,7 +157,8 @@ function hideItemTooltip(): void {
   itemTooltipEl.hidden = true;
 }
 
-mainEl.addEventListener("scroll", hideItemTooltip, { passive: true });
+mainEl.addEventListener("scroll", () => cancelRowHover(), { passive: true });
+document.addEventListener("pointerdown", () => cancelRowHover(), true);
 
 function tabItems(): SavedItem[] {
   if (activeTab === "books") return allItems.filter((i) => i.type === "book");
@@ -543,7 +544,7 @@ function createRowActions(item: SavedItem): HTMLElement {
     createRowAction(
       "check_circle",
       item.done ? labels.markTodo : labels.markDone,
-      () => void updateItemFields(item.id, { done: !item.done }),
+      () => void toggleDone(item),
       item.done ? "is-done pinned" : ""
     )
   );
@@ -577,6 +578,23 @@ function progressText(item: SavedItem): string {
 
 const MAX_CHIPS = 3;
 const HOVER_DELAY_MS = 350;
+
+/**
+ * The row tooltip is anchored to a row, so it must go away whenever that row can disappear or the user moves
+ * on: a redraw replaces the rows, a click can open a dialog, and the old row's mouseleave never fires once
+ * it has been replaced. One shared timer lets all of those cancel it.
+ */
+let rowHoverTimer: ReturnType<typeof setTimeout> | undefined;
+
+function cancelRowHover(): void {
+  clearTimeout(rowHoverTimer);
+  rowHoverTimer = undefined;
+  hideItemTooltip();
+}
+
+function anyDialogOpen(): boolean {
+  return [confirmDialogEl, editDialogEl, pickDialogEl, rateDialogEl].some((dialog) => !dialog.hidden);
+}
 const TOOLTIP_OVERVIEW_MAX = 320;
 const TOOLTIP_REVIEW_MAX = 200;
 
@@ -706,6 +724,7 @@ function renderOrganiseFilters(): void {
 }
 
 function render(): void {
+  cancelRowHover();
   const items = filteredItems();
   const tabCount = tabItems().length;
 
@@ -776,20 +795,15 @@ function render(): void {
     li.append(typeIconEl, body, createRowActions(item), checkbox);
 
     // Rest the pointer on a row and it describes itself, so you don't have to open the item.
-    let hoverTimer: ReturnType<typeof setTimeout> | undefined;
-    const stopHover = (): void => {
-      clearTimeout(hoverTimer);
-      hideItemTooltip();
-    };
     li.addEventListener("mouseenter", () => {
-      clearTimeout(hoverTimer);
-      hoverTimer = setTimeout(() => {
+      clearTimeout(rowHoverTimer);
+      rowHoverTimer = setTimeout(() => {
+        if (anyDialogOpen()) return;
         const text = hoverText(item, li);
         if (text) showItemTooltip(text, li);
       }, HOVER_DELAY_MS);
     });
-    li.addEventListener("mouseleave", stopHover);
-    li.addEventListener("click", stopHover);
+    li.addEventListener("mouseleave", cancelRowHover);
 
     const isOpenable = (item.type === "tab" || item.type === "link") && !!item.url;
 
@@ -1189,6 +1203,7 @@ function buildEditField(spec: EditFieldSpec, value: string): HTMLElement {
 }
 
 function openEditDialog(item: SavedItem): void {
+  cancelRowHover();
   editingId = item.id;
   editErrorEl.hidden = true;
   editFieldsEl.innerHTML = "";
@@ -1447,6 +1462,134 @@ editFormEl.addEventListener("submit", async (e) => {
 document.getElementById("edit-cancel")!.addEventListener("click", closeEditDialog);
 editDialogEl.querySelector("[data-edit-dismiss]")!.addEventListener("click", closeEditDialog);
 
+/* ── Rate when finished ──────────────────────────────────── */
+
+const ASK_RATING_KEY = "keepshelf.askRating";
+const rateDialogEl = document.getElementById("rate-dialog")!;
+const rateFormEl = document.getElementById("rate-form") as HTMLFormElement;
+const rateKickerEl = document.getElementById("rate-kicker")!;
+const rateTitleEl = document.getElementById("rate-title")!;
+const rateScaleEl = document.getElementById("rate-scale")!;
+const rateCaptionEl = document.getElementById("rate-caption")!;
+const rateReviewEl = document.getElementById("rate-review") as HTMLTextAreaElement;
+const prefAskRatingEl = document.getElementById("pref-ask-rating") as HTMLInputElement;
+const generalSummaryEl = document.getElementById("general-summary")!;
+let ratingForId: string | undefined;
+let ratingValue: number | undefined;
+
+/** On unless the user switched it off in Settings. */
+function askRatingEnabled(): boolean {
+  try {
+    return localStorage.getItem(ASK_RATING_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+function renderPrefs(): void {
+  const on = askRatingEnabled();
+  prefAskRatingEl.checked = on;
+  generalSummaryEl.textContent = on ? "Rating prompt on" : "Rating prompt off";
+  generalSummaryEl.classList.toggle("is-ok", on);
+}
+
+prefAskRatingEl.addEventListener("change", () => {
+  try {
+    localStorage.setItem(ASK_RATING_KEY, prefAskRatingEl.checked ? "on" : "off");
+  } catch {
+    /* the choice just won't be remembered */
+  }
+  renderPrefs();
+});
+
+function paintRatingScale(): void {
+  rateScaleEl.querySelectorAll<HTMLButtonElement>(".rate-btn").forEach((btn) => {
+    const selected = Number(btn.dataset.value) === ratingValue;
+    btn.classList.toggle("selected", selected);
+    btn.setAttribute("aria-checked", String(selected));
+  });
+  rateCaptionEl.textContent = ratingValue ? `★ ${ratingValue} / 10` : "Tap a number to rate it";
+}
+
+function selectRating(value: number): void {
+  // Tapping the chosen number again clears it, so a rating can be taken back.
+  ratingValue = ratingValue === value ? undefined : value;
+  paintRatingScale();
+}
+
+for (let n = 1; n <= 10; n++) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "rate-btn";
+  btn.dataset.value = String(n);
+  btn.textContent = String(n);
+  btn.setAttribute("role", "radio");
+  btn.setAttribute("aria-label", `${n} out of 10`);
+  btn.addEventListener("click", () => selectRating(n));
+  rateScaleEl.append(btn);
+}
+
+function openRateDialog(item: SavedItem): void {
+  cancelRowHover();
+  ratingForId = item.id;
+  ratingValue = item.myRating;
+  rateKickerEl.textContent = item.type === "book" ? "Finished reading" : "Finished watching";
+  rateTitleEl.textContent = itemTitle(item);
+  rateReviewEl.value = item.review ?? "";
+  paintRatingScale();
+  rateDialogEl.hidden = false;
+  // Focus the dialog, not a number: a ringed "1" would look like a rating already chosen.
+  // Number keys still work from here, and Tab moves on to the buttons.
+  (rateScaleEl.querySelector<HTMLElement>(".rate-btn.selected") ?? rateFormEl).focus();
+}
+
+function closeRateDialog(): void {
+  rateDialogEl.hidden = true;
+  ratingForId = undefined;
+  ratingValue = undefined;
+}
+
+/** Offers the rating box for an item that was just finished, unless the setting is off. */
+function maybeAskRating(id: string): void {
+  const item = allItems.find((i) => i.id === id);
+  if (item && shouldAskForRating(item, askRatingEnabled())) openRateDialog(item);
+}
+
+/** Marks an item finished (or not). Finishing is saved first, so closing the rating box never loses it. */
+async function toggleDone(item: SavedItem): Promise<void> {
+  const finishing = !item.done;
+  const error = await updateItemFields(item.id, { done: finishing });
+  if (error) {
+    showStatus(error, true);
+    return;
+  }
+  if (finishing) maybeAskRating(item.id);
+}
+
+rateFormEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = ratingForId;
+  const item = allItems.find((i) => i.id === id);
+  const rating = ratingValue;
+  const review = rateReviewEl.value.trim();
+  closeRateDialog();
+  if (!id || !item) return;
+  if (rating === item.myRating && review === (item.review ?? "")) return;
+  const error = await updateItemFields(id, { myRating: rating ?? null, review });
+  showStatus(error ?? "Saved your rating.", Boolean(error));
+});
+
+rateFormEl.addEventListener("keydown", (e) => {
+  // 1 to 9 pick that rating and 0 picks 10, unless you are typing a review.
+  if (e.target === rateReviewEl || e.ctrlKey || e.metaKey || e.altKey || !/^[0-9]$/.test(e.key)) return;
+  e.preventDefault();
+  selectRating(e.key === "0" ? 10 : Number(e.key));
+});
+
+document.getElementById("rate-skip")!.addEventListener("click", closeRateDialog);
+rateDialogEl.querySelector("[data-rate-dismiss]")!.addEventListener("click", closeRateDialog);
+renderPrefs();
+
 /* ── TMDB settings ───────────────────────────────────────── */
 
 const tmdbTokenEl = document.getElementById("tmdb-token") as HTMLInputElement;
@@ -1551,6 +1694,7 @@ const pickOpenEl = document.getElementById("pick-open") as HTMLButtonElement;
 let pickedId: string | undefined;
 
 function showPick(item: SavedItem): void {
+  cancelRowHover();
   pickedId = item.id;
   pickLeadingEl.replaceChildren(createLeadingEl(item));
   pickTitleEl.textContent = itemTitle(item);
@@ -1596,6 +1740,7 @@ pickStartEl.addEventListener("click", async () => {
   const error = await updateItemFields(item.id, { status: next });
   closePick();
   showStatus(error ?? (next === "done" ? "Marked as done." : "Marked as in progress."), Boolean(error));
+  if (!error && next === "done") maybeAskRating(item.id);
 });
 pickOpenEl.addEventListener("click", () => {
   const item = allItems.find((i) => i.id === pickedId);
@@ -1912,6 +2057,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   if (!confirmDialogEl.hidden) closeConfirmDialog(false);
   else if (!editDialogEl.hidden) closeEditDialog();
+  else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden) closePick();
   else if (!statsView.hidden) closeStats();
 });

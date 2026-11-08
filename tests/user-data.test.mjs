@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildUserPatch, normalizeRating, normalizeTags, sanitizeImportedUserData, statusOf } from "../dist-test/user-data.js";
+import { buildUserPatch, normalizeRating, normalizeTags, sanitizeImportedUserData, shouldAskForRating, statusOf } from "../dist-test/user-data.js";
 import { buildBackup, parseImportFile } from "../dist-test/import.js";
 
 test("normalizeTags lowercases, strips #, dedupes and accepts comma strings", () => {
@@ -66,4 +66,12 @@ test("backup round trip keeps personal fields", () => {
   assert.equal(items[0].done, false);
   assert.equal(items[0].list, "Weekend");
   assert.equal(items[0].progressTotal, 2);
+});
+
+test("the rating box is offered for things you watch or read, and only when enabled", () => {
+  for (const type of ["movie", "series", "anime", "book"]) {
+    assert.equal(shouldAskForRating({ type }, true), true, type);
+    assert.equal(shouldAskForRating({ type }, false), false, `${type} when off`);
+  }
+  for (const type of ["tab", "link", "note"]) assert.equal(shouldAskForRating({ type }, true), false, type);
 });
