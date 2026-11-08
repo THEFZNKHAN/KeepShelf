@@ -1,5 +1,6 @@
 import { buildBookParsed } from "./book-jsonld.js";
 import type { ImportItem, MediaType, SavedItem } from "./types.js";
+import { sanitizeTmdb } from "./tmdb.js";
 import { sanitizeImportedUserData } from "./user-data.js";
 import { normalizeYear } from "./year.js";
 
@@ -134,11 +135,12 @@ export function fromBackupJson(text: string): ImportItem[] {
     const { id: _id, ...rest } = raw as ImportItem & { id?: string };
     const {
       tags: _tags, list: _list, myRating: _rating, review: _review, status: _status,
-      progressCurrent: _current, progressTotal: _total, ...base
+      progressCurrent: _current, progressTotal: _total, tmdb: rawTmdb, ...base
     } = rest;
     return {
       ...base,
       ...sanitizeImportedUserData(rest as unknown as Record<string, unknown>),
+      ...(sanitizeTmdb(rawTmdb) ? { tmdb: sanitizeTmdb(rawTmdb) } : {}),
       subtitle: typeof rest.subtitle === "string" ? rest.subtitle : "",
       googleQuery: typeof rest.googleQuery === "string" ? rest.googleQuery : rest.title,
       sourceUrl: typeof rest.sourceUrl === "string" ? rest.sourceUrl : "",

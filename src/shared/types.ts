@@ -23,6 +23,9 @@ export interface SavedItem {
   done?: boolean;
   doneAt?: number;
   status?: ItemStatus;
+  tmdb?: TmdbInfo;
+  /** The user removed a wrong TMDB match, so don't look it up again automatically. */
+  tmdbOptOut?: boolean;
   tags?: string[];
   /** Name of a custom list the item belongs to. */
   list?: string;
@@ -34,6 +37,32 @@ export interface SavedItem {
   progressTotal?: number;
   keepStatus?: ItemKeepStatus;
   keepError?: string;
+}
+
+export type TmdbKind = "movie" | "tv";
+
+/**
+ * Information fetched from TMDB. It is a cache: TMDB's terms forbid keeping it more than six months,
+ * so it carries `fetchedAt` and is refreshed or dropped (see tmdb.ts).
+ */
+export interface TmdbInfo {
+  id: number;
+  kind: TmdbKind;
+  imdbId?: string;
+  genres: string[];
+  overview?: string;
+  tagline?: string;
+  /** TMDB community score, 0 to 10. */
+  rating?: number;
+  votes?: number;
+  /** Age rating such as PG-13 or TV-MA (US). */
+  certification?: string;
+  runtimeMinutes?: number;
+  seasons?: number;
+  episodes?: number;
+  status?: string;
+  posterPath?: string;
+  fetchedAt: number;
 }
 
 export type ItemStatus = "plan" | "in_progress" | "done" | "dropped";
@@ -80,6 +109,12 @@ export type MessageAction =
   | { action: "syncKeep"; ids: string[] }
   | { action: "import"; items: ImportItem[] }
   | { action: "merge"; keepId: string; removeIds: string[] }
+  | { action: "getTmdbSettings" }
+  | { action: "setTmdbToken"; token: string }
+  | { action: "testTmdb"; token?: string }
+  | { action: "enrich"; ids?: string[]; force?: boolean }
+  | { action: "removeTmdbMatch"; id: string }
+  | { action: "refreshStaleTmdb" }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
@@ -88,7 +123,19 @@ export type MessageAction =
 
 export type MessageResponse =
   | { ok: true; duplicate?: boolean; similar?: string[]; item?: SavedItem; keep?: KeepSyncResult }
-  | { ok: true; items: SavedItem[]; synced?: number; failed?: number; added?: number; skipped?: number }
+  | {
+      ok: true;
+      items: SavedItem[];
+      synced?: number;
+      failed?: number;
+      added?: number;
+      skipped?: number;
+      enriched?: number;
+      unmatched?: number;
+      remaining?: number;
+    }
+  | { ok: true; tmdb: { configured: boolean } }
+  | { ok: true; message: string }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }
   | { ok: true; lastKeepResult: { message: string; isError: boolean; at: number } | null }
