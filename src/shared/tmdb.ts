@@ -123,6 +123,7 @@ interface Details {
   vote_count?: number;
   runtime?: number | null;
   episode_run_time?: number[];
+  last_episode_to_air?: { runtime?: number | null } | null;
   number_of_seasons?: number;
   number_of_episodes?: number;
   status?: string;
@@ -159,7 +160,8 @@ export function toTmdbInfo(kind: TmdbKind, d: Details, now = Date.now()): TmdbIn
   }
   const certification = certificationOf(kind, d);
   if (certification) info.certification = certification;
-  const runtime = kind === "movie" ? d.runtime : d.episode_run_time?.[0];
+  // TMDB often leaves episode_run_time empty for shows; the latest episode is a good stand-in.
+  const runtime = kind === "movie" ? d.runtime : d.episode_run_time?.[0] || d.last_episode_to_air?.runtime;
   if (runtime) info.runtimeMinutes = runtime;
   if (d.number_of_seasons) info.seasons = d.number_of_seasons;
   if (d.number_of_episodes) info.episodes = d.number_of_episodes;

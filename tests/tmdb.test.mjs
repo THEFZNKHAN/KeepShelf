@@ -93,6 +93,12 @@ test("toTmdbInfo maps movie and tv details", () => {
   assert.equal(tv.runtimeMinutes, 47);
 });
 
+test("tv runtime falls back to the latest episode when episode_run_time is empty", () => {
+  assert.equal(toTmdbInfo("tv", { id: 1, episode_run_time: [], last_episode_to_air: { runtime: 52 } }).runtimeMinutes, 52);
+  assert.equal(toTmdbInfo("tv", { id: 1, episode_run_time: [47], last_episode_to_air: { runtime: 52 } }).runtimeMinutes, 47);
+  assert.equal(toTmdbInfo("tv", { id: 1, episode_run_time: [] }).runtimeMinutes, undefined);
+});
+
 test("an unrated title has no rating rather than 0", () => {
   assert.equal(toTmdbInfo("movie", { id: 1, vote_average: 0, vote_count: 0 }).rating, undefined);
 });
