@@ -331,6 +331,40 @@
         </section>
 
         <section class="settings-section settings-section-divider">
+          <h2 class="section-title">TMDB — genres, ratings &amp; info</h2>
+          <p class="settings-hint">
+            Optional. With a free TMDB token, new movies, series and anime get their genres, TMDB rating, age
+            rating, overview and poster automatically. Your token stays in this browser, and titles are sent to TMDB
+            only to look them up. Get a token at
+            <span class="mono">themoviedb.org/settings/api</span> and paste the <strong>API Read Access Token</strong>.
+          </p>
+          <div class="field">
+            <div class="field-input-row">
+              <input
+                type="password"
+                id="tmdb-token"
+                placeholder="API Read Access Token"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" id="tmdb-test" class="btn btn-outline btn-test">Test</button>
+            </div>
+            <span id="tmdb-token-status" class="field-status">Not set</span>
+          </div>
+          <div class="settings-button-row">
+            <button type="button" id="tmdb-save" class="btn btn-primary">Save</button>
+            <button type="button" id="tmdb-enrich-all" class="btn btn-outline">Fetch info for my shelf</button>
+          </div>
+          <div id="tmdb-settings-status" class="settings-toast" hidden>
+            <div class="settings-toast-content">
+              <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+              <span id="tmdb-settings-status-text"></span>
+            </div>
+          </div>
+          <p class="settings-hint tmdb-notice" id="tmdb-notice"></p>
+        </section>
+
+        <section class="settings-section settings-section-divider">
           <h2 class="section-title">Backup &amp; import</h2>
           <p class="settings-hint">
             Your shelf is stored only in this browser. Export a backup to keep it safe. Import accepts a
@@ -416,6 +450,7 @@
         <div id="pick-leading" class="pick-leading"></div>
         <h2 id="pick-title" class="confirm-title"></h2>
         <p id="pick-detail" class="confirm-message"></p>
+        <p id="pick-overview" class="pick-overview" hidden></p>
         <div class="confirm-actions">
           <button type="button" id="pick-again" class="btn btn-outline">Pick another</button>
           <button type="button" id="pick-start" class="btn btn-primary">Start</button>

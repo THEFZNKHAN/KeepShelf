@@ -6,6 +6,7 @@ import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import { genreText, isEnrichable, tmdbPosterUrl, TMDB_NOTICE } from "../shared/tmdb.js";
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
@@ -32,6 +33,7 @@ let allItems: SavedItem[] = [];
 let activeFilter: MediaType | "all" = "all";
 let activeTab: "media" | "books" | "tabs" = "media";
 let searchQuery = "";
+let tmdbConfigured = false;
 let tagFilter = "";
 let listFilter = "";
 let statusFilter = storedChoice<StatusFilter>("keepshelf.status", STATUS_FILTERS, "all");
@@ -143,7 +145,7 @@ function tabItems(): SavedItem[] {
 }
 
 function searchText(item: SavedItem): string {
-  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, ...(item.tags ?? [])]
+  return [formatItemLine(item), item.subtitle, item.genre, item.author, item.url, item.body, item.review, item.list, genreText(item), ...(item.tags ?? [])]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
@@ -464,10 +466,11 @@ function updateEmptyState(): void {
 }
 
 function createLeadingEl(item: SavedItem): HTMLElement {
-  if (!item.imageUrl) return createTypeIconEl(item.type);
+  const imageUrl = item.imageUrl ?? tmdbPosterUrl(item);
+  if (!imageUrl) return createTypeIconEl(item.type);
   const img = document.createElement("img");
   img.className = "item-thumb";
-  img.src = item.imageUrl;
+  img.src = imageUrl;
   img.alt = "";
   img.loading = "lazy";
   img.referrerPolicy = "no-referrer";
@@ -552,6 +555,12 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
   if (progress && isTrackable(item)) parts.push(progress);
   if (item.myRating) parts.push(`★ ${item.myRating}/10`);
   if (item.list) parts.push(item.list);
+  if (isTrackable(item)) {
+    const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 2);
+    if (genres.length) parts.push(genres.join(" / "));
+    if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
+    if (item.tmdb?.certification) parts.push(item.tmdb.certification);
+  }
   const tags = item.tags ?? [];
   if (parts.length === 0 && tags.length === 0) return undefined;
 
@@ -561,7 +570,8 @@ function createItemMeta(item: SavedItem): HTMLElement | undefined {
     const text = document.createElement("span");
     text.className = "item-meta-text";
     text.textContent = parts.join(" · ");
-    if (item.review) text.title = item.review;
+    const hover = [item.review, item.tmdb?.overview].filter(Boolean).join("\n\n");
+    if (hover) text.title = hover;
     meta.append(text);
   }
   for (const tag of tags) {
@@ -1176,7 +1186,101 @@ function appendPersonalFields(item: SavedItem): void {
     area.value = item.review ?? "";
     label.append(area);
     editFieldsEl.append(label);
+    editFieldsEl.append(buildTmdbBlock(item.id));
   }
+}
+
+function tmdbSummary(item: SavedItem): string {
+  const info = item.tmdb;
+  if (!info) return "";
+  const bits = [
+    info.genres.join(", "),
+    info.rating ? `TMDB ${info.rating}/10 (${(info.votes ?? 0).toLocaleString()} votes)` : "",
+    info.certification,
+    info.runtimeMinutes ? `${info.runtimeMinutes} min` : "",
+    info.seasons ? `${info.seasons} season${info.seasons === 1 ? "" : "s"}` : "",
+    info.status,
+  ];
+  return bits.filter(Boolean).join(" · ");
+}
+
+/** Read-only TMDB details with Refresh and Remove match. Re-rendered in place so unsaved edits above are kept. */
+function buildTmdbBlock(itemId: string): HTMLElement {
+  const block = document.createElement("div");
+  block.className = "edit-tmdb";
+
+  const paint = (): void => {
+    const item = allItems.find((i) => i.id === itemId);
+    block.replaceChildren();
+    if (!item || !isEnrichable(item)) return;
+
+    const heading = document.createElement("h3");
+    heading.className = "edit-section";
+    heading.textContent = "From TMDB";
+    block.append(heading);
+
+    const text = document.createElement("p");
+    text.className = "edit-tmdb-text";
+    text.textContent = item.tmdb
+      ? tmdbSummary(item) || "Matched on TMDB."
+      : !tmdbConfigured
+        ? "Add a TMDB token in Settings to fetch genres, ratings and more."
+        : item.tmdbOptOut
+          ? "Match removed. Fetch again to look it up."
+          : "No match found yet.";
+    block.append(text);
+    if (item.tmdb?.overview) {
+      const overview = document.createElement("p");
+      overview.className = "edit-tmdb-overview";
+      overview.textContent = item.tmdb.overview;
+      block.append(overview);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "edit-tmdb-actions";
+    const fetchBtn = document.createElement("button");
+    fetchBtn.type = "button";
+    fetchBtn.className = "btn btn-outline";
+    fetchBtn.textContent = item.tmdb ? "Refresh" : "Fetch info";
+    fetchBtn.disabled = !tmdbConfigured;
+    fetchBtn.addEventListener("click", async () => {
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = "Fetching…";
+      try {
+        const response = await sendToBackground({ action: "enrich", ids: [itemId], force: true });
+        if (!response.ok) showStatus(response.error, true, 5000);
+        else if ("items" in response) {
+          allItems = response.items;
+          render();
+          if (!response.enriched) showStatus("No match found on TMDB.", true);
+        }
+      } catch (err) {
+        showStatus(err instanceof Error ? err.message : "Could not reach TMDB.", true);
+      }
+      paint();
+    });
+    actions.append(fetchBtn);
+
+    if (item.tmdb) {
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "btn btn-outline";
+      removeBtn.textContent = "Wrong match? Remove";
+      removeBtn.addEventListener("click", async () => {
+        const response = await sendToBackground({ action: "removeTmdbMatch", id: itemId });
+        if (response.ok && "items" in response) {
+          allItems = response.items;
+          render();
+        }
+        paint();
+      });
+      actions.append(removeBtn);
+    }
+    block.append(actions);
+  };
+
+  paint();
+  return block;
 }
 
 function closeEditDialog(): void {
@@ -1222,12 +1326,103 @@ editFormEl.addEventListener("submit", async (e) => {
 document.getElementById("edit-cancel")!.addEventListener("click", closeEditDialog);
 editDialogEl.querySelector("[data-edit-dismiss]")!.addEventListener("click", closeEditDialog);
 
+/* ── TMDB settings ───────────────────────────────────────── */
+
+const tmdbTokenEl = document.getElementById("tmdb-token") as HTMLInputElement;
+const tmdbTokenStatusEl = document.getElementById("tmdb-token-status")!;
+const tmdbSettingsStatusEl = document.getElementById("tmdb-settings-status")!;
+const tmdbSettingsStatusTextEl = document.getElementById("tmdb-settings-status-text")!;
+const tmdbSettingsStatusIconEl = document.getElementById("tmdb-settings-status-icon")!;
+const tmdbEnrichAllEl = document.getElementById("tmdb-enrich-all") as HTMLButtonElement;
+const tmdbStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+document.getElementById("tmdb-notice")!.textContent = TMDB_NOTICE;
+
+function showTmdbStatus(msg: string, err = false, ms = 6000): void {
+  showSectionStatus(tmdbSettingsStatusEl, tmdbSettingsStatusTextEl, tmdbSettingsStatusIconEl, tmdbStatusTimer, msg, err, ms);
+}
+
+function renderTmdbConfigured(): void {
+  tmdbTokenStatusEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
+  tmdbTokenEl.placeholder = tmdbConfigured ? "Token saved. Paste a new one to replace it." : "API Read Access Token";
+  tmdbEnrichAllEl.disabled = !tmdbConfigured;
+}
+
+async function loadTmdbSettings(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "getTmdbSettings" });
+    if (response.ok && "tmdb" in response) tmdbConfigured = response.tmdb.configured;
+  } catch {
+    /* leave as not configured */
+  }
+  renderTmdbConfigured();
+}
+
+async function saveTmdbToken(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "setTmdbToken", token: tmdbTokenEl.value });
+    if (!response.ok) throw new Error(response.error);
+    if ("tmdb" in response) tmdbConfigured = response.tmdb.configured;
+    const cleared = tmdbTokenEl.value.trim() === "";
+    tmdbTokenEl.value = "";
+    renderTmdbConfigured();
+    showTmdbStatus(cleared ? "Token removed." : "Token saved. New saves will fetch TMDB info.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Could not save the token.", true);
+  }
+}
+
+async function testTmdbToken(): Promise<void> {
+  try {
+    const typed = tmdbTokenEl.value.trim();
+    const response = await sendToBackground({ action: "testTmdb", ...(typed ? { token: typed } : {}) });
+    if (!response.ok) throw new Error(response.error);
+    showTmdbStatus("message" in response ? response.message : "Connected to TMDB.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Test failed.", true);
+  }
+}
+
+async function enrichShelf(): Promise<void> {
+  const ids = allItems.filter((i) => isEnrichable(i) && !i.tmdb && !i.tmdbOptOut).map((i) => i.id);
+  if (ids.length === 0) {
+    showTmdbStatus("Every movie, series and anime already has TMDB info.");
+    return;
+  }
+  tmdbEnrichAllEl.disabled = true;
+  let enriched = 0;
+  let unmatched = 0;
+  try {
+    for (let i = 0; i < ids.length; i += 25) {
+      showTmdbStatus(`Fetching info… ${i}/${ids.length}`, false, 120000);
+      const response = await sendToBackground({ action: "enrich", ids: ids.slice(i, i + 25) });
+      if (!response.ok) throw new Error(response.error);
+      if ("items" in response) {
+        allItems = response.items;
+        enriched += response.enriched ?? 0;
+        unmatched += response.unmatched ?? 0;
+      }
+    }
+    render();
+    showTmdbStatus(`Added info to ${enriched} item${enriched === 1 ? "" : "s"}` + (unmatched ? `; ${unmatched} had no match.` : "."));
+  } catch (err) {
+    render();
+    showTmdbStatus(err instanceof Error ? err.message : "Fetching info failed.", true);
+  } finally {
+    tmdbEnrichAllEl.disabled = !tmdbConfigured;
+  }
+}
+
+document.getElementById("tmdb-save")!.addEventListener("click", () => void saveTmdbToken());
+document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
+tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
+
 /* ── Random pick ─────────────────────────────────────────── */
 
 const pickDialogEl = document.getElementById("pick-dialog")!;
 const pickLeadingEl = document.getElementById("pick-leading")!;
 const pickTitleEl = document.getElementById("pick-title")!;
 const pickDetailEl = document.getElementById("pick-detail")!;
+const pickOverviewEl = document.getElementById("pick-overview")!;
 const pickStartEl = document.getElementById("pick-start") as HTMLButtonElement;
 const pickOpenEl = document.getElementById("pick-open") as HTMLButtonElement;
 let pickedId: string | undefined;
@@ -1236,7 +1431,12 @@ function showPick(item: SavedItem): void {
   pickedId = item.id;
   pickLeadingEl.replaceChildren(createLeadingEl(item));
   pickTitleEl.textContent = itemTitle(item);
-  pickDetailEl.textContent = [itemSubtitle(item), item.genre, item.author].filter(Boolean).join(" · ");
+  pickDetailEl.textContent = [itemSubtitle(item), genreText(item), item.tmdb?.certification, item.author]
+    .filter(Boolean)
+    .join(" · ");
+  const overview = item.tmdb?.overview;
+  pickOverviewEl.textContent = overview && overview.length > 220 ? `${overview.slice(0, 217)}…` : (overview ?? "");
+  pickOverviewEl.hidden = !overview;
   const inProgress = statusOf(item) === "in_progress";
   pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
   pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
@@ -1615,5 +1815,17 @@ if (isTabView) {
   openSettings();
 }
 
-void loadItems();
+void loadItems().then(async () => {
+  // Refreshes or drops TMDB data older than the retention limit; usually a no-op.
+  try {
+    const response = await sendToBackground({ action: "refreshStaleTmdb" });
+    if (response.ok && "items" in response) {
+      allItems = response.items;
+      render();
+    }
+  } catch {
+    /* not critical */
+  }
+});
 void loadKeepSettings();
+void loadTmdbSettings();
