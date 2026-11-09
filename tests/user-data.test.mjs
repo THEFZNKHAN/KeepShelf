@@ -75,3 +75,55 @@ test("the rating box is offered for things you watch or read, and only when enab
   }
   for (const type of ["tab", "link", "note"]) assert.equal(shouldAskForRating({ type }, true), false, type);
 });
+
+const seasonItem = { status: "plan", done: false, tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1, seasonEpisodes: [10, 8, 6] } };
+
+test("buildUserPatch stores season progress and keeps the overall count equal to its sum", () => {
+  const patch = buildUserPatch(seasonItem, { seasonProgress: [10, 3, 0] });
+  assert.deepEqual(patch.seasonProgress, [10, 3, 0]);
+  assert.equal(patch.progressCurrent, 13);
+  // The sum wins over a stale overall number sent alongside it.
+  assert.equal(buildUserPatch(seasonItem, { seasonProgress: [2], progressCurrent: 99 }).progressCurrent, 2);
+});
+
+test("buildUserPatch rejects a season above its episode count, and an overall count above the total", () => {
+  assert.throws(() => buildUserPatch(seasonItem, { seasonProgress: [11] }), /Season 1 has 10 episodes/);
+  assert.throws(() => buildUserPatch({ ...seasonItem, progressTotal: 12 }, { seasonProgress: [10, 3] }), /can't be higher than the total/);
+  // Without TMDB data there is nothing to check a season against.
+  assert.deepEqual(buildUserPatch({ status: "plan" }, { seasonProgress: [40] }).seasonProgress, [40]);
+});
+
+test("buildUserPatch clears season progress with null or an empty list, leaving the overall count alone", () => {
+  for (const cleared of [null, []]) {
+    const patch = buildUserPatch(seasonItem, { seasonProgress: cleared });
+    assert.ok("seasonProgress" in patch);
+    assert.equal(patch.seasonProgress, undefined);
+    assert.ok(!("progressCurrent" in patch));
+  }
+  assert.ok(!("seasonProgress" in buildUserPatch(seasonItem, { review: "x" })));
+});
+
+test("sanitizeImportedUserData keeps valid season progress and drops invalid lists", () => {
+  const ok = sanitizeImportedUserData({ seasonProgress: [4, 2] });
+  assert.deepEqual(ok.seasonProgress, [4, 2]);
+  assert.equal(ok.progressCurrent, 6);
+  for (const bad of [[1, "x"], [-1], [1.5], "5", {}, [], new Array(101).fill(1)]) {
+    const out = sanitizeImportedUserData({ seasonProgress: bad });
+    assert.equal(out.seasonProgress, undefined, JSON.stringify(bad).slice(0, 30));
+  }
+});
+
+test("season progress survives a backup round trip, and an old backup without it still loads", () => {
+  const base = { id: "a", title: "Show", type: "series", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1 };
+  const item = { ...base, status: "in_progress", done: false, progressCurrent: 13, seasonProgress: [10, 3] };
+  const back = parseImportFile(buildBackup([item]), "b.json").items;
+  assert.deepEqual(back[0].seasonProgress, [10, 3]);
+  assert.equal(back[0].progressCurrent, 13);
+  const old = parseImportFile(buildBackup([{ ...base, progressCurrent: 5 }]), "b.json").items;
+  assert.equal(old[0].seasonProgress, undefined);
+  assert.equal(old[0].progressCurrent, 5);
+  // A tampered backup can't smuggle in a broken list or a mismatched overall count.
+  const tampered = parseImportFile(JSON.stringify({ items: [{ ...base, seasonProgress: [3, -1], progressCurrent: 50 }] }), "b.json").items;
+  assert.equal(tampered[0].seasonProgress, undefined);
+  assert.equal(tampered[0].progressCurrent, 50);
+});
