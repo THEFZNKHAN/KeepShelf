@@ -126,6 +126,11 @@ body {
   transition: background 0.15s ease;
 }
 
+/* The button's own display would otherwise win over the hidden attribute. */
+.icon-btn[hidden] {
+  display: none;
+}
+
 .icon-btn:hover {
   background: var(--surface-container);
 }

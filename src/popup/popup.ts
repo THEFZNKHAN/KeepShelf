@@ -2,7 +2,7 @@ import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, fo
 import { buildBackup, parseImportFile } from "../shared/import.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
-import { isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
+import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
@@ -861,6 +861,7 @@ function render(): void {
   fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
   // Picking something to watch or read doesn't apply to bookmarks.
   pickRandomBtnEl.hidden = activeTab === "tabs";
+  updateSyncButton();
 
   savePageBtnEl.textContent =
     activeTab === "books" ? "Save book" :
@@ -978,6 +979,11 @@ function linkedText(noteId: string | undefined, noteUrl: string | undefined): st
   return "Not linked";
 }
 
+/** The sync button only appears when the Keep list for the tab you are on is switched on. */
+function updateSyncButton(): void {
+  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings);
+}
+
 function renderKeepStatus(): void {
   keepMediaEnabledEl.checked = keepSettings.mediaEnabled;
   keepBooksEnabledEl.checked = keepSettings.booksEnabled;
@@ -1003,6 +1009,7 @@ function renderKeepStatus(): void {
   ].filter(([on, id]) => on && isLikelyValidKeepNoteId(id as string | undefined)).length;
   keepSummaryEl.textContent = active ? `${active} of 3 on` : "Not set up";
   keepSummaryEl.classList.toggle("is-ok", active > 0);
+  updateSyncButton();
 }
 
 async function loadKeepSettings(): Promise<void> {

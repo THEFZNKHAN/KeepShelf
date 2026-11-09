@@ -86,6 +86,11 @@ export function isLikelyValidKeepNoteId(noteId: string | undefined): boolean {
   return Boolean(noteId && noteId.length >= 40);
 }
 
+/** Whether the Keep list behind a tab (Media, Books or Tabs) is switched on, so its sync button is worth showing. */
+export function isKeepOn(list: KeepTarget, settings: Pick<KeepSettings, "mediaEnabled" | "booksEnabled" | "tabsEnabled">): boolean {
+  return list === "books" ? settings.booksEnabled : list === "tabs" ? settings.tabsEnabled : settings.mediaEnabled;
+}
+
 export function getKeepTargetForType(
   type: MediaType,
   settings: KeepSettings
