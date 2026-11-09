@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   getKeepTargetForType,
+  isKeepOn,
   isLikelyValidKeepNoteId,
   normalizeKeepSettings,
   parseKeepNoteId,
@@ -47,4 +48,14 @@ test("items route to the matching Keep note only when enabled and linked", () =>
   assert.equal(getKeepTargetForType("link", s)?.noteId, LONG_ID);
   assert.equal(getKeepTargetForType("book", s), null);
   assert.equal(getKeepTargetForType("movie", s), null);
+});
+
+test("isKeepOn follows the switch for the list behind each tab", () => {
+  const off = { mediaEnabled: false, booksEnabled: false, tabsEnabled: false };
+  for (const list of ["media", "books", "tabs"]) assert.equal(isKeepOn(list, off), false, list);
+  assert.equal(isKeepOn("media", { ...off, mediaEnabled: true }), true);
+  assert.equal(isKeepOn("books", { ...off, mediaEnabled: true }), false);
+  assert.equal(isKeepOn("books", { ...off, booksEnabled: true }), true);
+  assert.equal(isKeepOn("tabs", { ...off, booksEnabled: true }), false);
+  assert.equal(isKeepOn("tabs", { ...off, tabsEnabled: true }), true);
 });

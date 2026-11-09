@@ -551,7 +551,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 ### Manage your shelf
 
 1. Use the filter chips, status, tag and list dropdowns, search box and sort menu to narrow the view.
-2. Tick the box on each item (tapping a row opens its card instead), then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon (you can **Undo** for a few seconds).
+2. Tick the box on each item (tapping a row opens its card instead), then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon (you can **Undo** for a few seconds). The sync button only appears when the Keep list for the tab you are on (Media, Books or Tabs) is switched on in Settings, so it stays out of the way if you don't use Keep.
 3. **Clear all** empties your shelf. Keep notes are never affected.
 
 ### Configure Keep sync
