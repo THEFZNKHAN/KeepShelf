@@ -2195,6 +2195,7 @@ body.in-tab {
 
 .watch-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
@@ -2227,4 +2228,74 @@ body.in-tab {
 .watch-row-note {
   font-size: 10.5px;
   color: var(--on-surface-variant);
+}
+
+.watch-row-buttons {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.watch-extra {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--outline-variant);
+}
+
+.watch-extra input[type="url"] {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.watch-extra input[type="url"]:focus {
+  border-color: var(--primary);
+}
+
+.watch-extra .view-select {
+  width: 100%;
+  height: 28px;
+}
+
+.watch-extra-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.watch-row-types {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding-top: 5px;
+  border-top: 1px solid var(--outline-variant);
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+
+.watch-row-types label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--on-surface);
+  cursor: pointer;
+}
+
+.watch-row-types input {
+  margin: 0;
+}
+
+.watch-row.is-off .watch-row-text,
+.watch-row.is-off .watch-row-types {
+  opacity: 0.5;
 }

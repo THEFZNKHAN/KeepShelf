@@ -8,9 +8,17 @@ import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
+  WATCH_MEDIA_TYPES,
+  addExampleToSite,
+  appliesTo,
+  defaultTypesFor,
   describePattern,
   getWatchSites,
+  isEnabled,
+  isSearchSite,
   learnPattern,
+  missingKind,
+  normalizeTypes,
   removeWatchSite,
   saveWatchSite,
   siteFromLearned,
@@ -608,6 +616,9 @@ function createRowAction(
   return btn;
 }
 
+/** More watch links than this on one row would crowd it, so the row shows a single button for the card instead. */
+const MAX_ROW_WATCH_BUTTONS = 2;
+
 function createRowActions(item: SavedItem): HTMLElement {
   const actions = document.createElement("div");
   actions.className = "row-actions";
@@ -638,8 +649,16 @@ function createRowActions(item: SavedItem): HTMLElement {
     actions.append(createRowAction("open_in_new", "Open source page", () => void chrome.tabs.create({ url: item.sourceUrl })));
   }
 
-  for (const link of watchLinks(item, watchSites)) {
-    actions.append(createRowAction("play_circle", `Watch on ${link.host}`, () => void chrome.tabs.create({ url: link.url })));
+  const links = watchLinks(item, watchSites);
+  if (links.length <= MAX_ROW_WATCH_BUTTONS) {
+    for (const link of links) {
+      actions.append(
+        createRowAction(link.search ? "search" : "play_circle", `${link.search ? "Search" : "Watch"} on ${link.host}`, () => void chrome.tabs.create({ url: link.url }))
+      );
+    }
+  } else {
+    // Too many to fit in a row: one button opens the card, which lists them all.
+    actions.append(createRowAction("play_circle", `Watch or search on ${links.length} sites`, () => showDetails(item, "info")));
   }
 
   actions.append(createRowAction("edit", "Edit", () => openEditDialog(item)));
@@ -2061,13 +2080,84 @@ function fillWatchItemPickers(): void {
   }
 }
 
+/** A small form under a site's row for adding a page of the kind it doesn't know yet (a series, say). */
+function buildAddKindForm(site: WatchSite, kind: "movie" | "tv", close: () => void): HTMLElement {
+  const word = kind === "tv" ? "series" : "movie";
+  const form = document.createElement("div");
+  form.className = "watch-extra";
+
+  const label = document.createElement("span");
+  label.className = "watch-example-label";
+  label.textContent = `Paste a ${word} page from ${site.host}`;
+  const url = document.createElement("input");
+  url.type = "url";
+  url.placeholder = "https://…";
+  url.autocomplete = "off";
+  url.spellcheck = false;
+  const select = document.createElement("select");
+  select.className = "view-select";
+  select.setAttribute("aria-label", `Which ${word} is that page for?`);
+  select.append(new Option(`Which ${word} is that page for?`, ""));
+  for (const item of allItems) {
+    if (titleFacts(item)?.kind !== kind) continue;
+    select.append(new Option(`${item.title}${item.year ? ` (${item.year})` : ""}${item.tmdb ? " · TMDB info" : ""}`, item.id));
+  }
+
+  const add = document.createElement("button");
+  add.type = "button";
+  add.className = "btn btn-primary btn-sm";
+  add.textContent = "Add";
+  add.addEventListener("click", async () => {
+    try {
+      const facts = titleFacts(allItems.find((i) => i.id === select.value) ?? ({} as SavedItem));
+      if (!url.value.trim()) throw new Error(`Paste the address of a ${word} page first.`);
+      if (!facts) throw new Error(`Pick which ${word} that page is for.`);
+      const learned = learnPattern(url.value, facts);
+      if (!learned.ok) throw new Error(learned.error);
+      const made = addExampleToSite(site, learned.learned);
+      if (!made.ok) throw new Error(made.error);
+      watchSites = await saveWatchSite(made.site);
+      renderWatchSites();
+      render();
+      showWatchStatus(`Added ${word} pages for ${site.host}.`);
+    } catch (err) {
+      showWatchStatus(err instanceof Error ? err.message : "Could not add the page.", true);
+    }
+  });
+  const cancel = document.createElement("button");
+  cancel.type = "button";
+  cancel.className = "btn btn-outline btn-sm";
+  cancel.textContent = "Cancel";
+  cancel.addEventListener("click", close);
+
+  const buttons = document.createElement("div");
+  buttons.className = "watch-extra-buttons";
+  buttons.append(add, cancel);
+  form.append(label, url, select, buttons);
+  return form;
+}
+
 function renderWatchSites(): void {
-  watchSummaryEl.textContent = watchSites.length === 0 ? "None" : `${watchSites.length} added`;
-  watchSummaryEl.classList.toggle("is-ok", watchSites.length > 0);
+  const on = watchSites.filter(isEnabled).length;
+  watchSummaryEl.textContent =
+    watchSites.length === 0 ? "None" : on === watchSites.length ? `${watchSites.length} added` : `${on} of ${watchSites.length} on`;
+  watchSummaryEl.classList.toggle("is-ok", on > 0);
   watchListEl.replaceChildren(
     ...watchSites.map((site) => {
       const row = document.createElement("li");
       row.className = "watch-row";
+      row.classList.toggle("is-off", !isEnabled(site));
+      const toggle = document.createElement("label");
+      toggle.className = "switch";
+      toggle.title = isEnabled(site) ? `Switch ${site.host} off` : `Switch ${site.host} on`;
+      const toggleBox = document.createElement("input");
+      toggleBox.type = "checkbox";
+      toggleBox.checked = isEnabled(site);
+      toggleBox.setAttribute("aria-label", `Show buttons for ${site.host}`);
+      toggleBox.addEventListener("change", () => void saveSiteEnabled(site, toggleBox.checked));
+      const toggleTrack = document.createElement("span");
+      toggleTrack.className = "switch-track";
+      toggle.append(toggleBox, toggleTrack);
       const text = document.createElement("div");
       text.className = "watch-row-text";
       const host = document.createElement("span");
@@ -2078,19 +2168,62 @@ function renderWatchSites(): void {
       pattern.textContent = describePattern(site);
       pattern.title = describePattern(site);
       text.append(host, pattern);
-      const kinds = supportedKinds(site);
-      if (kinds.length < 2) {
+      if (isSearchSite(site)) {
         const note = document.createElement("span");
         note.className = "watch-row-note";
-        note.textContent = kinds[0] === "movie" ? "Movies only. Remove and add again with a series page to include series." : "Series only. Remove and add again with a movie page to include movies.";
+        note.textContent = "Opens this site's search for each title.";
         text.append(note);
+      }
+
+      const buttons = document.createElement("div");
+      buttons.className = "watch-row-buttons";
+      const missing = missingKind(site);
+      if (missing) {
+        const word = missing === "tv" ? "series" : "movie";
+        const note = document.createElement("span");
+        note.className = "watch-row-note";
+        note.textContent = `${missing === "tv" ? "Movies" : "Series"} only so far.`;
+        text.append(note);
+        const addKind = document.createElement("button");
+        addKind.type = "button";
+        addKind.className = "btn btn-outline btn-sm";
+        addKind.textContent = `Add a ${word} page`;
+        addKind.addEventListener("click", () => {
+          const existing = row.querySelector(".watch-extra");
+          if (existing) {
+            existing.remove();
+            return;
+          }
+          row.append(buildAddKindForm(site, missing, () => row.querySelector(".watch-extra")?.remove()));
+        });
+        buttons.append(addKind);
       }
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "btn btn-outline btn-sm";
       remove.textContent = "Remove";
       remove.addEventListener("click", () => void removeSite(site.host));
-      row.append(text, remove);
+      buttons.append(remove);
+
+      // Which kinds of title get this site's button, so an anime site doesn't clutter movies.
+      const kinds = document.createElement("div");
+      kinds.className = "watch-row-types";
+      const kindsLabel = document.createElement("span");
+      kindsLabel.textContent = "Show on:";
+      kinds.append(kindsLabel);
+      const boxes: HTMLInputElement[] = [];
+      for (const type of WATCH_MEDIA_TYPES) {
+        const label = document.createElement("label");
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = appliesTo(site, type);
+        box.dataset.type = type;
+        boxes.push(box);
+        box.addEventListener("change", () => void saveSiteTypes(site, boxes));
+        label.append(box, document.createTextNode(type === "anime" ? "Anime" : type === "movie" ? "Movies" : "Series"));
+        kinds.append(label);
+      }
+      row.append(toggle, text, buttons, kinds);
       return row;
     })
   );
@@ -2123,7 +2256,9 @@ async function addWatchSite(): Promise<void> {
     if (!first.ok) throw new Error(first.error);
     const second = learnFromRow(1);
     if (second && !second.ok) throw new Error(second.error);
-    const made = siteFromLearned(first.learned, second?.ok ? second.learned : undefined);
+    // A site added with an anime as the example starts as anime only; the row's tick boxes change that.
+    const exampleType = allItems.find((i) => i.id === watchItemEls[0].value)?.type;
+    const made = siteFromLearned(first.learned, second?.ok ? second.learned : undefined, defaultTypesFor(exampleType));
     if (!made.ok) throw new Error(made.error);
     watchSites = await saveWatchSite(made.site);
     for (const el of watchUrlEls) el.value = "";
@@ -2140,6 +2275,34 @@ async function addWatchSite(): Promise<void> {
     showWatchStatus(err instanceof Error ? err.message : "Could not add the site.", true);
   } finally {
     watchAddEl.disabled = false;
+  }
+}
+
+async function saveSiteEnabled(site: WatchSite, enabled: boolean): Promise<void> {
+  try {
+    watchSites = await saveWatchSite({ ...site, enabled: enabled ? undefined : false });
+    renderWatchSites();
+    render();
+  } catch (err) {
+    renderWatchSites();
+    showWatchStatus(err instanceof Error ? err.message : "Could not save that.", true);
+  }
+}
+
+async function saveSiteTypes(site: WatchSite, boxes: HTMLInputElement[]): Promise<void> {
+  const checked = boxes.filter((b) => b.checked).map((b) => b.dataset.type as (typeof WATCH_MEDIA_TYPES)[number]);
+  if (checked.length === 0) {
+    renderWatchSites();
+    showWatchStatus("Keep at least one kind ticked, or remove the site.", true);
+    return;
+  }
+  try {
+    watchSites = await saveWatchSite({ ...site, types: normalizeTypes(checked) });
+    renderWatchSites();
+    render();
+  } catch (err) {
+    renderWatchSites();
+    showWatchStatus(err instanceof Error ? err.message : "Could not save that.", true);
   }
 }
 
@@ -2311,7 +2474,7 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "btn btn-primary btn-block";
-      btn.textContent = `Watch on ${link.host}`;
+      btn.textContent = `${link.search ? "Search" : "Watch"} on ${link.host}`;
       btn.addEventListener("click", () => void chrome.tabs.create({ url: link.url }));
       return btn;
     })

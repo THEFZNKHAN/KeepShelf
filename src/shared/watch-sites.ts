@@ -8,10 +8,27 @@ import type { SavedItem, TmdbKind } from "./types.js";
  * Nothing is built in, so no site is named anywhere in this code.
  */
 
-export type WatchToken = "tmdb_id" | "imdb_id" | "slug" | "year" | "type";
+/**
+ * Parts of an address that are filled in per title. `q_plus` and `q_pct` are the title as search text, written
+ * the two common ways: `one+piece` and `one%20piece`. `qm_plus` and `qm_pct` are the same for the main name only,
+ * the part before a colon ("One Piece" for "One Piece: Wan pîsu"), because that is what sites search by.
+ */
+export type WatchToken = "tmdb_id" | "imdb_id" | "slug" | "year" | "type" | "q_plus" | "q_pct" | "qm_plus" | "qm_pct";
+
+/** The parts that say which title an address is for. A template needs at least one. */
+const IDENTIFYING = /\{(imdb_id|tmdb_id|slug|q_plus|q_pct|qm_plus|qm_pct)\}/;
+const ALL_TOKENS = /\{(tmdb_id|imdb_id|slug|year|type|q_plus|q_pct|qm_plus|qm_pct)\}/g;
+
+/** The kinds of title a site can be limited to. */
+export type WatchMediaType = "movie" | "series" | "anime";
+export const WATCH_MEDIA_TYPES: readonly WatchMediaType[] = ["movie", "series", "anime"];
 
 export interface WatchSite {
   host: string;
+  /** Only show this site's button on these kinds of title. Missing means all of them. */
+  types?: WatchMediaType[];
+  /** False when the user has switched the site off without removing it. Missing means on. */
+  enabled?: boolean;
   /** The address with parts to fill in, such as `https://example.com/details?id={tmdb_id}&type={type}`. */
   template: string;
   /** The word the site uses in `{type}` for each kind, as seen in the examples the user gave. */
@@ -19,7 +36,7 @@ export interface WatchSite {
 }
 
 export const WATCH_SITES_KEY = "keepshelf_watch_sites";
-export const MAX_WATCH_SITES = 4;
+export const MAX_WATCH_SITES = 10;
 
 /** What KeepShelf knows about a title that an address might contain. */
 export interface TitleFacts {
@@ -39,6 +56,18 @@ export function titleFacts(item: SavedItem): TitleFacts | undefined {
     title: item.title,
     year: item.year,
   };
+}
+
+/** The title as search text: `plus` gives "one+piece", `percent` gives "one%20piece". */
+export function searchText(title: string, style: "plus" | "percent"): string {
+  const words = title.trim().split(/\s+/).filter(Boolean);
+  return style === "plus" ? words.map(encodeURIComponent).join("+") : encodeURIComponent(words.join(" "));
+}
+
+/** "One Piece: Wan pîsu" to "One Piece". Undefined when the title has no subtitle. */
+export function mainTitle(title: string): string | undefined {
+  const main = title.split(/:|\s[-–—]\s/)[0].trim();
+  return main.length >= 2 && main !== title.trim() ? main : undefined;
 }
 
 /** "Heart of the Beast!" to "heart-of-the-beast". */
@@ -78,6 +107,36 @@ function replaceStandalone(text: string, value: string, token: string, dashed = 
   return text.replace(new RegExp(`${before}${escaped}${after}`, "gi"), token);
 }
 
+/**
+ * Finds the title as search text in the path and query of an example, and returns the address with it replaced,
+ * or undefined when it isn't there. The full title is tried first, then the main name before a colon.
+ */
+function learnSearch(rest: string, facts: TitleFacts): string | undefined {
+  const [pathPart, ...queryParts] = rest.split("?");
+  const hasQuery = queryParts.length > 0;
+  const forms: Array<{ text: string; plus: WatchToken; pct: WatchToken }> = [{ text: facts.title, plus: "q_plus", pct: "q_pct" }];
+  const main = mainTitle(facts.title);
+  if (main) forms.push({ text: main, plus: "qm_plus", pct: "qm_pct" });
+
+  for (const { text, plus, pct } of forms) {
+    let path = pathPart;
+    let query = queryParts.join("?");
+    const inQuery = replaceStandalone(query, searchText(text, "plus"), `{${plus}}`);
+    if (hasQuery && inQuery !== query) return `${path}?${inQuery}`;
+    // Spaces written as %20 only show up for titles of two or more words.
+    if (!text.trim().includes(" ")) continue;
+    const encoded = searchText(text, "percent");
+    const pathPct = replaceStandalone(path, encoded, `{${pct}}`);
+    const queryPct = replaceStandalone(query, encoded, `{${pct}}`);
+    if (pathPct !== path || queryPct !== query) {
+      path = pathPct;
+      query = queryPct;
+      return hasQuery ? `${path}?${query}` : path;
+    }
+  }
+  return undefined;
+}
+
 /** Works out how an address is built from one example of a title the user picked. */
 export function learnPattern(exampleUrl: string, facts: TitleFacts): LearnResult {
   let url: URL;
@@ -93,9 +152,14 @@ export function learnPattern(exampleUrl: string, facts: TitleFacts): LearnResult
   if (facts.imdbId) rest = replaceStandalone(rest, facts.imdbId, "{imdb_id}");
   if (facts.tmdbId) rest = replaceStandalone(rest, String(facts.tmdbId), "{tmdb_id}");
   const slug = slugify(facts.title);
-  if (slug) {
-    const withYear = facts.year ? replaceStandalone(rest, `${slug}-${facts.year}`, "{slug}-{year}", true) : rest;
-    rest = withYear !== rest ? withYear : replaceStandalone(rest, slug, "{slug}", true);
+  const withYear = slug && facts.year ? replaceStandalone(rest, `${slug}-${facts.year}`, "{slug}-{year}", true) : rest;
+  if (withYear !== rest) {
+    rest = withYear;
+  } else {
+    // A search page has the title as text in the query (or path), such as ?keyword=one+piece.
+    const searched = learnSearch(rest, facts);
+    if (searched !== undefined) rest = searched;
+    else if (slug) rest = replaceStandalone(rest, slug, "{slug}", true);
   }
 
   let typeWord: string | undefined;
@@ -107,7 +171,7 @@ export function learnPattern(exampleUrl: string, facts: TitleFacts): LearnResult
     return "{type}";
   });
 
-  if (!/\{(imdb_id|tmdb_id|slug)\}/.test(rest)) return fail(notFoundHint(url, facts));
+  if (!IDENTIFYING.test(rest)) return fail(notFoundHint(url, facts));
   if (typeWord !== undefined) {
     const isMovieWord = MOVIE_WORDS.has(typeWord.toLowerCase());
     if (isMovieWord !== (facts.kind === "movie")) {
@@ -127,20 +191,51 @@ function notFoundHint(url: URL, facts: TitleFacts): string {
   if (/\d{4,}/.test(text) && facts.tmdbId === undefined) {
     return `${base} The number in it may be a TMDB id: add your TMDB token, fetch info for that title, then try again.`;
   }
-  return `${base} Some sites add random letters to their addresses, and those can't be worked out.`;
+  const searchFor = mainTitle(facts.title) ?? facts.title;
+  return `${base} Some sites add random letters to their addresses, and those can't be worked out. If the site has a search page, paste the address of a search for "${searchFor}" instead (a title with two or more words works best).`;
+}
+
+/** A site is on unless the user switched it off. */
+export function isEnabled(site: Pick<WatchSite, "enabled">): boolean {
+  return site.enabled !== false;
+}
+
+/** Whether a site's button belongs on a title of this kind. */
+export function appliesTo(site: Pick<WatchSite, "types">, type: string): boolean {
+  return !site.types || (site.types as string[]).includes(type);
+}
+
+/**
+ * Where to start: a site added with an anime as the example is most likely an anime site, so it starts as anime
+ * only. Anything else starts with every kind. The user can change it in the site's row.
+ */
+export function defaultTypesFor(exampleType: string | undefined): WatchMediaType[] | undefined {
+  return exampleType === "anime" ? ["anime"] : undefined;
+}
+
+/** A valid, non-empty set of kinds, or undefined for "all" (so a site with every kind ticked stores nothing extra). */
+export function normalizeTypes(types: unknown): WatchMediaType[] | undefined {
+  if (!Array.isArray(types)) return undefined;
+  const kept = WATCH_MEDIA_TYPES.filter((t) => types.includes(t));
+  return kept.length > 0 && kept.length < WATCH_MEDIA_TYPES.length ? kept : undefined;
+}
+
+/** Why two addresses can't both be examples of one site, in plain words. */
+function mismatchError(a: string, b: string): string {
+  if (a.replace("-{year}", "") === b.replace("-{year}", "")) {
+    return "One address has the year in it and the other doesn't, so this site doesn't build title addresses the same way every time. Use an address that has an id in it instead (a code like tt1196946 or a number), for example a /title/… page.";
+  }
+  return "The two addresses don't follow the same pattern. Check they are both from the same site.";
 }
 
 /** Turns what was learned from one or two examples into a site. The two must follow the same pattern. */
-export function siteFromLearned(first: Learned, second?: Learned): { ok: true; site: WatchSite } | { ok: false; error: string } {
+export function siteFromLearned(
+  first: Learned,
+  second?: Learned,
+  types?: WatchMediaType[]
+): { ok: true; site: WatchSite } | { ok: false; error: string } {
   if (second && second.template !== first.template) {
-    if (second.template.replace("-{year}", "") === first.template.replace("-{year}", "")) {
-      return {
-        ok: false,
-        error:
-          "One address has the year in it and the other doesn't, so this site doesn't build title addresses the same way every time. Use an address that has an id in it instead (a code like tt1196946 or a number), for example a /title/… page.",
-      };
-    }
-    return { ok: false, error: "The two addresses don't follow the same pattern. Check they are both from the same site." };
+    return { ok: false, error: mismatchError(first.template, second.template) };
   }
   const typeWords: WatchSite["typeWords"] = {};
   for (const learned of second ? [first, second] : [first]) {
@@ -148,7 +243,26 @@ export function siteFromLearned(first: Learned, second?: Learned): { ok: true; s
   }
   const host = hostOf(first.template);
   if (!host) return { ok: false, error: "That doesn't look like a web address." };
-  return { ok: true, site: { host, template: first.template, typeWords } };
+  const limited = normalizeTypes(types);
+  return { ok: true, site: { host, template: first.template, typeWords, ...(limited ? { types: limited } : {}) } };
+}
+
+/** Adds an example of the other kind (a series page, say) to a site that only knew one, without starting over. */
+export function addExampleToSite(site: WatchSite, learned: Learned): { ok: true; site: WatchSite } | { ok: false; error: string } {
+  if (learned.template !== site.template) return { ok: false, error: mismatchError(site.template, learned.template) };
+  if (learned.typeWord === undefined) return { ok: false, error: "That address doesn't tell movies from series, so there is nothing to add." };
+  return { ok: true, site: { ...site, typeWords: { ...site.typeWords, [learned.kind]: site.typeWords[learned.kind] ?? learned.typeWord } } };
+}
+
+/** The kind of title this site is still missing an example for, if any. */
+export function missingKind(site: WatchSite): TmdbKind | undefined {
+  if (!site.template.includes("{type}")) return undefined;
+  return (["movie", "tv"] as const).find((kind) => site.typeWords[kind] === undefined);
+}
+
+/** True when the link opens the site's search for the title, not the title's own page. */
+export function isSearchSite(site: Pick<WatchSite, "template">): boolean {
+  return /\{qm?_(plus|pct)\}/.test(site.template);
 }
 
 function hostOf(template: string): string | undefined {
@@ -158,7 +272,7 @@ function hostOf(template: string): string | undefined {
 /** The exact page for a title on a site, or undefined when something the address needs isn't known. */
 export function buildWatchUrl(site: WatchSite, facts: TitleFacts): string | undefined {
   let missing = false;
-  const url = site.template.replace(/\{(tmdb_id|imdb_id|slug|year|type)\}/g, (_, token: WatchToken) => {
+  const url = site.template.replace(ALL_TOKENS, (_, token: WatchToken) => {
     let value: string | undefined;
     switch (token) {
       case "tmdb_id":
@@ -176,6 +290,18 @@ export function buildWatchUrl(site: WatchSite, facts: TitleFacts): string | unde
       case "type":
         value = site.typeWords[facts.kind];
         break;
+      case "q_plus":
+        value = searchText(facts.title, "plus") || undefined;
+        break;
+      case "q_pct":
+        value = searchText(facts.title, "percent") || undefined;
+        break;
+      case "qm_plus":
+        value = searchText(mainTitle(facts.title) ?? facts.title, "plus") || undefined;
+        break;
+      case "qm_pct":
+        value = searchText(mainTitle(facts.title) ?? facts.title, "percent") || undefined;
+        break;
     }
     if (!value) missing = true;
     return value ?? "";
@@ -184,13 +310,14 @@ export function buildWatchUrl(site: WatchSite, facts: TitleFacts): string | unde
 }
 
 /** Links for every site that can build one for this item. */
-export function watchLinks(item: SavedItem, sites: WatchSite[]): Array<{ host: string; url: string }> {
+export function watchLinks(item: SavedItem, sites: WatchSite[]): Array<{ host: string; url: string; search: boolean }> {
   const facts = titleFacts(item);
   if (!facts) return [];
-  const links: Array<{ host: string; url: string }> = [];
+  const links: Array<{ host: string; url: string; search: boolean }> = [];
   for (const site of sites) {
+    if (!isEnabled(site) || !appliesTo(site, item.type)) continue;
     const url = buildWatchUrl(site, facts);
-    if (url) links.push({ host: site.host, url });
+    if (url) links.push({ host: site.host, url, search: isSearchSite(site) });
   }
   return links;
 }
@@ -201,13 +328,17 @@ const TOKEN_LABELS: Record<WatchToken, string> = {
   slug: "title",
   year: "year",
   type: "movie or series",
+  q_plus: "title",
+  q_pct: "title",
+  qm_plus: "title",
+  qm_pct: "title",
 };
 
 /** The pattern in plain words, such as `example.com/details?id=‹TMDB id›&type=‹movie or series›`. */
 export function describePattern(site: WatchSite): string {
   return site.template
     .replace(/^https?:\/\//i, "")
-    .replace(/\{(tmdb_id|imdb_id|slug|year|type)\}/g, (_, token: WatchToken) => `‹${TOKEN_LABELS[token]}›`);
+    .replace(ALL_TOKENS, (_, token: WatchToken) => `‹${TOKEN_LABELS[token]}›`);
 }
 
 /** Which kinds this site can link to. Sites that don't tell movies from series work for both. */
@@ -223,10 +354,10 @@ export function sanitizeWatchSites(raw: unknown): WatchSite[] {
   const sites: WatchSite[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
-    const { template, typeWords } = entry as Record<string, unknown>;
+    const { template, typeWords, types, enabled } = entry as Record<string, unknown>;
     if (typeof template !== "string") continue;
     const host = hostOf(template);
-    if (!host || seen.has(host) || !/\{(imdb_id|tmdb_id|slug)\}/.test(template)) continue;
+    if (!host || seen.has(host) || !IDENTIFYING.test(template)) continue;
     const words: WatchSite["typeWords"] = {};
     if (typeWords && typeof typeWords === "object") {
       const { movie, tv } = typeWords as Record<string, unknown>;
@@ -234,7 +365,8 @@ export function sanitizeWatchSites(raw: unknown): WatchSite[] {
       if (typeof tv === "string" && /^[\w-]{1,20}$/.test(tv)) words.tv = tv;
     }
     seen.add(host);
-    sites.push({ host, template, typeWords: words });
+    const limited = normalizeTypes(types);
+    sites.push({ host, template, typeWords: words, ...(limited ? { types: limited } : {}), ...(enabled === false ? { enabled: false } : {}) });
   }
   return sites.slice(0, MAX_WATCH_SITES);
 }
@@ -243,11 +375,12 @@ export async function getWatchSites(): Promise<WatchSite[]> {
   return sanitizeWatchSites((await chrome.storage.local.get(WATCH_SITES_KEY))[WATCH_SITES_KEY]);
 }
 
-/** Adds a site, replacing one already saved for the same host. */
+/** Adds a site, or replaces the one already saved for the same host in the same place, so the list never reorders. */
 export async function saveWatchSite(site: WatchSite): Promise<WatchSite[]> {
-  const others = (await getWatchSites()).filter((s) => s.host !== site.host);
-  if (others.length >= MAX_WATCH_SITES) throw new Error(`You can add up to ${MAX_WATCH_SITES} sites. Remove one first.`);
-  const sites = [...others, site];
+  const current = await getWatchSites();
+  const index = current.findIndex((s) => s.host === site.host);
+  if (index === -1 && current.length >= MAX_WATCH_SITES) throw new Error(`You can add up to ${MAX_WATCH_SITES} sites. Remove one first.`);
+  const sites = index === -1 ? [...current, site] : current.map((s, i) => (i === index ? site : s));
   await chrome.storage.local.set({ [WATCH_SITES_KEY]: sites });
   return sites;
 }

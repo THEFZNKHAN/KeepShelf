@@ -418,10 +418,12 @@
               Optional. Add a site where you watch, and each title on your shelf gets a button that opens its exact page
               there. None are included. KeepShelf never visits the site: you paste one title's address, say which title it
               is, and KeepShelf works out how the site builds its addresses. If the site has an address style that works for
-              both movies and series, use that one and you only need a single page.
+              both movies and series, use that one and you only need a single page. If a site's title addresses can't be
+              worked out (some add random letters), paste a search results page for one title instead, and each title will
+              get a button that opens that site's search.
             </p>
             <div class="watch-example">
-              <span class="watch-example-label">1. Paste the address of one title's page on the site</span>
+              <span class="watch-example-label">1. Paste the address of one title's page on the site, or of a search for one title</span>
               <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
               <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
             </div>
@@ -432,7 +434,9 @@
             </div>
             <p class="s-fine">
               Only titles with a TMDB id or an IMDb id can be linked on sites that use ids, so set up your TMDB token
-              above and fetch info for your shelf first. Pick a title that has info.
+              above and fetch info for your shelf first. Pick a title that has info. For a search page, search for a
+              title with two or more words (for a title like "One Piece: Wan pîsu", search for the part before the colon,
+              "One Piece"), and pick that title.
             </p>
             <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
             <ul id="watch-list" class="watch-list"></ul>
