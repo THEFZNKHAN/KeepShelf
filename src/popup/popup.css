@@ -338,6 +338,11 @@ body {
   background: var(--surface-container);
 }
 
+/* A button's own display would otherwise win over the hidden attribute. */
+.btn[hidden] {
+  display: none;
+}
+
 .btn-block {
   width: 100%;
   padding-top: 5px;
@@ -1237,6 +1242,47 @@ body.in-tab {
 
 .pick-open {
   margin-top: 8px;
+}
+
+/* Tapping a row opens the same card with everything about the title, so it must fit inside the popup. */
+.pick-panel {
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+
+.pick-overview.is-full {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.pick-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+  text-align: left;
+}
+
+.pick-meta[hidden] {
+  display: none;
+}
+
+.pick-meta strong {
+  color: var(--on-surface);
+}
+
+.pick-watch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pick-watch[hidden] {
+  display: none;
 }
 
 /* ── Stats ───────────────────────────────────────────────── */

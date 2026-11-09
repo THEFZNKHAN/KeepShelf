@@ -192,7 +192,7 @@ Deleted something by mistake, or merged the wrong duplicates? An **Undo** button
 - **Search** across title, author, genre, URL, notes, tags, lists and your reviews
 - **Filter** by type, status, tag and list
 - **Sort** by newest, oldest, title, year, source rating or your own rating
-- **Poster and cover thumbnails** next to each item, and **Open source page** to jump back to where you saved it
+- **Poster and cover thumbnails** next to each item. **Tap a row** to open a card with everything about it: the full description, your status, rating, tags and review, a **Watch** button for each [watch site](#watch-sites) you added, and **Open page** to jump back to where you saved it. Only the tick box selects a row. Hovering a row still shows a short preview
 
 ### Duplicate protection
 
@@ -551,7 +551,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 ### Manage your shelf
 
 1. Use the filter chips, status, tag and list dropdowns, search box and sort menu to narrow the view.
-2. Tick items, then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon (you can **Undo** for a few seconds).
+2. Tick the box on each item (tapping a row opens its card instead), then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon (you can **Undo** for a few seconds).
 3. **Clear all** empties your shelf. Keep notes are never affected.
 
 ### Configure Keep sync
