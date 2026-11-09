@@ -406,6 +406,23 @@ Anything the page gave you wins over Open Library, and anything you type wins ov
 | [Rotten Tomatoes](https://www.rottentomatoes.com) | Movie and TV pages (`/m/…`, `/tv/…`) | Title, year, runtime or seasons, Tomatometer |
 | [Trakt](https://app.trakt.tv) | Movie and show pages (`/movies/…`, `/shows/…`) | Title, year, runtime, Trakt rating |
 
+### Watch sites
+
+KeepShelf can add a **play button** to each title that opens its exact page on a site where you watch. It is optional and **nothing is included by default**: you add your own sites in **Settings > Watch sites**. KeepShelf never visits or reads those sites. It only builds the link.
+
+To add one:
+
+1. Open any title's page on the site and copy the address.
+2. In **Watch sites**, paste it and pick which title on your shelf it is for.
+3. Optionally paste a page for the other kind (a series if the first was a movie, or the other way round), because many sites use a different address for each. Without it, only the kind you gave gets a button.
+4. Click **Add this site**. KeepShelf works out what the address contains (a TMDB id, an IMDb id, or the title and year) and uses that for every other title.
+
+Notes:
+- Sites that use a TMDB id need your [TMDB token](#tmdb-info) and fetched info for the title. Sites that use an IMDb id work for titles saved from IMDb even without a token.
+- Addresses with random letters added by the site can't be worked out. KeepShelf tells you when that happens.
+- If a site changes its address style, remove it and add it again.
+- Up to four sites. Everything is stored only in your browser.
+
 ### Tips for best results
 
 **Google Search**
