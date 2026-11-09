@@ -34,6 +34,8 @@ import {
 } from "../shared/tmdb.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
+import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
+import { describeReminders, dueReminders, pruneNotified, selectForRefresh } from "../shared/reminders.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
 
 // Storage writes are read-modify-write and Keep sync drives a single tab, so these must not overlap.
@@ -46,6 +48,8 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "import",
   "merge",
   "restore",
+  "setRemindersEnabled",
+  "checkReminders",
   "setTmdbToken",
   "setBookInfoEnabled",
   "enrichBooks",
@@ -205,6 +209,74 @@ async function refreshStaleTmdb(): Promise<SavedItem[]> {
   return getAllItems();
 }
 
+/* ── Release reminders ──────────────────────────────────────────────── */
+
+const REMINDER_ALARM = "keepshelf-reminders";
+const REMINDER_NOTIFICATION = "keepshelf-reminder-";
+/** Checked a few times a day, so a laptop that was asleep still announces in time. Each release is announced once. */
+const REMINDER_PERIOD_MINUTES = 360;
+
+/** Keeps the alarm in step with the setting. Safe to call at any time. */
+async function syncReminderAlarm(): Promise<void> {
+  if (!(await isRemindersEnabled())) {
+    await chrome.alarms.clear(REMINDER_ALARM);
+    return;
+  }
+  if (!(await chrome.alarms.get(REMINDER_ALARM))) {
+    chrome.alarms.create(REMINDER_ALARM, { delayInMinutes: 1, periodInMinutes: REMINDER_PERIOD_MINUTES });
+  }
+}
+
+/**
+ * Refreshes release dates that may have moved (a few requests at most), then announces what comes out today or
+ * tomorrow. Returns how many releases were announced.
+ */
+async function runReminderCheck(now = Date.now()): Promise<number> {
+  if (!(await isRemindersEnabled())) return 0;
+
+  const client = await tmdbClient();
+  if (client) {
+    for (const item of selectForRefresh(await getAllItems(), now)) {
+      const info = item.tmdb;
+      if (!info) continue;
+      try {
+        await updateItem(item.id, { tmdb: await fetchDetails(client, info.kind, info.id, now) });
+      } catch {
+        /* keep the dates we have; the next check tries again */
+      }
+    }
+  }
+
+  const notified = await getNotified();
+  const due = dueReminders(await getAllItems(), now, notified);
+  if (due.length === 0) {
+    const pruned = pruneNotified(notified, now);
+    if (Object.keys(pruned).length !== Object.keys(notified).length) await setNotified(pruned);
+    return 0;
+  }
+  const { title, message } = describeReminders(due);
+  await chrome.notifications.create(`${REMINDER_NOTIFICATION}${now}`, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+    title,
+    message,
+  });
+  const next = pruneNotified(notified, now);
+  for (const d of due) next[d.key] = d.date;
+  await setNotified(next);
+  return due.length;
+}
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === REMINDER_ALARM) void runSerial(() => runReminderCheck()).catch(() => undefined);
+});
+
+chrome.notifications.onClicked.addListener((id) => {
+  if (!id.startsWith(REMINDER_NOTIFICATION)) return;
+  void chrome.tabs.create({ url: chrome.runtime.getURL("dist/popup.html") });
+  void chrome.notifications.clear(id);
+});
+
 async function saveAndSync(partial: NewItem) {
   const similar = findNearDuplicates(partial, await getAllItems()).map((i) => i.title);
   const { item, duplicate } = await saveItem(partial);
@@ -299,6 +371,22 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       const items = await restoreItems(message.items);
       return { ok: true, items };
     }
+    case "getReminderSettings": {
+      return { ok: true, reminders: { enabled: await isRemindersEnabled() } };
+    }
+    case "setRemindersEnabled": {
+      const enabled = await setRemindersEnabled(message.enabled);
+      await syncReminderAlarm();
+      return { ok: true, reminders: { enabled } };
+    }
+    case "checkReminders": {
+      if (!(await isRemindersEnabled())) return { ok: false, error: "Turn on release reminders first." };
+      const count = await runReminderCheck();
+      return {
+        ok: true,
+        message: count > 0 ? `Reminded you about ${count} release${count === 1 ? "" : "s"}.` : "Nothing is coming out today or tomorrow.",
+      };
+    }
     case "getBookInfoSettings": {
       return { ok: true, bookInfo: { enabled: await isBookInfoEnabled() } };
     }
@@ -375,9 +463,11 @@ const MENU_SAVE_NOTE = "keepshelf-save-note";
 
 chrome.runtime.onStartup.addListener(() => {
   void runSerial(refreshStaleTmdb).catch(() => undefined);
+  void syncReminderAlarm().catch(() => undefined);
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  void syncReminderAlarm().catch(() => undefined);
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU_SAVE_PAGE, title: "Save page to KeepShelf", contexts: ["page"] });
     chrome.contextMenus.create({ id: MENU_SAVE_LINK, title: "Save link to KeepShelf", contexts: ["link"] });

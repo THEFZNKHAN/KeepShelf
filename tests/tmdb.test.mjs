@@ -260,3 +260,28 @@ test("lacksSeasons flags only shows saved before per-season counts existed", asy
   assert.equal(lacksSeasons({ kind: "tv" }), false);
   assert.equal(lacksSeasons({ kind: "movie", seasons: 3 }), false);
 });
+
+test("toTmdbInfo keeps the next episode of a series and the release date of a movie", () => {
+  const tv = toTmdbInfo("tv", { id: 1, next_episode_to_air: { air_date: "2026-11-12", season_number: 2, episode_number: 5 }, release_date: "2020-01-01" });
+  assert.deepEqual(tv.nextEpisode, { airDate: "2026-11-12", season: 2, episode: 5 });
+  assert.equal(tv.releaseDate, undefined, "a series has no release date of its own");
+  const movie = toTmdbInfo("movie", { id: 1, release_date: "2026-12-01", next_episode_to_air: { air_date: "2026-11-12", season_number: 1, episode_number: 1 } });
+  assert.equal(movie.releaseDate, "2026-12-01");
+  assert.equal(movie.nextEpisode, undefined);
+  for (const bad of [{ air_date: null, season_number: 1, episode_number: 1 }, { air_date: "soon", season_number: 1, episode_number: 1 }, { air_date: "2026-11-12" }, null]) {
+    assert.equal(toTmdbInfo("tv", { id: 1, next_episode_to_air: bad }).nextEpisode, undefined);
+  }
+  assert.equal(toTmdbInfo("movie", { id: 1, release_date: "" }).releaseDate, undefined);
+  assert.equal(toTmdbInfo("movie", { id: 1, release_date: "2026" }).releaseDate, undefined);
+});
+
+test("sanitizeTmdb keeps valid reminder dates and drops malformed ones", () => {
+  const base = { id: 1, kind: "tv", genres: [], fetchedAt: Date.now() };
+  const good = sanitizeTmdb({ ...base, nextEpisode: { airDate: "2026-11-12", season: 2, episode: 5 }, releaseDate: "2026-11-12" });
+  assert.deepEqual(good.nextEpisode, { airDate: "2026-11-12", season: 2, episode: 5 });
+  assert.equal(good.releaseDate, "2026-11-12");
+  for (const bad of [{ airDate: "x", season: 1, episode: 1 }, { airDate: "2026-11-12", season: 1.5, episode: 1 }, "no", 5, null]) {
+    assert.equal(sanitizeTmdb({ ...base, nextEpisode: bad }).nextEpisode, undefined);
+  }
+  assert.equal(sanitizeTmdb({ ...base, releaseDate: "tomorrow" }).releaseDate, undefined);
+});

@@ -129,6 +129,8 @@ interface Details {
   number_of_seasons?: number;
   number_of_episodes?: number;
   seasons?: Array<{ season_number?: number; episode_count?: number }>;
+  next_episode_to_air?: { air_date?: string | null; season_number?: number; episode_number?: number } | null;
+  release_date?: string | null;
   status?: string;
   poster_path?: string | null;
   imdb_id?: string | null;
@@ -143,6 +145,17 @@ function certificationOf(kind: TmdbKind, d: Details): string | undefined {
     return us?.release_dates?.map((r) => r.certification?.trim()).find(Boolean) || undefined;
   }
   return d.content_ratings?.results?.find((r) => r.iso_3166_1 === "US")?.rating?.trim() || undefined;
+}
+
+const isIsoDay = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+function nextEpisodeOf(kind: TmdbKind, d: Details): TmdbInfo["nextEpisode"] {
+  const next = d.next_episode_to_air;
+  if (kind !== "tv" || !next || !isIsoDay(next.air_date)) return undefined;
+  const season = next.season_number;
+  const episode = next.episode_number;
+  if (!Number.isInteger(season) || !Number.isInteger(episode)) return undefined;
+  return { airDate: next.air_date, season: season!, episode: episode! };
 }
 
 /** Episodes per regular season, ordered by season number. Specials (season 0) are left out. */
@@ -180,6 +193,9 @@ export function toTmdbInfo(kind: TmdbKind, d: Details, now = Date.now()): TmdbIn
   if (d.number_of_episodes) info.episodes = d.number_of_episodes;
   const seasonEpisodes = seasonEpisodesOf(kind, d);
   if (seasonEpisodes) info.seasonEpisodes = seasonEpisodes;
+  const nextEpisode = nextEpisodeOf(kind, d);
+  if (nextEpisode) info.nextEpisode = nextEpisode;
+  if (kind === "movie" && isIsoDay(d.release_date)) info.releaseDate = d.release_date;
   if (d.status) info.status = d.status;
   if (d.poster_path) info.posterPath = d.poster_path;
   return info;
@@ -259,8 +275,15 @@ export function sanitizeTmdb(raw: unknown, now = Date.now()): TmdbInfo | undefin
     r.seasonEpisodes.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 100000)
       ? (r.seasonEpisodes as number[])
       : undefined;
+  const next = r.nextEpisode as Record<string, unknown> | undefined;
+  const nextEpisode =
+    next && typeof next === "object" && isIsoDay(next.airDate) && Number.isInteger(next.season) && Number.isInteger(next.episode)
+      ? { airDate: next.airDate, season: next.season as number, episode: next.episode as number }
+      : undefined;
   const optional: Partial<TmdbInfo> = {
     seasonEpisodes,
+    nextEpisode,
+    releaseDate: isIsoDay(r.releaseDate) ? r.releaseDate : undefined,
     imdbId: str(r.imdbId),
     overview: str(r.overview),
     tagline: str(r.tagline),
