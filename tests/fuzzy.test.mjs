@@ -53,3 +53,15 @@ test("merge keeps the richest item and unions user data", () => {
   assert.equal(patch.status, "done");
   assert.equal(patch.doneAt, 99);
 });
+
+test("mergeUserData takes the best episodes of each season and keeps the overall count equal to their sum", () => {
+  const a = item({ title: "Show", type: "series", seasonProgress: [10, 2], progressCurrent: 12 });
+  const b = item({ title: "Show", type: "series", seasonProgress: [6, 5, 1], progressCurrent: 12 });
+  const patch = mergeUserData(a, [b]);
+  assert.deepEqual(patch.seasonProgress, [10, 5, 1]);
+  assert.equal(patch.progressCurrent, 16);
+  // Items without seasons are untouched by this rule.
+  const plain = mergeUserData(item({ title: "X", progressCurrent: 4 }), [item({ title: "X", progressCurrent: 9 })]);
+  assert.equal(plain.seasonProgress, undefined);
+  assert.equal(plain.progressCurrent, 9);
+});

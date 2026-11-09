@@ -15,6 +15,7 @@ import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 import { snapshotItems } from "../shared/undo.js";
+import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, sumProgress } from "../shared/seasons.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
@@ -641,7 +642,10 @@ function progressText(item: SavedItem): string {
   if (item.progressCurrent === undefined && statusOf(item) !== "in_progress") return "";
   const total = item.type === "book" ? totalPages(item) : totalEpisodes(item);
   const current = item.progressCurrent ?? 0;
-  return `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
+  const overall = `${item.type === "book" ? "p." : "ep."} ${total !== undefined ? `${current}/${total}` : current}`;
+  // With seasons tracked, say where you are first: "S2 E5 (12/37)".
+  const where = item.type === "book" ? undefined : lastWatched(item.seasonProgress);
+  return where ? `${where} (${total !== undefined ? `${current}/${total}` : current})` : overall;
 }
 
 const MAX_CHIPS = 3;
@@ -1387,7 +1391,9 @@ function appendPersonalFields(item: SavedItem): void {
         buildSelectField("status", "Status", statuses.map((s) => [s, statusLabel(s)]), statusOf(item)),
         buildSelectField("myRating", "My rating", ratings, item.myRating ? String(item.myRating) : "")
       ),
-      ...(tracksProgress(item)
+      ...(tracksProgress(item) && item.type !== "book" && seasonTotals(item)
+        ? [buildSeasonBlock(item), row(buildTextField("progressTotal", "Total episodes", String(item.progressTotal ?? ""), "number", autoTotalLabel(item)))]
+        : tracksProgress(item)
         ? [
             row(
               buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
@@ -1424,6 +1430,68 @@ function appendPersonalFields(item: SavedItem): void {
     editFieldsEl.append(buildTmdbBlock(item.id));
     editFieldsEl.append(buildBookBlock(item.id));
   }
+}
+
+/** One number box per season, with a button that fills a season in. Changing any box updates the status to match. */
+function buildSeasonBlock(item: SavedItem): HTMLElement {
+  const totals = seasonTotals(item)!;
+  const start =
+    item.seasonProgress ?? ((item.progressCurrent ?? 0) > 0 ? distributeProgress(item.progressCurrent ?? 0, totals) : []);
+  const block = document.createElement("div");
+  block.className = "season-block";
+  const title = document.createElement("span");
+  title.className = "season-title";
+  title.textContent = "Episodes watched per season";
+  const grid = document.createElement("div");
+  grid.className = "season-grid";
+  const hint = buildHint("");
+  const inputs: HTMLInputElement[] = [];
+
+  const values = () => inputs.map((el) => (el.value === "" ? 0 : Number(el.value)));
+  const refresh = (changed: boolean) => {
+    const progress = values();
+    const next = nextToWatch(progress, totals);
+    hint.textContent = next ? `Next up: S${next.season} E${next.episode}` : "All episodes watched.";
+    if (!changed) return;
+    grid.dataset.dirty = "1";
+    const statusEl = editFieldsEl.querySelector<HTMLSelectElement>("select[name=status]");
+    if (statusEl && progress.every((n) => Number.isFinite(n))) {
+      statusEl.value = statusFromSeasons(progress, totals, statusEl.value as ItemStatus);
+    }
+  };
+
+  totals.forEach((total, i) => {
+    const cell = document.createElement("div");
+    cell.className = "season-cell";
+    const label = document.createElement("label");
+    label.textContent = `S${i + 1}`;
+    label.title = `Season ${i + 1}: ${total} episode${total === 1 ? "" : "s"}`;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.name = `season-${i + 1}`;
+    input.min = "0";
+    input.max = String(total);
+    input.value = start[i] ? String(start[i]) : "";
+    input.placeholder = `/${total}`;
+    input.addEventListener("input", () => refresh(true));
+    const done = document.createElement("button");
+    done.type = "button";
+    done.className = "season-done";
+    done.textContent = "✓";
+    done.title = `Mark season ${i + 1} as watched`;
+    done.addEventListener("click", () => {
+      const filled = markSeasonDone(values(), totals, i + 1);
+      inputs.forEach((el, n) => { el.value = filled[n] ? String(filled[n]) : ""; });
+      refresh(true);
+    });
+    label.append(input);
+    cell.append(label, done);
+    inputs.push(input);
+    grid.append(cell);
+  });
+  refresh(false);
+  block.append(title, grid, hint);
+  return block;
 }
 
 /** The placeholder in the Total field when you leave it empty: what Open Library, TMDB or the page says. */
@@ -1626,6 +1694,7 @@ editFormEl.addEventListener("submit", async (e) => {
   if (!editingId) return;
   const changes: EditableFields & UserFields = {};
   for (const el of editFieldsEl.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input, textarea, select")) {
+    if (el.name.startsWith("season-")) continue;
     switch (el.name) {
       case "tags":
         changes.tags = normalizeTags(el.value);
@@ -1645,6 +1714,13 @@ editFormEl.addEventListener("submit", async (e) => {
       default:
         changes[el.name as keyof EditableFields] = el.value;
     }
+  }
+  // Season numbers are sent only if you touched them, so saving an unrelated edit never converts an item.
+  const seasonGrid = editFieldsEl.querySelector<HTMLElement>(".season-grid");
+  if (seasonGrid?.dataset.dirty === "1") {
+    const boxes = [...seasonGrid.querySelectorAll<HTMLInputElement>("input")];
+    changes.seasonProgress = boxes.every((el) => el.value === "") ? null : boxes.map((el) => (el.value === "" ? 0 : Number(el.value)));
+    if (changes.seasonProgress === null) changes.progressCurrent = null;
   }
   const error = await updateItemFields(editingId, changes);
   if (error) {

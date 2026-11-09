@@ -38,6 +38,11 @@ export interface SavedItem {
   /** Episodes, chapters or pages completed, and the total when known. */
   progressCurrent?: number;
   progressTotal?: number;
+  /**
+   * Episodes watched in each season (index 0 is season 1). When set, `progressCurrent` is their sum,
+   * so everything that only knows the single number keeps working.
+   */
+  seasonProgress?: number[];
   keepStatus?: ItemKeepStatus;
   keepError?: string;
 }
@@ -63,6 +68,8 @@ export interface TmdbInfo {
   runtimeMinutes?: number;
   seasons?: number;
   episodes?: number;
+  /** Episodes in each regular season (specials excluded). Index 0 is season 1. */
+  seasonEpisodes?: number[];
   status?: string;
   posterPath?: string;
   fetchedAt: number;
@@ -97,6 +104,8 @@ export interface UserFields {
   status?: ItemStatus;
   progressCurrent?: number | null;
   progressTotal?: number | null;
+  /** Per-season episodes watched; `null` clears it. */
+  seasonProgress?: number[] | null;
 }
 
 export type ItemKeepStatus = "synced" | "duplicate" | "failed" | "missing_config" | "disabled";

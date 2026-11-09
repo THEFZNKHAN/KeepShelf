@@ -228,3 +228,35 @@ test("genres become tags automatically, merged with the ones you typed", () => {
   assert.deepEqual(allTags({ tags: ["weekend", "drama"], tmdb: { genres: ["Drama", "Crime"] } }), ["weekend", "drama", "crime"]);
   assert.deepEqual(allTags({}), []);
 });
+
+test("toTmdbInfo keeps episodes per regular season, in season order, and leaves specials out", () => {
+  const tv = toTmdbInfo("tv", {
+    id: 1,
+    seasons: [
+      { season_number: 2, episode_count: 8 },
+      { season_number: 0, episode_count: 12 },
+      { season_number: 1, episode_count: 10 },
+      { season_number: 3 },
+    ],
+  });
+  assert.deepEqual(tv.seasonEpisodes, [10, 8, 0]);
+  assert.equal(toTmdbInfo("tv", { id: 1, seasons: [{ season_number: 0, episode_count: 3 }] }).seasonEpisodes, undefined);
+  assert.equal(toTmdbInfo("tv", { id: 1 }).seasonEpisodes, undefined);
+  assert.equal(toTmdbInfo("movie", { id: 1, seasons: [{ season_number: 1, episode_count: 2 }] }).seasonEpisodes, undefined);
+});
+
+test("sanitizeTmdb keeps valid seasonEpisodes and drops malformed ones", () => {
+  const base = { id: 1, kind: "tv", genres: [], fetchedAt: Date.now() };
+  assert.deepEqual(sanitizeTmdb({ ...base, seasonEpisodes: [10, 8] }).seasonEpisodes, [10, 8]);
+  for (const bad of [[10, "8"], [-1], [1.5], [], "x", new Array(101).fill(1)]) {
+    assert.equal(sanitizeTmdb({ ...base, seasonEpisodes: bad }).seasonEpisodes, undefined);
+  }
+});
+
+test("lacksSeasons flags only shows saved before per-season counts existed", async () => {
+  const { lacksSeasons } = await import("../dist-test/tmdb.js");
+  assert.equal(lacksSeasons({ kind: "tv", seasons: 3 }), true);
+  assert.equal(lacksSeasons({ kind: "tv", seasons: 3, seasonEpisodes: [1, 2, 3] }), false);
+  assert.equal(lacksSeasons({ kind: "tv" }), false);
+  assert.equal(lacksSeasons({ kind: "movie", seasons: 3 }), false);
+});

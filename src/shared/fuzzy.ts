@@ -1,4 +1,5 @@
 import type { SavedItem } from "./types.js";
+import { mergeSeasonProgress, sumProgress } from "./seasons.js";
 import { statusOf } from "./user-data.js";
 
 const TITLE_THRESHOLD = 0.86;
@@ -142,6 +143,11 @@ export function mergeUserData(keeper: SavedItem, others: SavedItem[]): Partial<S
 
   const progress = Math.max(...all.map((i) => i.progressCurrent ?? -1));
   if (progress >= 0) patch.progressCurrent = progress;
+  const seasons = mergeSeasonProgress(all.map((i) => i.seasonProgress));
+  if (seasons) {
+    patch.seasonProgress = seasons;
+    patch.progressCurrent = sumProgress(seasons);
+  }
 
   const best = all.reduce((top, item) => (STATUS_RANK[statusOf(item)] > STATUS_RANK[statusOf(top)] ? item : top));
   patch.status = statusOf(best);

@@ -1,3 +1,4 @@
+import { seasonTotals, sumProgress, validateSeasonProgress } from "./seasons.js";
 import type { ItemStatus, SavedItem, UserFields } from "./types.js";
 
 export const ITEM_STATUSES: ItemStatus[] = ["plan", "in_progress", "done", "dropped"];
@@ -58,7 +59,7 @@ export function statusOf(item: Pick<SavedItem, "status" | "done">): ItemStatus {
  * Keeps `done` and `doneAt` consistent with `status` so older code paths and backups still work.
  */
 export function buildUserPatch(
-  item: Pick<SavedItem, "status" | "done" | "doneAt" | "progressTotal" | "progressCurrent">,
+  item: Pick<SavedItem, "status" | "done" | "doneAt" | "progressTotal" | "progressCurrent" | "tmdb">,
   changes: UserFields & { done?: boolean },
   now = Date.now()
 ): Partial<SavedItem> {
@@ -79,6 +80,16 @@ export function buildUserPatch(
   }
   if ("progressCurrent" in changes) patch.progressCurrent = normalizeCount(changes.progressCurrent, "Progress");
   if ("progressTotal" in changes) patch.progressTotal = normalizeCount(changes.progressTotal, "Total");
+  if ("seasonProgress" in changes) {
+    if (changes.seasonProgress === null || changes.seasonProgress === undefined || changes.seasonProgress.length === 0) {
+      patch.seasonProgress = undefined;
+    } else {
+      const seasons = validateSeasonProgress(changes.seasonProgress, seasonTotals(item));
+      patch.seasonProgress = seasons;
+      // The overall number always follows the seasons.
+      patch.progressCurrent = sumProgress(seasons);
+    }
+  }
 
   const current = patch.progressCurrent ?? ("progressCurrent" in patch ? undefined : item.progressCurrent);
   const total = patch.progressTotal ?? ("progressTotal" in patch ? undefined : item.progressTotal);
@@ -125,6 +136,15 @@ export function sanitizeImportedUserData(raw: Record<string, unknown>): Partial<
     try {
       const count = normalizeCount(raw[key], key);
       if (count !== undefined) out[key] = count;
+    } catch {
+      /* ignore */
+    }
+  }
+  if (Array.isArray(raw.seasonProgress) && raw.seasonProgress.length > 0) {
+    try {
+      const seasons = validateSeasonProgress(raw.seasonProgress, undefined);
+      out.seasonProgress = seasons;
+      out.progressCurrent = sumProgress(seasons);
     } catch {
       /* ignore */
     }

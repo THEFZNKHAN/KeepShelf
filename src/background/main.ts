@@ -27,6 +27,7 @@ import {
   fetchDetails,
   isEnrichable,
   isStale,
+  lacksSeasons,
   lookupInfo,
   mustPurge,
   parseTmdbToken,
@@ -193,7 +194,7 @@ async function refreshStaleTmdb(): Promise<SavedItem[]> {
   const client = await tmdbClient();
   for (const item of await getAllItems()) {
     const info = item.tmdb;
-    if (!info || !isStale(info, now)) continue;
+    if (!info || !(isStale(info, now) || lacksSeasons(info))) continue;
     try {
       if (!client) throw new Error("no token");
       await updateItem(item.id, { tmdb: await fetchDetails(client, info.kind, info.id, now) });

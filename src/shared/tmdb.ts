@@ -128,6 +128,7 @@ interface Details {
   last_episode_to_air?: { runtime?: number | null } | null;
   number_of_seasons?: number;
   number_of_episodes?: number;
+  seasons?: Array<{ season_number?: number; episode_count?: number }>;
   status?: string;
   poster_path?: string | null;
   imdb_id?: string | null;
@@ -142,6 +143,16 @@ function certificationOf(kind: TmdbKind, d: Details): string | undefined {
     return us?.release_dates?.map((r) => r.certification?.trim()).find(Boolean) || undefined;
   }
   return d.content_ratings?.results?.find((r) => r.iso_3166_1 === "US")?.rating?.trim() || undefined;
+}
+
+/** Episodes per regular season, ordered by season number. Specials (season 0) are left out. */
+function seasonEpisodesOf(kind: TmdbKind, d: Details): number[] | undefined {
+  if (kind !== "tv" || !Array.isArray(d.seasons)) return undefined;
+  const counts = d.seasons
+    .filter((s) => typeof s.season_number === "number" && s.season_number > 0)
+    .sort((a, b) => a.season_number! - b.season_number!)
+    .map((s) => (typeof s.episode_count === "number" && s.episode_count >= 0 ? Math.floor(s.episode_count) : 0));
+  return counts.length > 0 ? counts : undefined;
 }
 
 export function toTmdbInfo(kind: TmdbKind, d: Details, now = Date.now()): TmdbInfo {
@@ -167,6 +178,8 @@ export function toTmdbInfo(kind: TmdbKind, d: Details, now = Date.now()): TmdbIn
   if (runtime) info.runtimeMinutes = runtime;
   if (d.number_of_seasons) info.seasons = d.number_of_seasons;
   if (d.number_of_episodes) info.episodes = d.number_of_episodes;
+  const seasonEpisodes = seasonEpisodesOf(kind, d);
+  if (seasonEpisodes) info.seasonEpisodes = seasonEpisodes;
   if (d.status) info.status = d.status;
   if (d.poster_path) info.posterPath = d.poster_path;
   return info;
@@ -218,6 +231,11 @@ export function isStale(info: Pick<TmdbInfo, "fetchedAt">, now = Date.now()): bo
   return now - info.fetchedAt > REFRESH_AFTER_MS;
 }
 
+/** Shows saved before per-season counts existed: worth one refresh so the season tracker can appear. */
+export function lacksSeasons(info: Pick<TmdbInfo, "kind" | "seasons" | "seasonEpisodes">): boolean {
+  return info.kind === "tv" && (info.seasons ?? 0) > 0 && !info.seasonEpisodes;
+}
+
 export function mustPurge(info: Pick<TmdbInfo, "fetchedAt">, now = Date.now()): boolean {
   return now - info.fetchedAt > PURGE_AFTER_MS;
 }
@@ -236,7 +254,13 @@ export function sanitizeTmdb(raw: unknown, now = Date.now()): TmdbInfo | undefin
     genres: Array.isArray(r.genres) ? r.genres.filter((g): g is string => typeof g === "string" && g.trim() !== "") : [],
     fetchedAt: r.fetchedAt,
   };
+  const seasonEpisodes =
+    Array.isArray(r.seasonEpisodes) && r.seasonEpisodes.length > 0 && r.seasonEpisodes.length <= 100 &&
+    r.seasonEpisodes.every((n) => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 100000)
+      ? (r.seasonEpisodes as number[])
+      : undefined;
   const optional: Partial<TmdbInfo> = {
+    seasonEpisodes,
     imdbId: str(r.imdbId),
     overview: str(r.overview),
     tagline: str(r.tagline),

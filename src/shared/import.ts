@@ -136,7 +136,7 @@ export function fromBackupJson(text: string): ImportItem[] {
     const { id: _id, ...rest } = raw as ImportItem & { id?: string };
     const {
       tags: _tags, list: _list, myRating: _rating, review: _review, status: _status,
-      progressCurrent: _current, progressTotal: _total, tmdb: rawTmdb, bookInfo: rawBook, bookInfoOptOut: rawBookOptOut, ...base
+      progressCurrent: _current, progressTotal: _total, seasonProgress: _seasons, tmdb: rawTmdb, bookInfo: rawBook, bookInfoOptOut: rawBookOptOut, ...base
     } = rest;
     return {
       ...base,
