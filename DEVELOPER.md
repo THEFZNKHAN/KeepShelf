@@ -85,10 +85,25 @@ KeepShelf/
 │   ├── popup/
 │   │   ├── popup.html         # Extension popup markup
 │   │   ├── popup.css          # Popup styles (design tokens in :root)
-│   │   └── popup.ts           # Shelf UI, settings, tab/link/note input
+│   │   ├── popup.ts           # Shelf UI, settings, tab/link/note input, undo toast
+│   │   ├── stats-view.ts      # Stats dashboard charts
+│   │   └── tag-picker.ts      # Scrollable tag filter dropdown
 │   └── shared/
 │       ├── types.ts           # SavedItem, ParsedMedia, MessageAction, MessageResponse
 │       ├── storage.ts         # chrome.storage.local CRUD + dedupe logic
+│       ├── user-data.ts       # Status, tags, rating, progress rules (buildUserPatch, import cleaning)
+│       ├── fuzzy.ts           # Near-duplicate detection and merging
+│       ├── random-pick.ts     # "Pick something for me"
+│       ├── stats.ts           # Stats dashboard numbers
+│       ├── tag-filter.ts      # Groups tags for the filter dropdown
+│       ├── undo.ts            # Snapshots of items for the Undo toast
+│       ├── seasons.ts         # Season-by-season progress (pure helpers)
+│       ├── reminders.ts       # Release reminders: due dates, refresh rules, notification text (pure)
+│       ├── reminders-settings.ts # Reminder on/off and "already announced" records
+│       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
+│       ├── tmdb-settings.ts   # TMDB token storage
+│       ├── openlibrary.ts     # Open Library client, matching and subject cleaning
+│       ├── book-info-settings.ts # Book info on/off
 │       ├── messaging.ts       # sendToBackground with MV3 SW wake retry
 │       ├── format.ts          # formatItemLine, formatItemsList, rating labels
 │       ├── parser.ts          # Google knowledge panel parser (421 lines)
@@ -116,7 +131,15 @@ KeepShelf/
 │   ├── parser.test.mjs        # Google knowledge panel
 │   ├── format.test.mjs
 │   ├── year.test.mjs
-│   ├── storage.test.mjs       # Dedupe keys and URL normalisation
+│   ├── storage.test.mjs       # Dedupe keys, URL normalisation, restoring items
+│   ├── user-data.test.mjs     # Status, tags, rating, progress and per-season rules
+│   ├── fuzzy.test.mjs         # Duplicates and merging
+│   ├── seasons.test.mjs       # Season-by-season progress helpers
+│   ├── reminders.test.mjs     # Due dates, refresh rules, notification text
+│   ├── undo.test.mjs
+│   ├── tmdb.test.mjs
+│   ├── openlibrary.test.mjs
+│   ├── background-*.test.mjs  # Service worker with a fake chrome: books, undo, seasons, reminders
 │   ├── keep-settings.test.mjs
 │   ├── imdb.test.mjs
 │   ├── seriesgraph.test.mjs

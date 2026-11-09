@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Save movies, series, anime, books and links to a personal shelf in one click.<br>
-  Rate them, tag them, track your progress, and optionally mirror everything to Google Keep.</strong>
+  Rate them, tag them, track your progress, get reminded when something comes out, and optionally mirror everything to Google Keep.</strong>
 </p>
 
 <p align="center">
@@ -60,7 +60,7 @@
 | | |
 |---|---|
 | **What it does** | Reads title metadata from supported pages and saves a clean, formatted entry to your local shelf with one click |
-| **Beyond saving** | Tags, custom lists, personal ratings and reviews, watch/read progress, a random "what next" picker, and a stats dashboard |
+| **Beyond saving** | Tags, custom lists, personal ratings and reviews, watch/read progress (down to each season), release reminders, a random "what next" picker, a stats dashboard, and Undo for deletes and merges |
 | **Also works as** | A lightweight bookmark manager for tabs, links and notes |
 | **Where data lives** | Locally in Chrome storage on your device. Optional sync to your own Google Keep notes, optional TMDB lookups, and optional book details from Open Library with your own free token |
 | **Who it is for** | Anyone keeping a watchlist, reading list, anime list or link collection without copy-pasting or tab-hoarding |
@@ -77,6 +77,7 @@
 - [Features](#features)
 - [Organise and track your shelf](#organise-and-track-your-shelf)
 - [TMDB info](#tmdb-info)
+- [Release reminders](#release-reminders)
 - [Book info](#book-info)
 - [Supported sources](#supported-sources)
 - [Tabs, links and notes](#tabs-links-and-notes)
@@ -176,7 +177,15 @@ Click **Save page** in the popup, press `Alt+Shift+S`, or right-click a page, li
 
 ### Rate, tag and track
 
-Your own ratings and reviews, tags, custom lists, watch and read progress, a random picker and stats. Details in [Organise and track your shelf](#organise-and-track-your-shelf).
+Your own ratings and reviews, tags, custom lists, watch and read progress (episode by episode, season by season), a random picker and stats. Details in [Organise and track your shelf](#organise-and-track-your-shelf).
+
+### Release reminders
+
+Turn on reminders and get a notification when a series you haven't finished has a new episode, or a movie on your shelf comes out, today or tomorrow. See [Release reminders](#release-reminders).
+
+### Undo
+
+Deleted something by mistake, or merged the wrong duplicates? An **Undo** button appears for 8 seconds and puts everything back exactly as it was. See [Undo](#undo-for-deletes-and-merges).
 
 ### Find things fast
 
@@ -233,6 +242,25 @@ Every movie, series, anime and book has a status. Each row also shows a small **
 
 For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Movies have no progress fields. The total episode count fills in automatically from TMDB or the source page, and you can still override it. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
 
+### Season-by-season progress
+
+For series and anime that have [TMDB info](#tmdb-info), the Edit dialog shows **one box per season** instead of a single number, with each season's episode count as a hint (`/10`).
+
+- Type how many episodes you have watched in each season, or click the **✓** next to a season to mark all of it watched.
+- A **Next up: S2 E6** line under the boxes tells you where to continue.
+- The **status follows along**: some episodes watched sets *In progress*, every episode sets *Watched*, and lowering the count of a finished show puts it back to *In progress*. You can still change the status yourself.
+- Rows show where you are, such as `In progress · S2 E3 (13/24)`.
+- The overall count is always the sum of the seasons, so sorting, the random picker, backups and Keep lines work as before. A season can't be set higher than its episode count.
+
+If you were already tracking a show with a single number, opening it spreads that number across the seasons for you. Nothing changes until you edit a season box. Shows without TMDB season data keep the single **Episodes done** field. Shows you enriched before this feature get their season counts filled in automatically the next time the popup or browser starts.
+
+### Undo for deletes and merges
+
+After you **delete** items or **merge duplicates**, the message at the top (or in Settings, for merges) has an **Undo** button for 8 seconds. Click it and the items come back with their original order, tags, ratings, reviews and progress. For a merge, the kept item also returns to how it was before.
+
+- Undo works only while the popup stays open. Closing it ends the 8 seconds.
+- **Clear all** still asks for confirmation first and can't be undone, so export a backup before using it.
+
 ### Personal rating and review
 
 Rate anything from 1 to 10 and write a short review. Your rating is separate from the source rating (IMDb, MAL and so on), so both stay visible. Sort by **My rating** to see your favourites first. Hover the summary line on a row to read your review.
@@ -288,7 +316,8 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 **What you get** for movies, series and anime, filled in for you:
 - **Genres**, shown as a short line on each row and usable as tags in the filter (so you can filter by `drama` without typing anything). They also feed your [stats](#stats-dashboard).
 - **Runtime** for movies, **seasons** for series and **episode count** for anime, used in the row and in copied or Keep lines when the source page didn't give one.
-- **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total.
+- **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total, plus **episodes per season** for [season-by-season progress](#season-by-season-progress).
+- **Next air dates** for series and **release dates** for movies, used by [release reminders](#release-reminders).
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
 
 Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered by TMDB, which only has films and TV. Books have their own option, see [Book info](#book-info).
@@ -304,6 +333,32 @@ Anything the page itself provided wins over TMDB, and anything you type wins ove
 - The IMDb, Letterboxd and other ratings still come from the page you saved. TMDB's rating is shown separately as `TMDB 8.4`.
 
 *This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.*
+
+---
+
+## Release reminders
+
+Get a desktop notification when something on your shelf is about to come out. It is optional and **off until you turn it on**, and it uses your [TMDB](#tmdb-info) token.
+
+**Set it up**
+1. Add your TMDB token first (see [TMDB info](#tmdb-info)). The switch stays disabled until a token is saved.
+2. Open **Settings, TMDB info** and switch on **Release reminders**.
+3. Click **Check for releases now** to try it. Chrome may also need notifications allowed for it in your operating system.
+
+**What you get**
+- A notification when a **series** you haven't finished has an episode airing **today or tomorrow**, naming the season and episode, such as `Severance: S2 E5 tomorrow`.
+- A notification when a **movie** on your shelf is released today or tomorrow, such as `Dune: out today`.
+- Several releases at once are grouped into one notification. Clicking it opens KeepShelf.
+- Items you have marked **Watched** or **Dropped** are never announced, and each release is announced **only once**. A new episode of the same show gets its own reminder.
+
+**How it works**
+- KeepShelf checks a few times a day (every 6 hours, so a computer that was asleep still catches up). It reads the dates it already has and refreshes dates that may have moved: airing series whose next date has passed or is unknown, and movies not yet released. Each item is looked up at most about once a week, and a check makes at most 25 requests.
+- If TMDB can't be reached, reminders still work from the dates already saved.
+- Only titles are sent to TMDB, as with the rest of TMDB info. Nothing else leaves your browser.
+
+**Good to know**
+- It can only remind you about things TMDB knows the date of. Between seasons a series has no next date, so there is nothing to announce until TMDB lists one.
+- Turn the switch off at any time and the background checks stop.
 
 ---
 
@@ -456,6 +511,21 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 1. Optionally narrow the view with a type, tag or list.
 2. Click the **dice** button, then **Start watching** or **Pick another**.
 
+### Track a series season by season
+
+1. Make sure the series has TMDB info (see [TMDB info](#tmdb-info)).
+2. Click the **pencil** on its row. Under **Your shelf**, type the episodes watched in each season, or click **✓** to finish a season.
+3. Click **Save**. The row shows where you are, such as `S2 E3 (13/24)`.
+
+### Undo a delete or merge
+
+1. Right after deleting or merging, click **Undo** in the message (you have 8 seconds).
+
+### Get release reminders
+
+1. Save your TMDB token, then switch on **Release reminders** under **Settings, TMDB info**.
+2. Click **Check for releases now** to see it work.
+
 ### Save a tab or bookmark
 
 1. Switch to the **Tabs** tab.
@@ -464,7 +534,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 ### Manage your shelf
 
 1. Use the filter chips, status, tag and list dropdowns, search box and sort menu to narrow the view.
-2. Tick items, then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon.
+2. Tick items, then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon (you can **Undo** for a few seconds).
 3. **Clear all** empties your shelf. Keep notes are never affected.
 
 ### Configure Keep sync
@@ -527,7 +597,7 @@ Google Keep only persists list items entered through trusted browser input. Keep
 
 Your shelf lives only in this browser, so export a backup now and then.
 
-- **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress.
+- **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress (per season too).
 - **Import** accepts:
   - a **KeepShelf backup** (`.json`)
   - a **Letterboxd** export CSV (watchlist, watched, diary or ratings)
@@ -546,10 +616,11 @@ Importing from a file picker opens Settings in a full tab, because Chrome closes
 | Saved shelf items, including tags, ratings and reviews | `chrome.storage.local` (your device only) |
 | Keep settings (URLs, toggles) | `chrome.storage.local` (your device only) |
 | Keep list content | Your Google Keep account (only when sync is on) |
-| TMDB token and fetched TMDB info | `chrome.storage.local` (your device only; refreshed or dropped after about 6 months) |
+| TMDB token and fetched TMDB info, including season counts and release dates | `chrome.storage.local` (your device only; refreshed or dropped after about 6 months) |
+| Release reminder setting and which releases were already announced | `chrome.storage.local` (your device only) |
 | Fetched book info (pages, genres, description, rating) | `chrome.storage.local` (your device only) |
 
-KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, TMDB lookups send item titles (and IMDb ids) to `api.themoviedb.org` using your own token, and book info sends book titles and authors to `openlibrary.org`. Posters and covers load directly from the source site's, TMDB's or Open Library's image server, without a referrer.
+KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, TMDB lookups (including the background date checks for release reminders) send item titles (and IMDb ids) to `api.themoviedb.org` using your own token, and book info sends book titles and authors to `openlibrary.org`. Posters and covers load directly from the source site's, TMDB's or Open Library's image server, without a referrer.
 
 Uninstalling the extension removes all local shelf data. KeepShelf only ever appends lines to your Keep notes. It never edits or deletes them.
 
@@ -564,6 +635,8 @@ Uninstalling the extension removes all local shelf data. KeepShelf only ever app
 | `scripting` | Run the Keep append script inside your Keep tab |
 | `debugger` | Send trusted text input so Keep persists list items reliably |
 | `contextMenus` | Add the right-click **Save … to KeepShelf** entries |
+| `alarms` | Run the release-reminder check a few times a day (only active once you turn reminders on) |
+| `notifications` | Show the release-reminder notification |
 | `google.com` | Parse Google Search knowledge panels |
 | `imdb.com` | Parse IMDb title pages |
 | `seriesgraph.com` | Parse Series Graph show pages |
@@ -594,6 +667,9 @@ npx tsc --noEmit  # type-check
 | Site parsers and formatting | `src/shared/` (`imdb.ts`, `letterboxd.ts`, `mal.ts`, `format.ts`, …) |
 | Personal data rules (status, tags, ratings, progress) | `src/shared/user-data.ts` |
 | Duplicates, random pick, stats (pure, unit-tested) | `src/shared/fuzzy.ts`, `random-pick.ts`, `stats.ts` |
+| Season-by-season progress (pure, unit-tested) | `src/shared/seasons.ts` |
+| Undo snapshots and restore | `src/shared/undo.ts`, `restoreItems` in `storage.ts` |
+| Release reminders (due dates, notification text, settings) | `src/shared/reminders.ts`, `reminders-settings.ts`, with the alarm and notification wiring in `src/background/main.ts` |
 | TMDB lookups and cache rules | `src/shared/tmdb.ts`, `tmdb-settings.ts` |
 | Book info from Open Library (matching, rate pacing, cleaning) | `src/shared/openlibrary.ts`, `book-info-settings.ts` |
 | Storage and backup import | `src/shared/storage.ts`, `import.ts` |
@@ -625,6 +701,18 @@ No. Open Library needs neither. You only switch it on in Settings.
 **Do I need TMDB?**
 
 No. It is optional. Without a token KeepShelf works exactly as before.
+
+**Do I need TMDB for release reminders?**
+
+Yes. The dates come from TMDB, so you need a (free) token. Without one the switch stays disabled.
+
+**Why didn't I get a reminder for a show I follow?**
+
+Reminders only cover series you haven't finished that have TMDB info and a known next episode date, announced today or tomorrow. Between seasons TMDB often has no date yet. Also check that notifications are allowed for Chrome in your operating system.
+
+**Can I undo a delete after closing the popup?**
+
+No. Undo is available for 8 seconds and only while the popup stays open. For anything bigger, keep a backup.
 
 **Do my tags, ratings and progress sync to Keep?**
 
@@ -688,6 +776,11 @@ Text inserted without trusted browser input is discarded by Keep. Reload the ext
 | TMDB "rejected this token" | Paste the API Read Access Token from themoviedb.org/settings/api, with no spaces |
 | "No match found" on TMDB | Fix the title or year in Edit, then click Fetch info |
 | Wrong TMDB info on an item | Edit, then Wrong match? Remove |
+| No season boxes in the Edit dialog | The show needs TMDB info. Add your token, then click **Fetch info** on the item (older shows fill in automatically on the next popup or browser start) |
+| "Season 2 has 8 episodes, so 9 is too many" | A season can't be set above its episode count on TMDB. Lower the number, or clear the season boxes to use the single Episodes done field |
+| Release reminders switch is disabled | Save your TMDB token first (Settings, TMDB info) |
+| No release notification appears | Click **Check for releases now**. If it says nothing is coming, nothing is due today or tomorrow. If it says it reminded you, allow notifications for Chrome in your operating system settings |
+| Undo button disappeared | It lasts 8 seconds and only while the popup is open |
 | Nothing to pick | Everything in the current view is finished or dropped; clear a filter or add items |
 | Rating or progress is rejected | Ratings are whole numbers from 1 to 10, and progress cannot exceed the total |
 | Extension still shows an old version | Reload at `chrome://extensions`, or restart Chrome |
@@ -702,7 +795,6 @@ Ideas under consideration, not promises:
 - Export to CSV and Markdown
 - Scheduled automatic backups
 - "Where to watch" streaming availability
-- Reminders for unreleased titles
 - More sources (AniList, StoryGraph) and games or music as new types
 
 Have a suggestion? [Open an issue](../../issues).
