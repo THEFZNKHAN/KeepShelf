@@ -14,6 +14,7 @@ import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
+import { snapshotItems } from "../shared/undo.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
@@ -341,13 +342,47 @@ function itemSubtitle(item: SavedItem): string {
   return parts.join(" | ");
 }
 
-function showStatus(message: string, isError = false, durationMs = 2500): void {
+const UNDO_MS = 8000;
+
+/** Adds (or clears) the Undo button next to a toast's text. Only one Undo exists per toast at a time. */
+function setToastUndo(textEl: HTMLElement, onUndo?: () => void | Promise<void>): void {
+  const holder = textEl.parentElement!;
+  holder.querySelector(".toast-action")?.remove();
+  if (!onUndo) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "toast-action";
+  button.textContent = "Undo";
+  button.addEventListener("click", () => {
+    button.disabled = true;
+    void onUndo();
+  });
+  holder.append(button);
+}
+
+/** Puts back what a delete or merge removed, then reports the result. */
+async function undoRemoval(restored: SavedItem[], label: string, report: (msg: string, err?: boolean) => void): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "restore", items: restored });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    render();
+    renderDuplicates();
+    report(label);
+  } catch (err) {
+    report(err instanceof Error ? err.message : "Undo failed.", true);
+  }
+}
+
+function showStatus(message: string, isError = false, durationMs = 2500, onUndo?: () => void | Promise<void>): void {
   if (statusTimer) clearTimeout(statusTimer);
   statusTextEl.textContent = message;
+  setToastUndo(statusTextEl, onUndo);
   statusEl.hidden = false;
   statusEl.classList.toggle("error", isError);
   statusTimer = setTimeout(() => {
     statusEl.hidden = true;
+    setToastUndo(statusTextEl);
   }, durationMs);
 }
 
@@ -387,14 +422,19 @@ function showSectionStatus(
   timerRef: { value: ReturnType<typeof setTimeout> | undefined },
   message: string,
   isError = false,
-  durationMs = 3500
+  durationMs = 3500,
+  onUndo?: () => void | Promise<void>
 ): void {
   if (timerRef.value) clearTimeout(timerRef.value);
   textEl.textContent = message;
+  setToastUndo(textEl, onUndo);
   iconEl.textContent = isError ? "error" : "check_circle";
   el.hidden = false;
   el.classList.toggle("error", isError);
-  timerRef.value = setTimeout(() => { el.hidden = true; }, durationMs);
+  timerRef.value = setTimeout(() => {
+    el.hidden = true;
+    setToastUndo(textEl);
+  }, durationMs);
 }
 
 const mediaStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
@@ -2075,13 +2115,16 @@ function renderDuplicates(): void {
 }
 
 async function mergeGroup(keepId: string, removeIds: string[]): Promise<void> {
+  const snapshot = snapshotItems(allItems, [keepId, ...removeIds]);
   try {
     const response = await sendToBackground({ action: "merge", keepId, removeIds });
     if (!response.ok) throw new Error(response.error);
     if ("items" in response) allItems = response.items;
     render();
     renderDuplicates();
-    showBackupStatus(`Merged ${removeIds.length + 1} items into one.`);
+    showBackupStatus(`Merged ${removeIds.length + 1} items into one.`, false, UNDO_MS, () =>
+      undoRemoval(snapshot, "Merge undone.", (msg, err) => showBackupStatus(msg, err))
+    );
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Merge failed.", true);
   }
@@ -2093,8 +2136,8 @@ document.getElementById("find-duplicates")!.addEventListener("click", renderDupl
 
 const backupStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
 
-function showBackupStatus(msg: string, err = false, ms = 6000): void {
-  showSectionStatus(backupSettingsStatusEl, backupSettingsStatusTextEl, backupSettingsStatusIconEl, backupStatusTimer, msg, err, ms);
+function showBackupStatus(msg: string, err = false, ms = 6000, onUndo?: () => void | Promise<void>): void {
+  showSectionStatus(backupSettingsStatusEl, backupSettingsStatusTextEl, backupSettingsStatusIconEl, backupStatusTimer, msg, err, ms, onUndo);
 }
 
 async function exportBackup(): Promise<void> {
@@ -2241,12 +2284,17 @@ document.getElementById("delete-selected")!.addEventListener("click", async () =
     showStatus("Select items to delete.", true);
     return;
   }
+  const snapshot = snapshotItems(allItems, ids);
   try {
     const response = await sendToBackground({ action: "delete", ids });
     if (response?.ok && "items" in response) {
       allItems = response.items;
       render();
-      showStatus(`Deleted ${ids.length} item${ids.length === 1 ? "" : "s"}.`);
+      showStatus(`Deleted ${ids.length} item${ids.length === 1 ? "" : "s"}.`, false, UNDO_MS, () =>
+        undoRemoval(snapshot, `Restored ${snapshot.length} item${snapshot.length === 1 ? "" : "s"}.`, (msg, err) =>
+          showStatus(msg, err)
+        )
+      );
     }
   } catch (err) {
     showStatus(err instanceof Error ? err.message : "Delete failed.", true);
@@ -2298,6 +2346,7 @@ document.getElementById("close-settings")!.addEventListener("click", closeSettin
 
 document.getElementById("status-close")!.addEventListener("click", () => {
   statusEl.hidden = true;
+  setToastUndo(statusTextEl);
   if (statusTimer) clearTimeout(statusTimer);
 });
 

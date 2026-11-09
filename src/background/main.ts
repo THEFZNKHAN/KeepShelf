@@ -6,6 +6,7 @@ import {
   updateItem,
   importItems,
   mergeItems,
+  restoreItems,
   STORAGE_KEY,
 } from "../shared/storage.js";
 import {
@@ -43,6 +44,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "syncKeep",
   "import",
   "merge",
+  "restore",
   "setTmdbToken",
   "setBookInfoEnabled",
   "enrichBooks",
@@ -290,6 +292,10 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "merge": {
       const items = await mergeItems(message.keepId, message.removeIds);
+      return { ok: true, items };
+    }
+    case "restore": {
+      const items = await restoreItems(message.items);
       return { ok: true, items };
     }
     case "getBookInfoSettings": {
