@@ -1250,28 +1250,14 @@ body.in-tab {
   overflow-y: auto;
 }
 
-.pick-overview.is-full {
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.pick-meta {
+.pick-footer {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 8px;
-  font-size: 11.5px;
-  line-height: 16px;
-  color: var(--on-surface-variant);
-  text-align: left;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
-.pick-meta[hidden] {
+.pick-footer[hidden] {
   display: none;
-}
-
-.pick-meta strong {
-  color: var(--on-surface);
 }
 
 .pick-watch {
@@ -1283,6 +1269,199 @@ body.in-tab {
 
 .pick-watch[hidden] {
   display: none;
+}
+
+/* The info card: poster beside the title and facts, then labels, text and buttons in a tight stack. */
+.pick-panel.is-info {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  /* The poster is taller than the text beside it; the spare height goes to the last row, not between the lines. */
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: 8px 12px;
+  max-width: 360px;
+  padding: 14px;
+  text-align: left;
+}
+
+.pick-panel.is-info > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+}
+
+.pick-panel.is-info .pick-leading {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
+  justify-content: flex-start;
+}
+
+.pick-panel.is-info .pick-leading {
+  min-width: 40px;
+}
+
+.pick-panel.is-info .pick-leading .item-thumb {
+  width: 76px;
+  height: 114px;
+}
+
+.pick-panel.is-info .pick-leading .type-icon {
+  font-size: 36px;
+}
+
+.pick-panel.is-info .confirm-title {
+  grid-column: 2;
+  grid-row: 1;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 20px;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pick-panel.is-info .confirm-message {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 11.5px;
+  line-height: 16px;
+  text-align: left;
+  white-space: pre-line;
+}
+
+.pick-panel.is-info .pick-chips {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+}
+
+.pick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pick-chips[hidden] {
+  display: none;
+}
+
+.pick-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 999px;
+  background: var(--surface-container-low);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--on-surface);
+}
+
+.pick-chip-tag {
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+.pick-panel.is-info .pick-overview {
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+/* Cut long text to a few lines instead of scrolling inside the card. */
+.pick-panel.is-clamped .pick-overview,
+.pick-panel.is-clamped .pick-review {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.pick-panel.is-clamped .pick-overview {
+  -webkit-line-clamp: 4;
+}
+
+.pick-panel.is-clamped .pick-review {
+  -webkit-line-clamp: 2;
+}
+
+.pick-more {
+  justify-self: start;
+  margin-top: -4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pick-panel.is-info > .pick-more {
+  margin-top: -4px;
+}
+
+.pick-more[hidden] {
+  display: none;
+}
+
+/* The card is only as tall as its content; if a tall one ever overflows, it still scrolls, without a visible bar. */
+.pick-panel.is-info {
+  scrollbar-width: none;
+}
+
+.pick-panel.is-info::-webkit-scrollbar {
+  display: none;
+}
+
+.pick-review {
+  padding-left: 8px;
+  border-left: 2px solid var(--outline-variant);
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+}
+
+.pick-review[hidden] {
+  display: none;
+}
+
+.pick-watch.is-compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+.pick-watch.is-compact .btn {
+  display: inline-flex;
+  flex: 1 1 calc(50% - 3px);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-watch.is-compact .btn-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.confirm-actions[hidden] {
+  display: none;
+}
+
+.pick-panel.is-info .pick-footer .pick-open {
+  width: auto;
+  margin: 0 auto 0 0;
+  padding: 0 10px;
+  height: 28px;
+  font-size: 11.5px;
 }
 
 /* ── Stats ───────────────────────────────────────────────── */

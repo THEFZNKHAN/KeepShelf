@@ -587,16 +587,20 @@
         <div id="pick-leading" class="pick-leading"></div>
         <h2 id="pick-title" class="confirm-title"></h2>
         <p id="pick-detail" class="confirm-message"></p>
+        <div id="pick-chips" class="pick-chips" hidden></div>
         <p id="pick-overview" class="pick-overview" hidden></p>
-        <div id="pick-meta" class="pick-meta" hidden></div>
-        <div class="confirm-actions">
+        <button type="button" id="pick-more" class="pick-more" hidden>More</button>
+        <p id="pick-review" class="pick-review" hidden></p>
+        <div id="pick-actions" class="confirm-actions">
           <button type="button" id="pick-again" class="btn btn-outline">Pick another</button>
           <button type="button" id="pick-start" class="btn btn-primary">Start</button>
-          <button type="button" id="pick-edit" class="btn btn-outline" hidden>Edit</button>
-          <button type="button" id="pick-close" class="btn btn-primary" hidden>Close</button>
         </div>
         <div id="pick-watch" class="pick-watch" hidden></div>
-        <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
+        <div id="pick-footer" class="pick-footer">
+          <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
+          <button type="button" id="pick-edit" class="btn btn-outline btn-sm" hidden>Edit</button>
+          <button type="button" id="pick-close" class="btn btn-primary btn-sm" hidden>Close</button>
+        </div>
       </div>
     </div>
 

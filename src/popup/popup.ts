@@ -2411,70 +2411,82 @@ const pickStartEl = document.getElementById("pick-start") as HTMLButtonElement;
 const pickOpenEl = document.getElementById("pick-open") as HTMLButtonElement;
 let pickedId: string | undefined;
 
-const pickMetaEl = document.getElementById("pick-meta")!;
+const pickChipsEl = document.getElementById("pick-chips")!;
+const pickReviewEl = document.getElementById("pick-review")!;
+const pickMoreEl = document.getElementById("pick-more") as HTMLButtonElement;
 const pickWatchEl = document.getElementById("pick-watch")!;
 const pickKickerEl = document.getElementById("pick-heading")!;
+const pickPanelEl = pickDialogEl.querySelector<HTMLElement>(".pick-panel")!;
+const pickActionsEl = document.getElementById("pick-actions")!;
+const pickFooterEl = document.getElementById("pick-footer")!;
 const pickAgainEl = document.getElementById("pick-again") as HTMLButtonElement;
 const pickEditEl = document.getElementById("pick-edit") as HTMLButtonElement;
 const pickCloseEl = document.getElementById("pick-close") as HTMLButtonElement;
 
-/** "pick" is the random suggestion; "info" is what opens when you tap a row. Same card, different buttons. */
+/** "pick" is the random suggestion; "info" is what opens when you tap a row. Same card, different layout. */
 type DetailMode = "pick" | "info";
 
-/** Your own data as short labelled lines, shown on the card when you open an item. */
-function metaLines(item: SavedItem): Array<[label: string, value: string]> {
-  const lines: Array<[string, string]> = [];
-  const status = statusOf(item);
-  lines.push(["Status", statusLabel(status)]);
+/** The small labels under an item's title on its card: kind, status, progress, your rating, list and tags. */
+function detailChips(item: SavedItem): Array<{ text: string; className: string }> {
+  const chips: Array<{ text: string; className: string }> = [];
+  if (isTrackable(item)) chips.push({ text: typeLabel(item.type), className: `pick-chip type-${item.type}` });
+  chips.push({ text: statusLabel(statusOf(item)), className: "pick-chip" });
   const progress = progressText(item);
-  if (progress) lines.push(["Progress", progress]);
-  if (item.myRating) lines.push(["Your rating", `★ ${item.myRating}/10`]);
-  if (item.tags?.length) lines.push(["Tags", item.tags.join(", ")]);
-  if (item.list) lines.push(["List", item.list]);
-  if (item.review) lines.push(["Your review", item.review]);
-  return lines;
+  if (progress) chips.push({ text: progress, className: "pick-chip" });
+  if (item.myRating) chips.push({ text: `★ ${item.myRating}/10`, className: "pick-chip" });
+  if (item.list) chips.push({ text: item.list, className: "pick-chip" });
+  for (const tag of item.tags ?? []) chips.push({ text: `#${tag}`, className: "pick-chip pick-chip-tag" });
+  return chips;
 }
 
 function showDetails(item: SavedItem, mode: DetailMode): void {
   cancelRowHover();
   pickedId = item.id;
   const info = mode === "info";
+  pickPanelEl.classList.toggle("is-info", info);
   pickKickerEl.hidden = info;
   pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
-  pickDetailEl.textContent = [itemSubtitle(item), genreText(item).split(/,\s*/).slice(0, 3).join(", "), item.tmdb?.certification, item.author]
-    .filter(Boolean)
-    .join(" · ");
+  pickTitleEl.title = itemTitle(item);
+  pickDetailEl.textContent = info
+    ? [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n")
+    : [itemSubtitle(item), genreText(item).split(/,\s*/).slice(0, 3).join(", "), item.tmdb?.certification, item.author]
+        .filter(Boolean)
+        .join(" · ");
   const overview = item.tmdb?.overview ?? item.bookInfo?.description;
   pickOverviewEl.textContent = overview ? (info ? overview : clipText(overview, 220)) : "";
-  pickOverviewEl.classList.toggle("is-full", info);
   pickOverviewEl.hidden = !overview;
 
-  const lines = info ? metaLines(item) : [];
-  pickMetaEl.replaceChildren(
-    ...lines.map(([label, value]) => {
-      const row = document.createElement("div");
-      const strong = document.createElement("strong");
-      strong.textContent = `${label}: `;
-      row.append(strong, document.createTextNode(value));
-      return row;
-    })
-  );
-  pickMetaEl.hidden = lines.length === 0;
+  const chips = info ? detailChips(item) : [];
+  pickChipsEl.replaceChildren(...chips.map(({ text, className }) => textPart(text, className)));
+  pickChipsEl.hidden = chips.length === 0;
+  pickReviewEl.textContent = info && item.review ? item.review : "";
+  pickReviewEl.hidden = !(info && item.review);
 
   const inProgress = statusOf(item) === "in_progress";
   pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
-  pickAgainEl.hidden = info;
-  pickStartEl.hidden = info;
+  pickActionsEl.hidden = info;
   pickEditEl.hidden = !info;
   pickCloseEl.hidden = !info;
 
+  pickWatchEl.classList.toggle("is-compact", info);
   pickWatchEl.replaceChildren(
     ...watchLinks(item, watchSites).map((link) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "btn btn-primary btn-block";
-      btn.textContent = `${link.search ? "Search" : "Watch"} on ${link.host}`;
+      btn.className = info ? "btn btn-primary btn-sm" : "btn btn-primary btn-block";
+      const label = `${link.search ? "Search" : "Watch"} on ${link.host}`;
+      btn.title = label;
+      if (info) {
+        // The icon says what it does, so the host is enough text on the compact card.
+        const icon = document.createElement("span");
+        icon.className = "material-symbols-outlined btn-icon";
+        icon.textContent = link.search ? "search" : "play_circle";
+        btn.append(icon, document.createTextNode(link.host));
+        btn.setAttribute("aria-label", label);
+      } else {
+        btn.textContent = label;
+      }
       btn.addEventListener("click", () => void chrome.tabs.create({ url: link.url }));
       return btn;
     })
@@ -2482,7 +2494,18 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickWatchEl.hidden = pickWatchEl.childElementCount === 0;
 
   pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
+  pickFooterEl.hidden = pickOpenEl.hidden && !info;
   pickDialogEl.hidden = false;
+
+  // Long text is cut to a few lines with a More link that opens it out, so the card never needs a scrollbar.
+  pickMoreEl.hidden = true;
+  pickPanelEl.classList.remove("is-expanded");
+  pickPanelEl.classList.toggle("is-clamped", info);
+  if (info) {
+    const cutOff = [pickOverviewEl, pickReviewEl].some((el) => !el.hidden && el.scrollHeight > el.clientHeight + 1);
+    pickMoreEl.hidden = !cutOff;
+    pickMoreEl.textContent = "More";
+  }
 }
 
 function showPick(item: SavedItem): void {
@@ -2513,6 +2536,11 @@ document.getElementById("pick-random")!.addEventListener("click", () => pickForM
 document.getElementById("pick-again")!.addEventListener("click", () => pickForMe(pickedId));
 pickDialogEl.querySelector("[data-pick-dismiss]")!.addEventListener("click", closePick);
 pickCloseEl.addEventListener("click", closePick);
+pickMoreEl.addEventListener("click", () => {
+  const expanded = pickPanelEl.classList.toggle("is-expanded");
+  pickPanelEl.classList.toggle("is-clamped", !expanded);
+  pickMoreEl.textContent = expanded ? "Less" : "More";
+});
 pickEditEl.addEventListener("click", () => {
   const item = allItems.find((i) => i.id === pickedId);
   closePick();
