@@ -1878,12 +1878,60 @@ function showTmdbStatus(msg: string, err = false, ms = 6000): void {
   showSectionStatus(tmdbSettingsStatusEl, tmdbSettingsStatusTextEl, tmdbSettingsStatusIconEl, tmdbStatusTimer, msg, err, ms);
 }
 
+let remindersEnabled = false;
+const prefRemindersEl = document.getElementById("pref-reminders") as HTMLInputElement;
+const remindersCheckEl = document.getElementById("reminders-check") as HTMLButtonElement;
+
+function renderReminders(): void {
+  prefRemindersEl.checked = remindersEnabled;
+  // It needs the token to look up dates, but it can always be turned off.
+  prefRemindersEl.disabled = !tmdbConfigured && !remindersEnabled;
+  remindersCheckEl.disabled = !remindersEnabled;
+}
+
+async function loadReminderSettings(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "getReminderSettings" });
+    if (response.ok && "reminders" in response) remindersEnabled = response.reminders.enabled;
+  } catch {
+    /* leave it off */
+  }
+  renderReminders();
+}
+
+prefRemindersEl.addEventListener("change", async () => {
+  try {
+    const response = await sendToBackground({ action: "setRemindersEnabled", enabled: prefRemindersEl.checked });
+    if (!response.ok) throw new Error(response.error);
+    if ("reminders" in response) remindersEnabled = response.reminders.enabled;
+    showTmdbStatus(remindersEnabled ? "Release reminders are on." : "Release reminders are off.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Could not change the setting.", true);
+  }
+  renderReminders();
+});
+
+remindersCheckEl.addEventListener("click", async () => {
+  remindersCheckEl.disabled = true;
+  try {
+    const response = await sendToBackground({ action: "checkReminders" });
+    if (!response.ok) throw new Error(response.error);
+    showTmdbStatus("message" in response ? response.message : "Checked.");
+    const refreshed = await sendToBackground({ action: "getAll" });
+    if (refreshed.ok && "items" in refreshed) allItems = refreshed.items;
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Check failed.", true);
+  }
+  renderReminders();
+});
+
 function renderTmdbConfigured(): void {
   tmdbTokenStatusEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
   tmdbTokenEl.placeholder = tmdbConfigured ? "Saved. Paste to replace" : "API Read Access Token";
   tmdbEnrichAllEl.disabled = !tmdbConfigured;
   tmdbSummaryEl.textContent = tmdbConfigured ? "Token saved" : "Not set";
   tmdbSummaryEl.classList.toggle("is-ok", tmdbConfigured);
+  renderReminders();
 }
 
 async function loadTmdbSettings(): Promise<void> {
@@ -2453,3 +2501,4 @@ void loadItems().then(async () => {
 void loadKeepSettings();
 void loadTmdbSettings();
 void loadBookInfoSettings();
+void loadReminderSettings();

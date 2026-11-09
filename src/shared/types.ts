@@ -70,6 +70,10 @@ export interface TmdbInfo {
   episodes?: number;
   /** Episodes in each regular season (specials excluded). Index 0 is season 1. */
   seasonEpisodes?: number[];
+  /** The next episode to air for a series, as TMDB gives it. Used for release reminders. */
+  nextEpisode?: { airDate: string; season: number; episode: number };
+  /** A movie's release date, "YYYY-MM-DD". */
+  releaseDate?: string;
   status?: string;
   posterPath?: string;
   fetchedAt: number;
@@ -140,6 +144,9 @@ export type MessageAction =
   | { action: "import"; items: ImportItem[] }
   | { action: "merge"; keepId: string; removeIds: string[] }
   | { action: "restore"; items: SavedItem[] }
+  | { action: "getReminderSettings" }
+  | { action: "setRemindersEnabled"; enabled: boolean }
+  | { action: "checkReminders" }
   | { action: "getBookInfoSettings" }
   | { action: "setBookInfoEnabled"; enabled: boolean }
   | { action: "enrichBooks"; ids?: string[]; force?: boolean }
@@ -170,6 +177,7 @@ export type MessageResponse =
     }
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; bookInfo: { enabled: boolean } }
+  | { ok: true; reminders: { enabled: boolean } }
   | { ok: true; message: string }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }

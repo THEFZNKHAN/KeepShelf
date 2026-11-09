@@ -380,6 +380,23 @@
               <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
               Fetch info for my shelf
             </button>
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Release reminders</strong>
+                <span>
+                  A notification when a series you haven't finished has a new episode, or a movie on your list comes
+                  out, today or tomorrow. Checks TMDB a few times a day for the dates; needs the token above.
+                </span>
+              </div>
+              <label class="switch" title="Release reminders">
+                <input type="checkbox" id="pref-reminders" aria-label="Release reminders" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <button type="button" id="reminders-check" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon">notifications_active</span>
+              Check for releases now
+            </button>
             <div id="tmdb-settings-status" class="settings-toast" hidden>
               <div class="settings-toast-content">
                 <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
