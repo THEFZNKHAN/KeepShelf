@@ -406,6 +406,44 @@
             <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
           </div>
         </details>
+        <details class="s-card" id="card-watch">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">play_circle</span>
+            <span class="s-card-title">Watch sites</span>
+            <span class="s-card-summary" id="watch-summary">None</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <p class="s-hint">
+              Optional. Add a site where you watch, and each title on your shelf gets a button that opens its exact page
+              there. None are included. KeepShelf never visits the site: you paste one title's address, say which title it
+              is, and KeepShelf works out how the site builds its addresses. If the site has an address style that works for
+              both movies and series, use that one and you only need a single page.
+            </p>
+            <div class="watch-example">
+              <span class="watch-example-label">1. Paste the address of one title's page on the site</span>
+              <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
+              <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
+            </div>
+            <div class="watch-example">
+              <span class="watch-example-label">2. Optional: a page for the other kind, a series if the first was a movie or the other way round</span>
+              <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
+              <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
+            </div>
+            <p class="s-fine">
+              Only titles with a TMDB id or an IMDb id can be linked on sites that use ids, so set up your TMDB token
+              above and fetch info for your shelf first. Pick a title that has info.
+            </p>
+            <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
+            <ul id="watch-list" class="watch-list"></ul>
+            <div id="watch-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="watch-settings-status-text"></span>
+              </div>
+            </div>
+          </div>
+        </details>
         <details class="s-card" id="card-bookinfo">
           <summary>
             <span class="material-symbols-outlined s-card-icon">menu_book</span>

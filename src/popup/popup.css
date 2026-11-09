@@ -2099,3 +2099,86 @@ body.in-tab {
 .season-done:hover {
   background: var(--surface-container);
 }
+
+/* Watch sites */
+.watch-example {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.watch-example-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.watch-example input[type="url"] {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.watch-example input[type="url"]:focus {
+  border-color: var(--primary);
+}
+
+.watch-example .view-select {
+  width: 100%;
+  height: 28px;
+}
+
+.watch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.watch-list:empty {
+  display: none;
+}
+
+.watch-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--surface-container-low);
+}
+
+.watch-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.watch-row-host {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.watch-row-pattern {
+  overflow: hidden;
+  font-size: 10.5px;
+  color: var(--on-surface-variant);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.watch-row-note {
+  font-size: 10.5px;
+  color: var(--on-surface-variant);
+}
