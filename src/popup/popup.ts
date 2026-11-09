@@ -12,7 +12,7 @@ import {
   addExampleToSite,
   appliesTo,
   defaultTypesFor,
-  describePattern,
+  patternLines,
   getWatchSites,
   isEnabled,
   isSearchSite,
@@ -2198,11 +2198,15 @@ function renderWatchSites(): void {
       const host = document.createElement("span");
       host.className = "watch-row-host";
       host.textContent = site.host;
-      const pattern = document.createElement("span");
-      pattern.className = "watch-row-pattern";
-      pattern.textContent = describePattern(site);
-      pattern.title = describePattern(site);
-      text.append(host, pattern);
+      text.append(host);
+      // One line per kind when movies and series use different patterns, so neither is cut off.
+      for (const line of patternLines(site)) {
+        const pattern = document.createElement("span");
+        pattern.className = "watch-row-pattern";
+        pattern.textContent = line;
+        pattern.title = line;
+        text.append(pattern);
+      }
       if (isSearchSite(site)) {
         const note = document.createElement("span");
         note.className = "watch-row-note";

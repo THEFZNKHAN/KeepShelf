@@ -33,6 +33,11 @@ export interface WatchSite {
   template: string;
   /** The word the site uses in `{type}` for each kind, as seen in the examples the user gave. */
   typeWords: { movie?: string; tv?: string };
+  /**
+   * Set when movies and series don't share one pattern (a series address with extra parts, say). Each kind then
+   * uses its own, with the type word already written in; `template` is just the first of them.
+   */
+  templates?: { movie?: string; tv?: string };
 }
 
 export const WATCH_SITES_KEY = "keepshelf_watch_sites";
@@ -222,47 +227,110 @@ export function normalizeTypes(types: unknown): WatchMediaType[] | undefined {
 
 /** Why two addresses can't both be examples of one site, in plain words. */
 function mismatchError(a: string, b: string): string {
-  if (a.replace("-{year}", "") === b.replace("-{year}", "")) {
+  if (yearOnlyDifference(a, b)) {
     return "One address has the year in it and the other doesn't, so this site doesn't build title addresses the same way every time. Use an address that has an id in it instead (a code like tt1196946 or a number), for example a /title/… page.";
   }
   return "The two addresses don't follow the same pattern. Check they are both from the same site.";
 }
 
-/** Turns what was learned from one or two examples into a site. The two must follow the same pattern. */
-export function siteFromLearned(
-  first: Learned,
-  second?: Learned,
-  types?: WatchMediaType[]
-): { ok: true; site: WatchSite } | { ok: false; error: string } {
+/** True when two patterns differ only by a "-{year}" on the end, which sites add to some addresses and not others. */
+function yearOnlyDifference(a: string, b: string): boolean {
+  return a !== b && a.replace("-{year}", "") === b.replace("-{year}", "");
+}
+
+/** A learned pattern with the site's word for movie or series written in, so it no longer needs `{type}`. */
+function literalTemplate(learned: Learned): string {
+  return learned.typeWord === undefined ? learned.template : learned.template.split("{type}").join(learned.typeWord);
+}
+
+const OTHER_KIND: Record<TmdbKind, TmdbKind> = { movie: "tv", tv: "movie" };
+
+type SiteResult = { ok: true; site: WatchSite } | { ok: false; error: string };
+
+/**
+ * Turns what was learned from one or two examples into a site. If both follow one pattern the site shares it.
+ * If they are different kinds (a movie page and a series page) with different patterns, each kind keeps its own.
+ */
+export function siteFromLearned(first: Learned, second?: Learned, types?: WatchMediaType[]): SiteResult {
+  const limited = normalizeTypes(types);
+  const extra = limited ? { types: limited } : {};
+  const host = hostOf(first.template);
+  if (!host) return { ok: false, error: "That doesn't look like a web address." };
+
   if (second && second.template !== first.template) {
-    return { ok: false, error: mismatchError(first.template, second.template) };
+    const separate =
+      second.kind !== first.kind && hostOf(second.template) === host && !yearOnlyDifference(first.template, second.template);
+    if (!separate) return { ok: false, error: mismatchError(first.template, second.template) };
+    const own = literalTemplate(first);
+    return {
+      ok: true,
+      site: { host, template: own, typeWords: {}, templates: { [first.kind]: own, [second.kind]: literalTemplate(second) }, ...extra },
+    };
   }
+
   const typeWords: WatchSite["typeWords"] = {};
   for (const learned of second ? [first, second] : [first]) {
     if (learned.typeWord !== undefined) typeWords[learned.kind] ??= learned.typeWord;
   }
-  const host = hostOf(first.template);
-  if (!host) return { ok: false, error: "That doesn't look like a web address." };
-  const limited = normalizeTypes(types);
-  return { ok: true, site: { host, template: first.template, typeWords, ...(limited ? { types: limited } : {}) } };
+  return { ok: true, site: { host, template: first.template, typeWords, ...extra } };
 }
 
 /** Adds an example of the other kind (a series page, say) to a site that only knew one, without starting over. */
-export function addExampleToSite(site: WatchSite, learned: Learned): { ok: true; site: WatchSite } | { ok: false; error: string } {
-  if (learned.template !== site.template) return { ok: false, error: mismatchError(site.template, learned.template) };
-  if (learned.typeWord === undefined) return { ok: false, error: "That address doesn't tell movies from series, so there is nothing to add." };
-  return { ok: true, site: { ...site, typeWords: { ...site.typeWords, [learned.kind]: site.typeWords[learned.kind] ?? learned.typeWord } } };
+export function addExampleToSite(site: WatchSite, learned: Learned): SiteResult {
+  const own = literalTemplate(learned);
+  if (hostOf(learned.template) !== site.host) return { ok: false, error: mismatchError(site.template, learned.template) };
+
+  if (site.templates) {
+    const existing = site.templates[learned.kind];
+    if (existing !== undefined) {
+      return existing === own ? { ok: true, site } : { ok: false, error: mismatchError(existing, own) };
+    }
+    const other = site.templates[OTHER_KIND[learned.kind]];
+    if (other !== undefined && yearOnlyDifference(other, own)) return { ok: false, error: mismatchError(other, own) };
+    return { ok: true, site: { ...site, templates: { ...site.templates, [learned.kind]: own } } };
+  }
+
+  if (learned.template === site.template) {
+    if (learned.typeWord === undefined) return { ok: false, error: "That address doesn't tell movies from series, so there is nothing to add." };
+    return { ok: true, site: { ...site, typeWords: { ...site.typeWords, [learned.kind]: site.typeWords[learned.kind] ?? learned.typeWord } } };
+  }
+
+  // A different pattern for the kind the site is missing: keep one pattern for each kind from now on.
+  const missing = missingKind(site);
+  const known = missing ? OTHER_KIND[missing] : undefined;
+  const knownWord = known ? site.typeWords[known] : undefined;
+  if (missing === learned.kind && known && knownWord !== undefined && !yearOnlyDifference(site.template, learned.template)) {
+    const existing = site.template.split("{type}").join(knownWord);
+    return { ok: true, site: { ...site, template: existing, typeWords: {}, templates: { [known]: existing, [learned.kind]: own } } };
+  }
+  return { ok: false, error: mismatchError(site.template, learned.template) };
+}
+
+/** The pattern a title of this kind uses on a site, or undefined when the site has none for it. */
+function templateFor(site: Pick<WatchSite, "template" | "templates">, kind: TmdbKind): string | undefined {
+  return site.templates ? site.templates[kind] : site.template;
 }
 
 /** The kind of title this site is still missing an example for, if any. */
 export function missingKind(site: WatchSite): TmdbKind | undefined {
+  if (site.templates) return (["movie", "tv"] as const).find((kind) => site.templates?.[kind] === undefined);
   if (!site.template.includes("{type}")) return undefined;
   return (["movie", "tv"] as const).find((kind) => site.typeWords[kind] === undefined);
 }
 
-/** True when the link opens the site's search for the title, not the title's own page. */
-export function isSearchSite(site: Pick<WatchSite, "template">): boolean {
-  return /\{qm?_(plus|pct)\}/.test(site.template);
+/**
+ * True for a pattern that opens the site's search for the title, not the title's own page: the title is written as
+ * text and nothing in it is an id. A title name alongside an id (`?id=603&title=Heat`) is still an exact page.
+ */
+function isSearchTemplate(template: string): boolean {
+  return /\{qm?_(plus|pct)\}/.test(template) && !/\{(tmdb_id|imdb_id|slug)\}/.test(template);
+}
+
+/** True when the site's links open its search. With a kind, only that kind's pattern counts. */
+export function isSearchSite(site: Pick<WatchSite, "template" | "templates">, kind?: TmdbKind): boolean {
+  const templates = kind ? [templateFor(site, kind)] : site.templates ? Object.values(site.templates) : [site.template];
+  const known = templates.filter((t): t is string => t !== undefined);
+  return known.length > 0 && known.every(isSearchTemplate);
 }
 
 function hostOf(template: string): string | undefined {
@@ -271,8 +339,10 @@ function hostOf(template: string): string | undefined {
 
 /** The exact page for a title on a site, or undefined when something the address needs isn't known. */
 export function buildWatchUrl(site: WatchSite, facts: TitleFacts): string | undefined {
+  const template = templateFor(site, facts.kind);
+  if (template === undefined) return undefined;
   let missing = false;
-  const url = site.template.replace(ALL_TOKENS, (_, token: WatchToken) => {
+  const url = template.replace(ALL_TOKENS, (_, token: WatchToken) => {
     let value: string | undefined;
     switch (token) {
       case "tmdb_id":
@@ -317,7 +387,7 @@ export function watchLinks(item: SavedItem, sites: WatchSite[]): Array<{ host: s
   for (const site of sites) {
     if (!isEnabled(site) || !appliesTo(site, item.type)) continue;
     const url = buildWatchUrl(site, facts);
-    if (url) links.push({ host: site.host, url, search: isSearchSite(site) });
+    if (url) links.push({ host: site.host, url, search: isSearchSite(site, facts.kind) });
   }
   return links;
 }
@@ -334,17 +404,37 @@ const TOKEN_LABELS: Record<WatchToken, string> = {
   qm_pct: "title",
 };
 
-/** The pattern in plain words, such as `example.com/details?id=‹TMDB id›&type=‹movie or series›`. */
+/** The pattern in plain words, one line per kind when movies and series differ: `example.com/details?id=‹TMDB id›`. */
+export function patternLines(site: WatchSite): string[] {
+  const plain = (template: string) =>
+    template.replace(/^https?:\/\//i, "").replace(ALL_TOKENS, (_, token: WatchToken) => `‹${TOKEN_LABELS[token]}›`);
+  if (!site.templates) return [plain(site.template)];
+  return (["movie", "tv"] as const)
+    .filter((kind) => site.templates?.[kind] !== undefined)
+    .map((kind) => `${kind === "movie" ? "Movies" : "Series"}: ${plain(site.templates![kind]!)}`);
+}
+
+/** The same, on one line. */
 export function describePattern(site: WatchSite): string {
-  return site.template
-    .replace(/^https?:\/\//i, "")
-    .replace(ALL_TOKENS, (_, token: WatchToken) => `‹${TOKEN_LABELS[token]}›`);
+  return patternLines(site).join("  ·  ");
 }
 
 /** Which kinds this site can link to. Sites that don't tell movies from series work for both. */
 export function supportedKinds(site: WatchSite): TmdbKind[] {
+  if (site.templates) return (["movie", "tv"] as const).filter((kind) => site.templates?.[kind] !== undefined);
   if (!site.template.includes("{type}")) return ["movie", "tv"];
   return (["movie", "tv"] as const).filter((kind) => site.typeWords[kind] !== undefined);
+}
+
+/** The per-kind patterns of a site, keeping only well-formed ones on the same host, or undefined if there are none. */
+function sanitizeKindTemplates(raw: unknown, host: string): WatchSite["templates"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const out: NonNullable<WatchSite["templates"]> = {};
+  for (const kind of ["movie", "tv"] as const) {
+    const value = (raw as Record<string, unknown>)[kind];
+    if (typeof value === "string" && hostOf(value) === host && IDENTIFYING.test(value)) out[kind] = value;
+  }
+  return out.movie !== undefined || out.tv !== undefined ? out : undefined;
 }
 
 /** Keeps only well-formed sites, one per host, so a damaged store can't break anything. */
@@ -354,7 +444,7 @@ export function sanitizeWatchSites(raw: unknown): WatchSite[] {
   const sites: WatchSite[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
-    const { template, typeWords, types, enabled } = entry as Record<string, unknown>;
+    const { template, typeWords, types, enabled, templates } = entry as Record<string, unknown>;
     if (typeof template !== "string") continue;
     const host = hostOf(template);
     if (!host || seen.has(host) || !IDENTIFYING.test(template)) continue;
@@ -366,7 +456,15 @@ export function sanitizeWatchSites(raw: unknown): WatchSite[] {
     }
     seen.add(host);
     const limited = normalizeTypes(types);
-    sites.push({ host, template, typeWords: words, ...(limited ? { types: limited } : {}), ...(enabled === false ? { enabled: false } : {}) });
+    const own = sanitizeKindTemplates(templates, host);
+    sites.push({
+      host,
+      template,
+      typeWords: words,
+      ...(own ? { templates: own } : {}),
+      ...(limited ? { types: limited } : {}),
+      ...(enabled === false ? { enabled: false } : {}),
+    });
   }
   return sites.slice(0, MAX_WATCH_SITES);
 }

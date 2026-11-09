@@ -1,7 +1,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
-  addExampleToSite, appliesTo, isEnabled, MAX_WATCH_SITES, buildWatchUrl, defaultTypesFor, normalizeTypes, describePattern, isSearchSite, mainTitle, missingKind, searchText, getWatchSites, learnPattern, removeWatchSite, sanitizeWatchSites, saveWatchSite,
+  addExampleToSite, appliesTo, isEnabled, MAX_WATCH_SITES, patternLines, buildWatchUrl, defaultTypesFor, normalizeTypes, describePattern, isSearchSite, mainTitle, missingKind, searchText, getWatchSites, learnPattern, removeWatchSite, sanitizeWatchSites, saveWatchSite,
   siteFromLearned, slugify, supportedKinds, titleFacts, watchLinks, WATCH_SITES_KEY,
 } from "../dist-test/watch-sites.js";
 
@@ -73,15 +73,22 @@ test("rejects a movie address for a series title and the other way round", () =>
   assert.match(learnPattern("https://site.example/details?id=1368337&type=tv", odyssey).error, /series page/);
 });
 
-test("two examples give both type words, and must follow the same pattern", () => {
+test("two examples of one pattern give both type words", () => {
   const movie = learn("https://site.example/details?id=1368337&type=movie", odyssey);
   const show = learn("https://site.example/details?id=5920&type=tv", mentalist);
   const r = siteFromLearned(movie, show);
   assert.equal(r.ok, true);
   assert.deepEqual(r.site, { host: "site.example", template: "https://site.example/details?id={tmdb_id}&type={type}", typeWords: { movie: "movie", tv: "tv" } });
+});
 
-  const other = learn("https://site.example/watch/tt1196946", mentalist);
-  assert.match(siteFromLearned(movie, other).error, /same pattern/);
+test("two examples that can't both be from one site are refused", () => {
+  const movie = learn("https://site.example/details?id=1368337&type=movie", odyssey);
+  // A different site.
+  const elsewhere = learn("https://other.example/details?id=5920&type=tv", mentalist);
+  assert.match(siteFromLearned(movie, elsewhere).error, /same pattern/);
+  // The same kind of title written two different ways.
+  const another = learn("https://site.example/watch/tt0000001/movie", { ...odyssey, kind: "movie" });
+  assert.match(siteFromLearned(movie, another).error, /same pattern/);
 });
 
 test("builds the exact page for other titles", () => {
@@ -293,9 +300,9 @@ test("adding a page for a kind the site already has changes nothing", () => {
   assert.deepEqual(again.site.typeWords, { movie: "movie" });
 });
 
-test("adding a page from a different pattern, or one with no type word, is refused", () => {
+test("adding a page from another site, or one with no type word, is refused", () => {
   const site = siteFromLearned(learn("https://site.example/details?id=1368337&type=movie", odyssey)).site;
-  const other = learn("https://site.example/watch/tt1196946", mentalist);
+  const other = learn("https://elsewhere.example/watch/tt1196946", mentalist);
   assert.match(addExampleToSite(site, other).error, /same pattern/);
   const noType = siteFromLearned(learn("https://app.example.com/title/tt1196946", mentalist)).site;
   assert.equal(missingKind(noType), undefined);
@@ -382,4 +389,118 @@ test("changing a saved site keeps it where it is in the list", async () => {
   assert.deepEqual(sites.map((x) => x.host), ["s1.example", "s2.example", "s3.example"]);
   assert.equal(sites[0].enabled, false);
   assert.deepEqual(sites[1].types, ["anime"]);
+});
+
+// The shapes of a real site whose series address has extra parts that its movie address doesn't.
+const heartOfTheBeast = { tmdbId: 1263337, kind: "movie", title: "Heart of the Beast", year: "2026" };
+const fargo = { tmdbId: 60622, kind: "tv", title: "Fargo", year: "2014" };
+const MOVIE_URL = "https://solarmoviesz.example/player?id=1263337&type=movie";
+const SERIES_URL = "https://solarmoviesz.example/player?id=60622&type=tv&title=Fargo&season=1&episode=1";
+
+test("a movie page and a series page with different shapes give each kind its own pattern", () => {
+  const movie = learn(MOVIE_URL, heartOfTheBeast);
+  const show = learn(SERIES_URL, fargo);
+  assert.equal(movie.template, "https://solarmoviesz.example/player?id={tmdb_id}&type={type}");
+  assert.equal(show.template, "https://solarmoviesz.example/player?id={tmdb_id}&type={type}&title={q_plus}&season=1&episode=1");
+
+  const r = siteFromLearned(movie, show);
+  assert.equal(r.ok, true, r.error);
+  assert.deepEqual(r.site.templates, {
+    movie: "https://solarmoviesz.example/player?id={tmdb_id}&type=movie",
+    tv: "https://solarmoviesz.example/player?id={tmdb_id}&type=tv&title={q_plus}&season=1&episode=1",
+  });
+  assert.deepEqual(supportedKinds(r.site), ["movie", "tv"]);
+  assert.equal(missingKind(r.site), undefined);
+  assert.equal(buildWatchUrl(r.site, { tmdbId: 603, kind: "movie", title: "The Matrix" }), "https://solarmoviesz.example/player?id=603&type=movie");
+  assert.equal(
+    buildWatchUrl(r.site, { tmdbId: 1396, kind: "tv", title: "Breaking Bad" }),
+    "https://solarmoviesz.example/player?id=1396&type=tv&title=Breaking+Bad&season=1&episode=1"
+  );
+  assert.equal(buildWatchUrl(r.site, { kind: "tv", title: "No Id" }), undefined);
+  assert.match(describePattern(r.site), /^Movies: .*type=movie {2}· {2}Series: .*type=tv&title=‹title›&season=1&episode=1$/);
+});
+
+test("the order of the two examples doesn't matter", () => {
+  const r = siteFromLearned(learn(SERIES_URL, fargo), learn(MOVIE_URL, heartOfTheBeast));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(buildWatchUrl(r.site, { tmdbId: 603, kind: "movie", title: "The Matrix" }), "https://solarmoviesz.example/player?id=603&type=movie");
+});
+
+test("a site that knew one kind can add the other kind with a different shape, later", () => {
+  const site = siteFromLearned(learn(MOVIE_URL, heartOfTheBeast)).site;
+  assert.deepEqual(supportedKinds(site), ["movie"]);
+  assert.equal(missingKind(site), "tv");
+  const r = addExampleToSite(site, learn(SERIES_URL, fargo));
+  assert.equal(r.ok, true, r.error);
+  assert.equal(missingKind(r.site), undefined);
+  assert.equal(buildWatchUrl(r.site, { tmdbId: 603, kind: "movie", title: "The Matrix" }), "https://solarmoviesz.example/player?id=603&type=movie");
+  assert.match(buildWatchUrl(r.site, { tmdbId: 1396, kind: "tv", title: "Breaking Bad" }), /title=Breaking\+Bad&season=1&episode=1$/);
+  // The original is untouched.
+  assert.equal(site.templates, undefined);
+});
+
+test("with a pattern per kind, a kind that has none gets no link, and can be added", () => {
+  const site = siteFromLearned(learn(MOVIE_URL, heartOfTheBeast), learn(SERIES_URL, fargo)).site;
+  const movieOnly = { ...site, templates: { movie: site.templates.movie } };
+  assert.deepEqual(supportedKinds(movieOnly), ["movie"]);
+  assert.equal(missingKind(movieOnly), "tv");
+  assert.equal(buildWatchUrl(movieOnly, { tmdbId: 1396, kind: "tv", title: "Breaking Bad" }), undefined);
+  const back = addExampleToSite(movieOnly, learn(SERIES_URL, fargo));
+  assert.equal(back.ok, true, back.error);
+  assert.equal(back.site.templates.tv, site.templates.tv);
+});
+
+test("per-kind patterns still refuse a different site, the same kind written differently, and the year-only case", () => {
+  const site = siteFromLearned(learn(MOVIE_URL, heartOfTheBeast), learn(SERIES_URL, fargo)).site;
+  // Another site.
+  assert.match(addExampleToSite(site, learn("https://elsewhere.example/player?id=5920&type=tv", mentalist)).error, /same pattern/);
+  // A series written differently from the series pattern already saved.
+  assert.match(addExampleToSite(site, learn("https://solarmoviesz.example/player?id=5920&type=tv", mentalist)).error, /same pattern/);
+  // Years: a movie address with the year and a series address without it can't be told apart reliably.
+  const withYear = learn("https://app.example.com/movies/heart-of-the-beast-2026", { kind: "movie", title: "Heart of the Beast", year: "2026" });
+  const withoutYear = learn("https://app.example.com/shows/the-mentalist", mentalist);
+  assert.match(siteFromLearned(withYear, withoutYear).error, /year in it and the other doesn't/);
+});
+
+test("per-kind patterns survive saving, and damaged ones are dropped", () => {
+  const site = siteFromLearned(learn(MOVIE_URL, heartOfTheBeast), learn(SERIES_URL, fargo)).site;
+  assert.deepEqual(sanitizeWatchSites([site]), [site]);
+  const damaged = sanitizeWatchSites([{ ...site, templates: { movie: "https://elsewhere.example/x/{tmdb_id}", tv: "https://solarmoviesz.example/nothing" } }]);
+  assert.equal(damaged[0].templates, undefined);
+  const partly = sanitizeWatchSites([{ ...site, templates: { movie: site.templates.movie, tv: 5 } }]);
+  assert.deepEqual(partly[0].templates, { movie: site.templates.movie });
+  assert.equal("templates" in sanitizeWatchSites([{ ...site, templates: "x" }])[0], false);
+});
+
+test("a title name next to an id is still an exact page, not a search", () => {
+  const site = siteFromLearned(learn(MOVIE_URL, heartOfTheBeast), learn(SERIES_URL, fargo)).site;
+  assert.equal(isSearchSite(site), false);
+  assert.equal(isSearchSite(site, "tv"), false);
+  const links = watchLinks({ type: "series", title: "Breaking Bad", sourceUrl: "", tmdb: { id: 1396, kind: "tv", genres: [], fetchedAt: 1 } }, [site]);
+  assert.equal(links[0].search, false);
+});
+
+test("search is decided per kind, and a site is a search site only when every pattern is", () => {
+  const search = "https://s.example/find?q={q_plus}";
+  const exact = "https://s.example/title/{imdb_id}";
+  const mixed = { host: "s.example", template: exact, typeWords: {}, templates: { movie: exact, tv: search } };
+  assert.equal(isSearchSite(mixed, "movie"), false);
+  assert.equal(isSearchSite(mixed, "tv"), true);
+  assert.equal(isSearchSite(mixed), false);
+  assert.equal(isSearchSite({ ...mixed, templates: { movie: search, tv: search } }), true);
+  assert.equal(isSearchSite({ template: search }), true);
+  assert.equal(isSearchSite({ template: search }, "tv"), true);
+  const item = (type, kind) => ({ type, title: "Dune", sourceUrl: "https://www.imdb.com/title/tt0000001/", tmdb: { id: 1, kind, genres: [], fetchedAt: 1 } });
+  assert.deepEqual(watchLinks(item("movie", "movie"), [mixed]).map((l) => l.search), [false]);
+  assert.deepEqual(watchLinks(item("series", "tv"), [mixed]).map((l) => l.search), [true]);
+});
+
+test("patternLines gives one line per kind when they differ, and one otherwise", () => {
+  const split = siteFromLearned(learn(MOVIE_URL, heartOfTheBeast), learn(SERIES_URL, fargo)).site;
+  assert.deepEqual(patternLines(split), [
+    "Movies: solarmoviesz.example/player?id=‹TMDB id›&type=movie",
+    "Series: solarmoviesz.example/player?id=‹TMDB id›&type=tv&title=‹title›&season=1&episode=1",
+  ]);
+  const shared = siteFromLearned(learn("https://site.example/details?id=1368337&type=movie", odyssey)).site;
+  assert.deepEqual(patternLines(shared), ["site.example/details?id=‹TMDB id›&type=‹movie or series›"]);
 });
