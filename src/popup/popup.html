@@ -254,6 +254,7 @@
       </header>
 
       <div class="settings-body">
+        <h2 class="s-group">Preferences</h2>
         <details class="s-card" id="card-general">
           <summary>
             <span class="material-symbols-outlined s-card-icon">tune</span>
@@ -277,6 +278,22 @@
             </div>
           </div>
         </details>
+        <details class="s-card" id="card-quick">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">bolt</span>
+            <span class="s-card-title">Quick save</span>
+            <span class="s-card-summary" id="quick-summary">Alt+Shift+S</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <p class="s-hint">
+              Right-click a page, link or selected text and choose “Save … to KeepShelf”, or press
+              <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>. The toolbar icon shows ✓ when saved.
+              Change the shortcut at <span class="mono">chrome://extensions/shortcuts</span>.
+            </p>
+          </div>
+        </details>
+        <h2 class="s-group">Connections</h2>
         <details class="s-card" id="card-keep">
           <summary>
             <span class="material-symbols-outlined s-card-icon">cloud_sync</span>
@@ -406,44 +423,6 @@
             <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
           </div>
         </details>
-        <details class="s-card" id="card-watch">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">play_circle</span>
-            <span class="s-card-title">Watch sites</span>
-            <span class="s-card-summary" id="watch-summary">None</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Optional. Add a site where you watch, and each title on your shelf gets a button that opens its exact page
-              there. None are included. KeepShelf never visits the site: you paste one title's address, say which title it
-              is, and KeepShelf works out how the site builds its addresses. If the site has an address style that works for
-              both movies and series, use that one and you only need a single page.
-            </p>
-            <div class="watch-example">
-              <span class="watch-example-label">1. Paste the address of one title's page on the site</span>
-              <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
-              <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
-            </div>
-            <div class="watch-example">
-              <span class="watch-example-label">2. Optional: a page for the other kind, a series if the first was a movie or the other way round</span>
-              <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
-              <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
-            </div>
-            <p class="s-fine">
-              Only titles with a TMDB id or an IMDb id can be linked on sites that use ids, so set up your TMDB token
-              above and fetch info for your shelf first. Pick a title that has info.
-            </p>
-            <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
-            <ul id="watch-list" class="watch-list"></ul>
-            <div id="watch-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="watch-settings-status-text"></span>
-              </div>
-            </div>
-          </div>
-        </details>
         <details class="s-card" id="card-bookinfo">
           <summary>
             <span class="material-symbols-outlined s-card-icon">menu_book</span>
@@ -478,7 +457,59 @@
             <p class="s-fine" id="bookinfo-notice"></p>
           </div>
         </details>
-
+        <details class="s-card" id="card-watch">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">play_circle</span>
+            <span class="s-card-title">Watch sites</span>
+            <span class="s-card-summary" id="watch-summary">None</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <p class="s-hint">
+              Optional. Add a site where you watch, and each title gets a button that opens its page there. None are
+              included, and KeepShelf never visits the site: it only builds the link.
+            </p>
+            <details class="s-more">
+              <summary>How it works</summary>
+              <div class="s-more-body">
+                <p>Paste the address of one title's page and say which title it is. KeepShelf works out how the site builds
+                its addresses and uses that for every other title.</p>
+                <p>If the site has an address style that works for both movies and series, use that one and you only need a
+                single page.</p>
+                <p>Sites that use ids need a TMDB id or an IMDb id for the title, so set up your TMDB token above and fetch
+                info for your shelf first, then pick a title that has info.</p>
+                <p>If a site's title addresses can't be worked out (some add random letters), paste a search results page
+                for one title instead, and each title gets a button that opens that site's search. Search for a title with
+                two or more words. For a title like "One Piece: Wan pîsu", search for the part before the colon,
+                "One Piece", and pick that title.</p>
+              </div>
+            </details>
+            <div class="watch-example">
+              <span class="watch-example-label"><span class="watch-step">1</span>A title's page on the site, or a search for one title</span>
+              <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
+              <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
+            </div>
+            <details class="s-more">
+              <summary>Add a page for the other kind (movie or series)</summary>
+              <div class="s-more-body">
+                <div class="watch-example">
+                  <span class="watch-example-label"><span class="watch-step">2</span>A series if the first was a movie, or the other way round</span>
+                  <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
+                  <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
+                </div>
+              </div>
+            </details>
+            <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
+            <ul id="watch-list" class="watch-list"></ul>
+            <div id="watch-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="watch-settings-status-text"></span>
+              </div>
+            </div>
+          </div>
+        </details>
+        <h2 class="s-group">Your data</h2>
         <details class="s-card" id="card-backup">
           <summary>
             <span class="material-symbols-outlined s-card-icon">backup</span>
@@ -531,21 +562,6 @@
             <div id="duplicates-result" class="dup-result"></div>
           </div>
         </details>
-        <details class="s-card" id="card-quick">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">bolt</span>
-            <span class="s-card-title">Quick save</span>
-            <span class="s-card-summary" id="quick-summary">Alt+Shift+S</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Right-click a page, link or selected text and choose “Save … to KeepShelf”, or press
-              <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>. The toolbar icon shows ✓ when saved.
-              Change the shortcut at <span class="mono">chrome://extensions/shortcuts</span>.
-            </p>
-          </div>
-        </details>
       </div>
     </div>
 
@@ -583,16 +599,20 @@
         <div id="pick-leading" class="pick-leading"></div>
         <h2 id="pick-title" class="confirm-title"></h2>
         <p id="pick-detail" class="confirm-message"></p>
+        <div id="pick-chips" class="pick-chips" hidden></div>
         <p id="pick-overview" class="pick-overview" hidden></p>
-        <div id="pick-meta" class="pick-meta" hidden></div>
-        <div class="confirm-actions">
-          <button type="button" id="pick-again" class="btn btn-outline">Pick another</button>
+        <button type="button" id="pick-more" class="pick-more" hidden>More</button>
+        <p id="pick-review" class="pick-review" hidden></p>
+        <div id="pick-actions" class="confirm-actions">
           <button type="button" id="pick-start" class="btn btn-primary">Start</button>
-          <button type="button" id="pick-edit" class="btn btn-outline" hidden>Edit</button>
-          <button type="button" id="pick-close" class="btn btn-primary" hidden>Close</button>
         </div>
         <div id="pick-watch" class="pick-watch" hidden></div>
-        <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
+        <div id="pick-footer" class="pick-footer">
+          <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
+          <button type="button" id="pick-edit" class="btn btn-outline btn-sm" hidden>Edit</button>
+          <button type="button" id="pick-again" class="btn btn-primary btn-sm"><span class="material-symbols-outlined btn-icon">casino</span>Pick another</button>
+          <button type="button" id="pick-close" class="btn btn-primary btn-sm" hidden>Close</button>
+        </div>
       </div>
     </div>
 

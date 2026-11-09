@@ -419,9 +419,12 @@ To add one:
 
 Notes:
 - Sites that use a TMDB id need your [TMDB token](#tmdb-info) and fetched info for the title. Sites that use an IMDb id work for titles saved from IMDb even without a token.
-- Addresses with random letters added by the site can't be worked out. KeepShelf tells you when that happens.
+- If you only gave one kind of page, the site's row says "Movies only so far" (or "Series only") and has an **Add a series page** (or movie) button, so you can add the other kind later without starting over.
+- Some sites add random letters to their title addresses, and those can't be worked out. For those, paste the address of a **search results page** for one title instead (search for a title with two or more words, and pick that title; for a title like `One Piece: Wan pîsu`, search for the part before the colon, `One Piece`). Every title then gets a **Search on …** button that opens that site's search for it. That opens a search, not the exact page.
+- Each site row has **Show on** tick boxes (Movies, Series, Anime), so a site only adds its button to the kinds of title it is for. A site added with an anime as the example starts as anime only; anything else starts with all three. Change it any time.
 - If a site changes its address style, remove it and add it again.
-- Up to four sites. Everything is stored only in your browser.
+- Up to ten sites. Each has an on/off switch, so you can keep a long list and switch off the ones you don't want right now, without removing them. If more than two sites apply to a title, its row shows one button that opens the title's card, which lists them all.
+- Everything is stored only in your browser.
 
 ### Tips for best results
 

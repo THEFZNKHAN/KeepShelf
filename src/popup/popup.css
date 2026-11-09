@@ -829,7 +829,13 @@ body {
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
-  padding: 12px;
+  padding: 4px 12px 20px;
+  /* The cards open one at a time, so the page stays short; no scrollbar needed beside it. */
+  scrollbar-width: none;
+}
+
+.settings-body::-webkit-scrollbar {
+  display: none;
 }
 
 
@@ -1020,14 +1026,37 @@ body.in-tab {
 }
 
 .edit-panel {
-  max-width: 340px;
+  max-width: 372px;
+  padding: 14px;
 }
 
+/* The form body scrolls on its own with Save and Cancel pinned below it, and no visible scrollbar. */
 .edit-fields {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 8px;
-  margin: 8px 0 12px;
+  min-height: 0;
+  margin: 8px -2px 10px;
+  padding: 0 2px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.edit-fields::-webkit-scrollbar {
+  display: none;
+}
+
+/* A soft fade while more of the form is hidden below. */
+.edit-fields.has-more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+
+.edit-panel .confirm-title {
+  margin-bottom: 0;
+  font-size: 15px;
+  line-height: 20px;
 }
 
 .edit-field {
@@ -1051,7 +1080,7 @@ body.in-tab {
   font-size: 12px;
   font-weight: 400;
   outline: none;
-  resize: vertical;
+  resize: none;
 }
 
 .edit-field input:focus,
@@ -1067,6 +1096,10 @@ body.in-tab {
 .edit-row .edit-field {
   flex: 1;
   min-width: 0;
+}
+
+.edit-row .edit-field-wide {
+  flex: 1.7;
 }
 
 .edit-error {
@@ -1141,7 +1174,7 @@ body.in-tab {
 }
 
 .edit-section {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   padding-top: 8px;
   border-top: 1px solid var(--outline-variant);
   font-size: 11px;
@@ -1169,8 +1202,10 @@ body.in-tab {
 }
 
 .edit-panel {
+  display: flex;
+  flex-direction: column;
   max-height: calc(100vh - 24px);
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* ── Duplicates ──────────────────────────────────────────── */
@@ -1255,28 +1290,14 @@ body.in-tab {
   overflow-y: auto;
 }
 
-.pick-overview.is-full {
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.pick-meta {
+.pick-footer {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 0 0 8px;
-  font-size: 11.5px;
-  line-height: 16px;
-  color: var(--on-surface-variant);
-  text-align: left;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
-.pick-meta[hidden] {
+.pick-footer[hidden] {
   display: none;
-}
-
-.pick-meta strong {
-  color: var(--on-surface);
 }
 
 .pick-watch {
@@ -1288,6 +1309,199 @@ body.in-tab {
 
 .pick-watch[hidden] {
   display: none;
+}
+
+/* The info card: poster beside the title and facts, then labels, text and buttons in a tight stack. */
+.pick-panel.is-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  /* The poster is taller than the text beside it; the spare height goes to the last row, not between the lines. */
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: 8px 12px;
+  max-width: 360px;
+  padding: 14px;
+  text-align: left;
+}
+
+.pick-panel.is-card > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+}
+
+.pick-panel.is-card .pick-leading {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
+  justify-content: flex-start;
+}
+
+.pick-panel.is-card .pick-leading {
+  min-width: 40px;
+}
+
+.pick-panel.is-card .pick-leading .item-thumb {
+  width: 76px;
+  height: 114px;
+}
+
+.pick-panel.is-card .pick-leading .type-icon {
+  font-size: 36px;
+}
+
+.pick-panel.is-card .confirm-title {
+  grid-column: 2;
+  grid-row: 1;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 20px;
+  text-align: left;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pick-panel.is-card .confirm-message {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 11.5px;
+  line-height: 16px;
+  text-align: left;
+  white-space: pre-line;
+}
+
+.pick-panel.is-card .pick-chips {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+}
+
+.pick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pick-chips[hidden] {
+  display: none;
+}
+
+.pick-chip {
+  padding: 1px 7px;
+  border: 1px solid var(--outline-variant);
+  border-radius: 999px;
+  background: var(--surface-container-low);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--on-surface);
+}
+
+.pick-chip-tag {
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+.pick-panel.is-card .pick-overview {
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+/* Cut long text to a few lines instead of scrolling inside the card. */
+.pick-panel.is-clamped .pick-overview,
+.pick-panel.is-clamped .pick-review {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.pick-panel.is-clamped .pick-overview {
+  -webkit-line-clamp: 4;
+}
+
+.pick-panel.is-clamped .pick-review {
+  -webkit-line-clamp: 2;
+}
+
+.pick-more {
+  justify-self: start;
+  margin-top: -4px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pick-panel.is-card > .pick-more {
+  margin-top: -4px;
+}
+
+.pick-more[hidden] {
+  display: none;
+}
+
+/* The card is only as tall as its content; if a tall one ever overflows, it still scrolls, without a visible bar. */
+.pick-panel.is-card {
+  scrollbar-width: none;
+}
+
+.pick-panel.is-card::-webkit-scrollbar {
+  display: none;
+}
+
+.pick-review {
+  padding-left: 8px;
+  border-left: 2px solid var(--outline-variant);
+  font-size: 11.5px;
+  font-style: italic;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+}
+
+.pick-review[hidden] {
+  display: none;
+}
+
+.pick-watch.is-compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+.pick-watch.is-compact .btn {
+  display: inline-flex;
+  flex: 1 1 calc(50% - 3px);
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pick-watch.is-compact .btn-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.confirm-actions[hidden] {
+  display: none;
+}
+
+.pick-panel.is-card .pick-footer .pick-open {
+  width: auto;
+  margin: 0 auto 0 0;
+  padding: 0 10px;
+  height: 28px;
+  font-size: 11.5px;
 }
 
 /* ── Stats ───────────────────────────────────────────────── */
@@ -1672,11 +1886,16 @@ body.in-tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--surface-container);
   font-size: 11px;
+  line-height: 16px;
   color: var(--on-surface-variant);
 }
 
 .s-card-summary.is-ok {
+  background: var(--success-bg);
   color: var(--success-text);
 }
 
@@ -2096,7 +2315,6 @@ body.in-tab {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 2px 0 4px;
 }
 
 .season-title {
@@ -2107,48 +2325,81 @@ body.in-tab {
 
 .season-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  max-height: 132px;
-  overflow-y: auto;
-  padding: 2px;
 }
 
+/* One season: its number, the episodes watched, the total, and a button that fills it in. */
 .season-cell {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  min-width: 0;
+  padding: 2px 3px 2px 7px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+}
+
+.season-cell:focus-within {
+  border-color: var(--primary);
 }
 
 .season-cell label {
   display: flex;
+  flex: 1;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   font-size: 11px;
   font-weight: 700;
-  min-width: 0;
+  color: var(--on-surface);
+}
+
+.season-name {
+  flex-shrink: 0;
 }
 
 .season-cell input {
-  width: 40px;
+  width: 100%;
   min-width: 0;
-  padding: 3px 4px;
+  padding: 3px 2px;
+  border: none;
+  background: transparent;
   font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* No spinner arrows: the box is narrow and the total beside it needs the room. */
+.season-cell input::-webkit-outer-spin-button,
+.season-cell input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.season-total {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
 }
 
 .season-done {
-  border: 1px solid var(--outline-variant);
-  background: transparent;
-  color: inherit;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: var(--surface-container);
+  color: var(--on-surface);
   border-radius: var(--radius-lg);
   font-size: 11px;
   line-height: 1;
-  padding: 3px 5px;
   cursor: pointer;
 }
 
 .season-done:hover {
-  background: var(--surface-container);
+  background: var(--outline-variant);
 }
 
 /* Watch sites */
@@ -2200,6 +2451,7 @@ body.in-tab {
 
 .watch-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 5px 8px;
@@ -2232,4 +2484,200 @@ body.in-tab {
 .watch-row-note {
   font-size: 10.5px;
   color: var(--on-surface-variant);
+}
+
+.watch-row-buttons {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.watch-extra {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--outline-variant);
+}
+
+.watch-extra input[type="url"] {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.watch-extra input[type="url"]:focus {
+  border-color: var(--primary);
+}
+
+.watch-extra .view-select {
+  width: 100%;
+  height: 28px;
+}
+
+.watch-extra-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.watch-row-types {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding-top: 5px;
+  border-top: 1px solid var(--outline-variant);
+  font-size: 11px;
+  color: var(--on-surface-variant);
+}
+
+.watch-row-types label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--on-surface);
+  cursor: pointer;
+}
+
+.watch-row-types input {
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.watch-row.is-off .watch-row-text,
+.watch-row.is-off .watch-row-types {
+  opacity: 0.5;
+}
+
+/* ── Settings: groups, a quieter card list ───────────────── */
+
+.s-group {
+  margin: 10px 2px 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.s-group:first-child {
+  margin-top: 6px;
+}
+
+.s-card[open] {
+  border-color: var(--outline);
+}
+
+/* "How it works"-style disclosure inside a card, so long explanations don't crowd the controls. */
+.s-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--on-surface);
+  text-decoration: underline;
+  user-select: none;
+}
+
+.s-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.s-more > summary::before {
+  content: "+";
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.s-more[open] > summary::before {
+  content: "–";
+}
+
+.s-more-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-left: 2px solid var(--outline-variant);
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+}
+
+.watch-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-primary);
+}
+
+/* The random suggestion: same layout as an item's card, with one strong button. */
+.pick-panel.is-card .pick-kicker {
+  grid-column: 1 / -1;
+  text-align: left;
+}
+
+.pick-panel.is-pick {
+  gap: 10px 12px;
+  /* The kicker takes the first row, so the poster and text start on the second. */
+  grid-template-rows: auto auto auto 1fr auto;
+}
+
+.pick-panel.is-pick .pick-kicker {
+  grid-row: 1;
+}
+
+.pick-panel.is-pick .pick-leading {
+  grid-row: 2 / span 3;
+}
+
+.pick-panel.is-pick .confirm-title {
+  grid-row: 2;
+}
+
+.pick-panel.is-pick .confirm-message {
+  grid-row: 3;
+}
+
+.pick-panel.is-pick .pick-chips {
+  grid-row: 4;
+}
+
+/* Start watching is the one big button; Pick another and Close sit in the same footer row as on the item's card. */
+.pick-panel.is-pick .confirm-actions .btn {
+  flex: 1;
+  height: 34px;
+}
+
+/* Pick another is solid so it stands out in the footer row; the dice icon says what it does. */
+.pick-footer .btn:not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pick-footer .btn-icon {
+  font-size: 14px;
 }
