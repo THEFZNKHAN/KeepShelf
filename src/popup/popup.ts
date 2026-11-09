@@ -7,6 +7,19 @@ import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
+import {
+  describePattern,
+  getWatchSites,
+  learnPattern,
+  removeWatchSite,
+  saveWatchSite,
+  siteFromLearned,
+  supportedKinds,
+  titleFacts,
+  watchLinks,
+  type Learned,
+  type WatchSite,
+} from "../shared/watch-sites.js";
 import { groupTags } from "../shared/tag-filter.js";
 import { createTagPicker } from "./tag-picker.js";
 import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, totalPages } from "../shared/openlibrary.js";
@@ -50,6 +63,8 @@ let activeFilter: MediaType | "all" = "all";
 let activeTab: "media" | "books" | "tabs" = "media";
 let searchQuery = "";
 let tmdbConfigured = false;
+/** Sites the user added in Settings; each gets a "Watch" button on titles it can link to. */
+let watchSites: WatchSite[] = [];
 let bookInfoEnabled = false;
 let tagFilter = "";
 let listFilter = "";
@@ -621,6 +636,10 @@ function createRowActions(item: SavedItem): HTMLElement {
   const isTabLike = item.type === "tab" || item.type === "link" || item.type === "note";
   if (!isTabLike && isHttpUrl(item.sourceUrl ?? "")) {
     actions.append(createRowAction("open_in_new", "Open source page", () => void chrome.tabs.create({ url: item.sourceUrl })));
+  }
+
+  for (const link of watchLinks(item, watchSites)) {
+    actions.append(createRowAction("play_circle", `Watch on ${link.host}`, () => void chrome.tabs.create({ url: link.url })));
   }
 
   actions.append(createRowAction("edit", "Edit", () => openEditDialog(item)));
@@ -2003,6 +2022,135 @@ document.getElementById("tmdb-save")!.addEventListener("click", () => void saveT
 document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
 tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
 
+/* ── Watch sites ─────────────────────────────────────────── */
+
+const watchUrlEls = [document.getElementById("watch-url-1"), document.getElementById("watch-url-2")] as HTMLInputElement[];
+const watchItemEls = [document.getElementById("watch-item-1"), document.getElementById("watch-item-2")] as HTMLSelectElement[];
+const watchAddEl = document.getElementById("watch-add") as HTMLButtonElement;
+const watchListEl = document.getElementById("watch-list")!;
+const watchSummaryEl = document.getElementById("watch-summary")!;
+const watchStatusEl = document.getElementById("watch-settings-status")!;
+const watchStatusTextEl = document.getElementById("watch-settings-status-text")!;
+const watchStatusIconEl = document.getElementById("watch-settings-status-icon")!;
+const watchStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+
+function showWatchStatus(msg: string, err = false, ms = 8000): void {
+  showSectionStatus(watchStatusEl, watchStatusTextEl, watchStatusIconEl, watchStatusTimer, msg, err, ms);
+}
+
+/** Movies, series and anime, with what KeepShelf already knows about each, so the user can say which one a page is for. */
+function fillWatchItemPickers(): void {
+  const eligible = allItems.filter((i) => titleFacts(i) !== undefined);
+  for (const select of watchItemEls) {
+    const chosen = select.value;
+    select.replaceChildren(new Option("Which title is that page for?", ""));
+    for (const item of eligible) {
+      const known = item.tmdb ? "TMDB info" : item.sourceUrl.includes("/title/tt") ? "IMDb" : "";
+      const label = `${item.title}${item.year ? ` (${item.year})` : ""}${known ? ` · ${known}` : ""}`;
+      select.append(new Option(label, item.id));
+    }
+    select.value = eligible.some((i) => i.id === chosen) ? chosen : "";
+  }
+}
+
+function renderWatchSites(): void {
+  watchSummaryEl.textContent = watchSites.length === 0 ? "None" : `${watchSites.length} added`;
+  watchSummaryEl.classList.toggle("is-ok", watchSites.length > 0);
+  watchListEl.replaceChildren(
+    ...watchSites.map((site) => {
+      const row = document.createElement("li");
+      row.className = "watch-row";
+      const text = document.createElement("div");
+      text.className = "watch-row-text";
+      const host = document.createElement("span");
+      host.className = "watch-row-host";
+      host.textContent = site.host;
+      const pattern = document.createElement("span");
+      pattern.className = "watch-row-pattern";
+      pattern.textContent = describePattern(site);
+      pattern.title = describePattern(site);
+      text.append(host, pattern);
+      const kinds = supportedKinds(site);
+      if (kinds.length < 2) {
+        const note = document.createElement("span");
+        note.className = "watch-row-note";
+        note.textContent = kinds[0] === "movie" ? "Movies only. Remove and add again with a series page to include series." : "Series only. Remove and add again with a movie page to include movies.";
+        text.append(note);
+      }
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "btn btn-outline btn-sm";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => void removeSite(site.host));
+      row.append(text, remove);
+      return row;
+    })
+  );
+}
+
+async function loadWatchSites(): Promise<void> {
+  try {
+    watchSites = await getWatchSites();
+  } catch {
+    watchSites = [];
+  }
+  renderWatchSites();
+  render();
+}
+
+function learnFromRow(index: number): { ok: true; learned: Learned } | { ok: false; error: string } | undefined {
+  const url = watchUrlEls[index].value.trim();
+  if (!url) return undefined;
+  const item = allItems.find((i) => i.id === watchItemEls[index].value);
+  const facts = item ? titleFacts(item) : undefined;
+  if (!facts) return { ok: false, error: `Pick which title page ${index + 1} is for.` };
+  return learnPattern(url, facts);
+}
+
+async function addWatchSite(): Promise<void> {
+  watchAddEl.disabled = true;
+  try {
+    const first = learnFromRow(0);
+    if (!first) throw new Error("Paste the address of one title's page first.");
+    if (!first.ok) throw new Error(first.error);
+    const second = learnFromRow(1);
+    if (second && !second.ok) throw new Error(second.error);
+    const made = siteFromLearned(first.learned, second?.ok ? second.learned : undefined);
+    if (!made.ok) throw new Error(made.error);
+    watchSites = await saveWatchSite(made.site);
+    for (const el of watchUrlEls) el.value = "";
+    for (const el of watchItemEls) el.value = "";
+    renderWatchSites();
+    render();
+    const kinds = supportedKinds(made.site);
+    showWatchStatus(
+      `Added ${made.site.host}. ` +
+        (kinds.length < 2 ? `It will link ${kinds[0] === "movie" ? "movies" : "series"} only, because you gave one kind of page. ` : "") +
+        "Titles it can link to now have a play button."
+    );
+  } catch (err) {
+    showWatchStatus(err instanceof Error ? err.message : "Could not add the site.", true);
+  } finally {
+    watchAddEl.disabled = false;
+  }
+}
+
+async function removeSite(host: string): Promise<void> {
+  try {
+    watchSites = await removeWatchSite(host);
+    renderWatchSites();
+    render();
+    showWatchStatus(`Removed ${host}.`);
+  } catch (err) {
+    showWatchStatus(err instanceof Error ? err.message : "Could not remove the site.", true);
+  }
+}
+
+watchAddEl.addEventListener("click", () => void addWatchSite());
+document.getElementById("card-watch")!.addEventListener("toggle", (e) => {
+  if ((e.target as HTMLDetailsElement).open) fillWatchItemPickers();
+});
+
 /* ── Book info settings ──────────────────────────────────── */
 
 const prefBookInfoEl = document.getElementById("pref-book-info") as HTMLInputElement;
@@ -2500,5 +2648,6 @@ void loadItems().then(async () => {
 });
 void loadKeepSettings();
 void loadTmdbSettings();
+void loadWatchSites();
 void loadBookInfoSettings();
 void loadReminderSettings();

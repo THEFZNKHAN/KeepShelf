@@ -118,6 +118,7 @@ KeepShelf/
 │       ├── rottentomatoes.ts  # Rotten Tomatoes parser (JSON-LD + hero metadata)
 │       ├── trakt.ts           # Trakt parser (client-rendered JSON-LD)
 │       ├── media-jsonld.ts    # Shared JSON-LD helpers for Movie / TVSeries pages
+│       ├── watch-sites.ts     # Watch sites: learn an address pattern from one example, build exact links
 │       ├── items.ts           # Builders for tab, link and note items
 │       ├── import.ts          # Backup JSON, Letterboxd and Goodreads CSV import
 │       ├── page-data.ts       # requestPageData: ask the content script, inject if missing
@@ -140,6 +141,7 @@ KeepShelf/
 │   ├── tmdb.test.mjs
 │   ├── openlibrary.test.mjs
 │   ├── background-*.test.mjs  # Service worker with a fake chrome: books, undo, seasons, reminders
+│   ├── watch-sites.test.mjs   # Learning address patterns and building watch links
 │   ├── keep-settings.test.mjs
 │   ├── imdb.test.mjs
 │   ├── seriesgraph.test.mjs
