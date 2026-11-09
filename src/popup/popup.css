@@ -2469,11 +2469,10 @@ body.in-tab {
 }
 
 .watch-row-pattern {
-  overflow: hidden;
   font-size: 10.5px;
   color: var(--on-surface-variant);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Long patterns wrap, so a site with a different address per kind shows both in full. */
+  overflow-wrap: anywhere;
 }
 
 .watch-row-note {
