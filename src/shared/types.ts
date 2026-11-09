@@ -130,6 +130,7 @@ export type MessageAction =
   | { action: "syncKeep"; ids: string[] }
   | { action: "import"; items: ImportItem[] }
   | { action: "merge"; keepId: string; removeIds: string[] }
+  | { action: "restore"; items: SavedItem[] }
   | { action: "getBookInfoSettings" }
   | { action: "setBookInfoEnabled"; enabled: boolean }
   | { action: "enrichBooks"; ids?: string[]; force?: boolean }

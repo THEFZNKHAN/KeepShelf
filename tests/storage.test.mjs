@@ -54,3 +54,67 @@ test("mergeItems folds user data into the keeper and removes the rest", async ()
   await assert.rejects(() => mergeItems("missing", []));
   delete globalThis.chrome;
 });
+
+function fakeChrome(store) {
+  globalThis.chrome = {
+    storage: {
+      local: {
+        get: async () => JSON.parse(JSON.stringify(store)),
+        set: async (value) => Object.assign(store, value),
+      },
+    },
+  };
+}
+
+test("restoreItems puts deleted items back with their original ids and order", async () => {
+  const { restoreItems, deleteItems, STORAGE_KEY } = await import("../dist-test/storage.js");
+  const base = { subtitle: "", googleQuery: "", sourceUrl: "", type: "movie" };
+  const original = [
+    { ...base, id: "a", title: "A", savedAt: 30, tags: ["x"], myRating: 8 },
+    { ...base, id: "b", title: "B", savedAt: 20 },
+    { ...base, id: "c", title: "C", savedAt: 10 },
+  ];
+  const store = { [STORAGE_KEY]: structuredClone(original) };
+  fakeChrome(store);
+  const removed = structuredClone(original.filter((i) => i.id !== "b"));
+  await deleteItems(["a", "c"]);
+  assert.deepEqual(store[STORAGE_KEY].map((i) => i.id), ["b"]);
+  const result = await restoreItems(removed);
+  assert.deepEqual(result, original);
+  assert.deepEqual(store[STORAGE_KEY], original);
+  delete globalThis.chrome;
+});
+
+test("restoreItems overwrites an item with the same id and never duplicates", async () => {
+  const { restoreItems, STORAGE_KEY } = await import("../dist-test/storage.js");
+  const base = { subtitle: "", googleQuery: "", sourceUrl: "", type: "movie" };
+  const store = { [STORAGE_KEY]: [{ ...base, id: "a", title: "A", savedAt: 5, tags: ["merged"] }] };
+  fakeChrome(store);
+  const result = await restoreItems([
+    { ...base, id: "a", title: "A", savedAt: 5 },
+    { ...base, id: "b", title: "B", savedAt: 9 },
+  ]);
+  assert.deepEqual(result.map((i) => i.id), ["b", "a"]);
+  assert.equal(result.find((i) => i.id === "a").tags, undefined);
+  await restoreItems([{ ...base, id: "b", title: "B", savedAt: 9 }]);
+  assert.equal(store[STORAGE_KEY].length, 2);
+  delete globalThis.chrome;
+});
+
+test("undoing a merge brings back the removed items and the keeper's original data", async () => {
+  const { restoreItems, mergeItems, STORAGE_KEY } = await import("../dist-test/storage.js");
+  const { snapshotItems } = await import("../dist-test/undo.js");
+  const base = { subtitle: "", googleQuery: "", sourceUrl: "", type: "movie" };
+  const original = [
+    { ...base, id: "a", title: "Dune", savedAt: 2, tags: ["x"] },
+    { ...base, id: "b", title: "Dune ", savedAt: 1, tags: ["y"], myRating: 9, status: "done", done: true, doneAt: 5 },
+  ];
+  const store = { [STORAGE_KEY]: structuredClone(original) };
+  fakeChrome(store);
+  const snap = snapshotItems(original, ["a", "b"]);
+  await mergeItems("a", ["b"]);
+  assert.equal(store[STORAGE_KEY].length, 1);
+  await restoreItems(snap);
+  assert.deepEqual(store[STORAGE_KEY], original);
+  delete globalThis.chrome;
+});

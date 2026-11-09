@@ -429,6 +429,28 @@ body {
   flex-shrink: 0;
 }
 
+.toast-action {
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: var(--radius-lg);
+  padding: 1px 8px;
+  margin-left: var(--gap-xs);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toast-action:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.toast-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .toast-close {
   border: none;
   background: transparent;

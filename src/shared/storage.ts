@@ -80,6 +80,18 @@ export async function mergeItems(keepId: string, removeIds: string[]): Promise<S
   return result;
 }
 
+/**
+ * Puts items back exactly as they were (same id and savedAt), replacing any item with the same id.
+ * Used by Undo; unlike import it never makes new ids.
+ */
+export async function restoreItems(restored: SavedItem[]): Promise<SavedItem[]> {
+  const byId = new Map((await getAllItems()).map((i) => [i.id, i]));
+  for (const item of restored) byId.set(item.id, item);
+  const items = [...byId.values()].sort((a, b) => b.savedAt - a.savedAt);
+  await chrome.storage.local.set({ [STORAGE_KEY]: items });
+  return items;
+}
+
 export async function clearAll(): Promise<void> {
   await chrome.storage.local.set({ [STORAGE_KEY]: [] });
 }
