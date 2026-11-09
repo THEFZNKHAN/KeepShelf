@@ -633,8 +633,8 @@ function createRowActions(item: SavedItem): HTMLElement {
     )
   );
 
-  const isTabLike = item.type === "tab" || item.type === "link" || item.type === "note";
-  if (!isTabLike && isHttpUrl(item.sourceUrl ?? "")) {
+  // For movies and series the Watch buttons and the detail card (which has "Open page") replace this.
+  if (item.type === "book" && isHttpUrl(item.sourceUrl ?? "")) {
     actions.append(createRowAction("open_in_new", "Open source page", () => void chrome.tabs.create({ url: item.sourceUrl })));
   }
 
@@ -942,7 +942,15 @@ function render(): void {
         return;
       }
 
-      checkbox.checked = !checkbox.checked;
+      // Tapping a row shows everything about it. Only the tick box selects.
+      if (!isOpenable) showDetails(item, "info");
+    });
+    li.tabIndex = 0;
+    li.addEventListener("keydown", (e) => {
+      if (e.target === li && (e.key === "Enter" || e.key === " ") && !isOpenable) {
+        e.preventDefault();
+        showDetails(item, "info");
+      }
     });
 
     listEl.append(li);
@@ -2240,21 +2248,82 @@ const pickStartEl = document.getElementById("pick-start") as HTMLButtonElement;
 const pickOpenEl = document.getElementById("pick-open") as HTMLButtonElement;
 let pickedId: string | undefined;
 
-function showPick(item: SavedItem): void {
+const pickMetaEl = document.getElementById("pick-meta")!;
+const pickWatchEl = document.getElementById("pick-watch")!;
+const pickKickerEl = document.getElementById("pick-heading")!;
+const pickAgainEl = document.getElementById("pick-again") as HTMLButtonElement;
+const pickEditEl = document.getElementById("pick-edit") as HTMLButtonElement;
+const pickCloseEl = document.getElementById("pick-close") as HTMLButtonElement;
+
+/** "pick" is the random suggestion; "info" is what opens when you tap a row. Same card, different buttons. */
+type DetailMode = "pick" | "info";
+
+/** Your own data as short labelled lines, shown on the card when you open an item. */
+function metaLines(item: SavedItem): Array<[label: string, value: string]> {
+  const lines: Array<[string, string]> = [];
+  const status = statusOf(item);
+  lines.push(["Status", statusLabel(status)]);
+  const progress = progressText(item);
+  if (progress) lines.push(["Progress", progress]);
+  if (item.myRating) lines.push(["Your rating", `★ ${item.myRating}/10`]);
+  if (item.tags?.length) lines.push(["Tags", item.tags.join(", ")]);
+  if (item.list) lines.push(["List", item.list]);
+  if (item.review) lines.push(["Your review", item.review]);
+  return lines;
+}
+
+function showDetails(item: SavedItem, mode: DetailMode): void {
   cancelRowHover();
   pickedId = item.id;
+  const info = mode === "info";
+  pickKickerEl.hidden = info;
   pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
   pickDetailEl.textContent = [itemSubtitle(item), genreText(item).split(/,\s*/).slice(0, 3).join(", "), item.tmdb?.certification, item.author]
     .filter(Boolean)
     .join(" · ");
   const overview = item.tmdb?.overview ?? item.bookInfo?.description;
-  pickOverviewEl.textContent = overview ? clipText(overview, 220) : "";
+  pickOverviewEl.textContent = overview ? (info ? overview : clipText(overview, 220)) : "";
+  pickOverviewEl.classList.toggle("is-full", info);
   pickOverviewEl.hidden = !overview;
+
+  const lines = info ? metaLines(item) : [];
+  pickMetaEl.replaceChildren(
+    ...lines.map(([label, value]) => {
+      const row = document.createElement("div");
+      const strong = document.createElement("strong");
+      strong.textContent = `${label}: `;
+      row.append(strong, document.createTextNode(value));
+      return row;
+    })
+  );
+  pickMetaEl.hidden = lines.length === 0;
+
   const inProgress = statusOf(item) === "in_progress";
   pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
+  pickAgainEl.hidden = info;
+  pickStartEl.hidden = info;
+  pickEditEl.hidden = !info;
+  pickCloseEl.hidden = !info;
+
+  pickWatchEl.replaceChildren(
+    ...watchLinks(item, watchSites).map((link) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-primary btn-block";
+      btn.textContent = `Watch on ${link.host}`;
+      btn.addEventListener("click", () => void chrome.tabs.create({ url: link.url }));
+      return btn;
+    })
+  );
+  pickWatchEl.hidden = pickWatchEl.childElementCount === 0;
+
   pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
   pickDialogEl.hidden = false;
+}
+
+function showPick(item: SavedItem): void {
+  showDetails(item, "pick");
 }
 
 function pickForMe(excludeId?: string): void {
@@ -2280,6 +2349,12 @@ function closePick(): void {
 document.getElementById("pick-random")!.addEventListener("click", () => pickForMe());
 document.getElementById("pick-again")!.addEventListener("click", () => pickForMe(pickedId));
 pickDialogEl.querySelector("[data-pick-dismiss]")!.addEventListener("click", closePick);
+pickCloseEl.addEventListener("click", closePick);
+pickEditEl.addEventListener("click", () => {
+  const item = allItems.find((i) => i.id === pickedId);
+  closePick();
+  if (item) openEditDialog(item);
+});
 pickStartEl.addEventListener("click", async () => {
   const item = allItems.find((i) => i.id === pickedId);
   if (!item) return;
