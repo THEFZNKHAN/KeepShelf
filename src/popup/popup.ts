@@ -1311,7 +1311,8 @@ async function syncToKeep(ids: string[]): Promise<void> {
 
 /* ── Edit dialog ─────────────────────────────────────────── */
 
-type EditFieldSpec = { key: keyof EditableFields; label: string; multiline?: boolean; half?: boolean };
+/** Fields with the same `group` share a row; `wide` ones take more of it. */
+type EditFieldSpec = { key: keyof EditableFields; label: string; multiline?: boolean; group?: string; wide?: boolean };
 
 function editFieldsFor(item: SavedItem): EditFieldSpec[] {
   switch (item.type) {
@@ -1327,25 +1328,26 @@ function editFieldsFor(item: SavedItem): EditFieldSpec[] {
       return [
         { key: "title", label: "Title" },
         { key: "author", label: "Author" },
-        { key: "publishedYear", label: "Year", half: true },
-        { key: "imdbRating", label: "Rating", half: true },
+        { key: "publishedYear", label: "Year", group: "facts" },
+        { key: "imdbRating", label: "Rating", group: "facts" },
       ];
     default:
       return [
         { key: "title", label: "Title" },
-        { key: "year", label: "Year", half: true },
-        { key: "imdbRating", label: "Rating", half: true },
-        { key: "durationOrSeasons", label: "Runtime or seasons (e.g. 2h 28m, 3 seasons)" },
+        { key: "year", label: "Year", group: "facts" },
+        { key: "imdbRating", label: "Rating", group: "facts" },
+        { key: "durationOrSeasons", label: "Runtime / seasons", group: "facts", wide: true },
       ];
   }
 }
 
 function buildEditField(spec: EditFieldSpec, value: string): HTMLElement {
   const label = document.createElement("label");
-  label.className = "edit-field";
+  label.className = spec.wide ? "edit-field edit-field-wide" : "edit-field";
   label.textContent = spec.label;
   const input = document.createElement(spec.multiline ? "textarea" : "input");
   input.name = spec.key;
+  if (spec.key === "durationOrSeasons") input.placeholder = "2h 28m or 3 seasons";
   input.value = value;
   if (input instanceof HTMLTextAreaElement) input.rows = 4;
   else input.type = spec.key === "url" ? "url" : "text";
@@ -1359,26 +1361,29 @@ function openEditDialog(item: SavedItem): void {
   editErrorEl.hidden = true;
   editFieldsEl.innerHTML = "";
 
-  let pendingRow: HTMLElement | null = null;
+  const groups = new Map<string, HTMLElement>();
   for (const spec of editFieldsFor(item)) {
     const value = spec.key === "body" ? (item.body ?? item.title) : (item[spec.key] ?? "");
     const field = buildEditField(spec, value);
-    if (!spec.half) {
+    if (!spec.group) {
       editFieldsEl.append(field);
       continue;
     }
-    if (!pendingRow) {
-      pendingRow = document.createElement("div");
-      pendingRow.className = "edit-row";
-      editFieldsEl.append(pendingRow);
+    let groupRow = groups.get(spec.group);
+    if (!groupRow) {
+      groupRow = document.createElement("div");
+      groupRow.className = "edit-row";
+      groups.set(spec.group, groupRow);
+      editFieldsEl.append(groupRow);
     }
-    pendingRow.append(field);
-    if (pendingRow.childElementCount === 2) pendingRow = null;
+    groupRow.append(field);
   }
 
   appendPersonalFields(item);
 
   editDialogEl.hidden = false;
+  editFieldsEl.scrollTop = 0;
+  updateEditScrollHint();
   editFieldsEl.querySelector<HTMLElement>("input, textarea")?.focus();
 }
 
@@ -1428,6 +1433,8 @@ function appendPersonalFields(item: SavedItem): void {
   heading.textContent = "Your shelf";
   editFieldsEl.append(heading);
 
+  // With seasons tracked, "Total episodes" shares a row with List further down, to save a line.
+  let totalField: HTMLElement | undefined;
   if (isTrackable(item)) {
     const statuses: ItemStatus[] = ["plan", "in_progress", "done", "dropped"];
     const ratings: Array<[string, string]> = [["", "No rating"]];
@@ -1436,32 +1443,33 @@ function appendPersonalFields(item: SavedItem): void {
       row(
         buildSelectField("status", "Status", statuses.map((s) => [s, statusLabel(s)]), statusOf(item)),
         buildSelectField("myRating", "My rating", ratings, item.myRating ? String(item.myRating) : "")
-      ),
-      ...(tracksProgress(item) && item.type !== "book" && seasonTotals(item)
-        ? [buildSeasonBlock(item), row(buildTextField("progressTotal", "Total episodes", String(item.progressTotal ?? ""), "number", autoTotalLabel(item)))]
-        : tracksProgress(item)
-        ? [
-            row(
-              buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
-              buildTextField(
-                "progressTotal",
-                item.type === "book" ? "Total pages" : "Total episodes",
-                String(item.progressTotal ?? ""),
-                "number",
-                // Left empty, the total comes from TMDB or the page automatically.
-                autoTotalLabel(item)
-              )
-            ),
-          ]
-        : [])
+      )
     );
+    if (tracksProgress(item) && item.type !== "book" && seasonTotals(item)) {
+      editFieldsEl.append(buildSeasonBlock(item));
+      totalField = buildTextField("progressTotal", "Total episodes", String(item.progressTotal ?? ""), "number", autoTotalLabel(item));
+    } else if (tracksProgress(item)) {
+      editFieldsEl.append(
+        row(
+          buildTextField("progressCurrent", item.type === "book" ? "Pages read" : "Episodes done", String(item.progressCurrent ?? ""), "number"),
+          buildTextField(
+            "progressTotal",
+            item.type === "book" ? "Total pages" : "Total episodes",
+            String(item.progressTotal ?? ""),
+            "number",
+            // Left empty, the total comes from TMDB or the page automatically.
+            autoTotalLabel(item)
+          )
+        )
+      );
+    }
   }
 
-  editFieldsEl.append(
-    buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "weekend, rewatch"),
-    ...(genreTags(item).length ? [buildHint(`Genres also work as tags in the filter, no typing needed: ${genreTags(item).join(", ")}`)] : []),
-    buildTextField("list", "List", item.list ?? "", "text", "e.g. Weekend watch")
-  );
+  editFieldsEl.append(buildTextField("tags", "Tags (comma separated)", (item.tags ?? []).join(", "), "text", "weekend, rewatch"));
+  const genres = genreTags(item);
+  if (genres.length) editFieldsEl.append(buildHint(`Genres already work as tags: ${genres.join(", ")}`));
+  const listField = buildTextField("list", "List", item.list ?? "", "text", "e.g. Weekend watch");
+  editFieldsEl.append(totalField ? row(totalField, listField) : listField);
 
   if (isTrackable(item)) {
     const label = document.createElement("label");
@@ -1469,7 +1477,8 @@ function appendPersonalFields(item: SavedItem): void {
     label.textContent = "Review";
     const area = document.createElement("textarea");
     area.name = "review";
-    area.rows = 3;
+    area.rows = 2;
+    area.placeholder = "What did you think?";
     area.value = item.review ?? "";
     label.append(area);
     editFieldsEl.append(label);
@@ -1509,28 +1518,35 @@ function buildSeasonBlock(item: SavedItem): HTMLElement {
   totals.forEach((total, i) => {
     const cell = document.createElement("div");
     cell.className = "season-cell";
+    cell.title = `Season ${i + 1}: ${total} episode${total === 1 ? "" : "s"}`;
     const label = document.createElement("label");
-    label.textContent = `S${i + 1}`;
-    label.title = `Season ${i + 1}: ${total} episode${total === 1 ? "" : "s"}`;
+    const name = document.createElement("span");
+    name.className = "season-name";
+    name.textContent = `S${i + 1}`;
     const input = document.createElement("input");
     input.type = "number";
     input.name = `season-${i + 1}`;
     input.min = "0";
     input.max = String(total);
     input.value = start[i] ? String(start[i]) : "";
-    input.placeholder = `/${total}`;
+    input.placeholder = "0";
+    input.setAttribute("aria-label", `Episodes watched in season ${i + 1} of ${total}`);
     input.addEventListener("input", () => refresh(true));
+    const of = document.createElement("span");
+    of.className = "season-total";
+    of.textContent = `/${total}`;
+    label.append(name, input, of);
     const done = document.createElement("button");
     done.type = "button";
     done.className = "season-done";
     done.textContent = "✓";
     done.title = `Mark season ${i + 1} as watched`;
+    done.setAttribute("aria-label", done.title);
     done.addEventListener("click", () => {
       const filled = markSeasonDone(values(), totals, i + 1);
       inputs.forEach((el, n) => { el.value = filled[n] ? String(filled[n]) : ""; });
       refresh(true);
     });
-    label.append(input);
     cell.append(label, done);
     inputs.push(input);
     grid.append(cell);
@@ -1618,7 +1634,7 @@ function buildBookBlock(itemId: string): HTMLElement {
     if (item.bookInfo) {
       const removeBtn = document.createElement("button");
       removeBtn.type = "button";
-      removeBtn.className = "btn btn-outline";
+      removeBtn.className = "btn btn-outline btn-sm";
       removeBtn.textContent = "Wrong match? Remove";
       removeBtn.addEventListener("click", async () => {
         const response = await sendToBackground({ action: "removeBookMatch", id: itemId });
@@ -1676,18 +1692,12 @@ function buildTmdbBlock(itemId: string): HTMLElement {
           ? "Match removed. Fetch again to look it up."
           : "No match found yet.";
     block.append(text);
-    if (item.tmdb?.overview) {
-      const overview = document.createElement("p");
-      overview.className = "edit-tmdb-overview";
-      overview.textContent = item.tmdb.overview;
-      block.append(overview);
-    }
 
     const actions = document.createElement("div");
     actions.className = "edit-tmdb-actions";
     const fetchBtn = document.createElement("button");
     fetchBtn.type = "button";
-    fetchBtn.className = "btn btn-outline";
+    fetchBtn.className = "btn btn-outline btn-sm";
     fetchBtn.textContent = item.tmdb ? "Refresh" : "Fetch info";
     fetchBtn.disabled = !tmdbConfigured;
     fetchBtn.addEventListener("click", async () => {
@@ -1729,6 +1739,13 @@ function buildTmdbBlock(itemId: string): HTMLElement {
   paint();
   return block;
 }
+
+/** A soft fade at the bottom while more of the form is hidden below, so the missing scrollbar isn't missed. */
+function updateEditScrollHint(): void {
+  const more = editFieldsEl.scrollTop + editFieldsEl.clientHeight < editFieldsEl.scrollHeight - 2;
+  editFieldsEl.classList.toggle("has-more", more);
+}
+editFieldsEl.addEventListener("scroll", updateEditScrollHint);
 
 function closeEditDialog(): void {
   editDialogEl.hidden = true;
@@ -2048,6 +2065,17 @@ async function enrichShelf(): Promise<void> {
 document.getElementById("tmdb-save")!.addEventListener("click", () => void saveTmdbToken());
 document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
 tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
+
+/* ── Settings cards: one open at a time ──────────────────── */
+
+const settingsCards = Array.from(document.querySelectorAll<HTMLDetailsElement>("#settings-view details.s-card"));
+for (const card of settingsCards) {
+  card.addEventListener("toggle", () => {
+    if (!card.open) return;
+    for (const other of settingsCards) if (other !== card) other.open = false;
+    card.scrollIntoView({ block: "nearest" });
+  });
+}
 
 /* ── Watch sites ─────────────────────────────────────────── */
 
@@ -2443,21 +2471,22 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   cancelRowHover();
   pickedId = item.id;
   const info = mode === "info";
+  // Both cards share one layout (poster beside the facts); the buttons are what differ.
+  pickPanelEl.classList.add("is-card");
   pickPanelEl.classList.toggle("is-info", info);
+  pickPanelEl.classList.toggle("is-pick", !info);
   pickKickerEl.hidden = info;
+  pickKickerEl.textContent = "How about this?";
   pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
   pickTitleEl.title = itemTitle(item);
-  pickDetailEl.textContent = info
-    ? [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n")
-    : [itemSubtitle(item), genreText(item).split(/,\s*/).slice(0, 3).join(", "), item.tmdb?.certification, item.author]
-        .filter(Boolean)
-        .join(" · ");
+  pickDetailEl.textContent = [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n");
   const overview = item.tmdb?.overview ?? item.bookInfo?.description;
-  pickOverviewEl.textContent = overview ? (info ? overview : clipText(overview, 220)) : "";
+  pickOverviewEl.textContent = overview ?? "";
   pickOverviewEl.hidden = !overview;
 
-  const chips = info ? detailChips(item) : [];
+  // The suggestion doesn't need your tags and review; the item's own card shows everything.
+  const chips = detailChips(item).filter((chip) => info || !chip.className.includes("pick-chip-tag"));
   pickChipsEl.replaceChildren(...chips.map(({ text, className }) => textPart(text, className)));
   pickChipsEl.hidden = chips.length === 0;
   pickReviewEl.textContent = info && item.review ? item.review : "";
@@ -2466,27 +2495,26 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   const inProgress = statusOf(item) === "in_progress";
   pickStartEl.textContent = inProgress ? "Mark as done" : item.type === "book" ? "Start reading" : "Start watching";
   pickActionsEl.hidden = info;
+  pickAgainEl.hidden = info;
   pickEditEl.hidden = !info;
-  pickCloseEl.hidden = !info;
+  pickCloseEl.hidden = false;
+  // On the suggestion, Start watching is the one strong button; on the item's card, Close is.
+  pickCloseEl.className = info ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm";
 
-  pickWatchEl.classList.toggle("is-compact", info);
+  pickWatchEl.classList.add("is-compact");
   pickWatchEl.replaceChildren(
     ...watchLinks(item, watchSites).map((link) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = info ? "btn btn-primary btn-sm" : "btn btn-primary btn-block";
+      btn.className = info ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm";
       const label = `${link.search ? "Search" : "Watch"} on ${link.host}`;
       btn.title = label;
-      if (info) {
-        // The icon says what it does, so the host is enough text on the compact card.
-        const icon = document.createElement("span");
-        icon.className = "material-symbols-outlined btn-icon";
-        icon.textContent = link.search ? "search" : "play_circle";
-        btn.append(icon, document.createTextNode(link.host));
-        btn.setAttribute("aria-label", label);
-      } else {
-        btn.textContent = label;
-      }
+      // The icon says what it does, so the host is enough text on the compact card.
+      const icon = document.createElement("span");
+      icon.className = "material-symbols-outlined btn-icon";
+      icon.textContent = link.search ? "search" : "play_circle";
+      btn.append(icon, document.createTextNode(link.host));
+      btn.setAttribute("aria-label", label);
       btn.addEventListener("click", () => void chrome.tabs.create({ url: link.url }));
       return btn;
     })
@@ -2494,18 +2522,16 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickWatchEl.hidden = pickWatchEl.childElementCount === 0;
 
   pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
-  pickFooterEl.hidden = pickOpenEl.hidden && !info;
+  pickFooterEl.hidden = false;
   pickDialogEl.hidden = false;
 
   // Long text is cut to a few lines with a More link that opens it out, so the card never needs a scrollbar.
   pickMoreEl.hidden = true;
   pickPanelEl.classList.remove("is-expanded");
-  pickPanelEl.classList.toggle("is-clamped", info);
-  if (info) {
-    const cutOff = [pickOverviewEl, pickReviewEl].some((el) => !el.hidden && el.scrollHeight > el.clientHeight + 1);
-    pickMoreEl.hidden = !cutOff;
-    pickMoreEl.textContent = "More";
-  }
+  pickPanelEl.classList.add("is-clamped");
+  const cutOff = [pickOverviewEl, pickReviewEl].some((el) => !el.hidden && el.scrollHeight > el.clientHeight + 1);
+  pickMoreEl.hidden = !cutOff;
+  pickMoreEl.textContent = "More";
 }
 
 function showPick(item: SavedItem): void {
@@ -2522,9 +2548,9 @@ function pickForMe(excludeId?: string): void {
     );
     return;
   }
-  const fallback = pickCandidates(pool).some((i) => statusOf(i) === "plan") ? "" : " (in progress)";
+  const nothingPlanned = !pickCandidates(pool).some((i) => statusOf(i) === "plan");
   showPick(item);
-  if (fallback) pickDetailEl.textContent = `Nothing planned, so here is something already started. ${pickDetailEl.textContent}`;
+  if (nothingPlanned) pickKickerEl.textContent = "Nothing planned, so here's one you started";
 }
 
 function closePick(): void {
