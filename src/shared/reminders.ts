@@ -7,6 +7,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const REMINDER_WINDOW_DAYS = 1;
 /** Release dates are re-checked at most this often per item, so a daily alarm doesn't mean daily requests. */
 export const DATE_REFRESH_AFTER_MS = 7 * DAY_MS;
+/** A movie out for less than this long may still have a streaming date to come. */
+export const RECENT_RELEASE_DAYS = 150;
 /** At most this many TMDB requests per check. */
 export const MAX_DATE_REFRESHES = 25;
 /** Records of what was announced are kept this long past the release date, then dropped. */
@@ -86,22 +88,32 @@ export function pruneNotified(notified: Record<string, string>, now: number): Re
   return kept;
 }
 
-/** Whether the saved TMDB dates for an item may be out of date and worth one request. */
-export function needsDateRefresh(item: SavedItem, now: number): boolean {
+/**
+ * Whether the saved TMDB dates for an item may be out of date and worth one request. `force` skips the
+ * "looked up this week already" rule, for when the user asks to check now.
+ */
+export function needsDateRefresh(item: SavedItem, now: number, force = false): boolean {
   const tmdb = item.tmdb;
   if (!tmdb || !isOpen(item)) return false;
-  if (now - tmdb.fetchedAt < DATE_REFRESH_AFTER_MS) return false;
+  if (!force && now - tmdb.fetchedAt < DATE_REFRESH_AFTER_MS) return false;
   if (tmdb.kind === "tv") {
     if (/^(ended|canceled|cancelled)$/i.test(tmdb.status ?? "")) return false;
     const days = tmdb.nextEpisode ? daysUntil(tmdb.nextEpisode.airDate, now) : undefined;
     return days === undefined || days < 0;
   }
   const days = tmdb.releaseDate ? daysUntil(tmdb.releaseDate, now) : undefined;
-  return days === undefined || days > 0;
+  if (days === undefined || days > 0) return true;
+  // Already out: its streaming date is what is still to come, so look again until that has passed.
+  if (days < 0 && days >= -RECENT_RELEASE_DAYS) {
+    const known = Object.values(tmdb.digitalDates ?? {});
+    // Nothing known yet (or never looked): a date often shows up later. Otherwise, only while one is still ahead.
+    return known.length === 0 || known.some((day) => (daysUntil(day, now) ?? -1) >= 0);
+  }
+  return false;
 }
 
-export function selectForRefresh(items: SavedItem[], now: number, max = MAX_DATE_REFRESHES): SavedItem[] {
-  return items.filter((item) => needsDateRefresh(item, now)).slice(0, max);
+export function selectForRefresh(items: SavedItem[], now: number, max = MAX_DATE_REFRESHES, force = false): SavedItem[] {
+  return items.filter((item) => needsDateRefresh(item, now, force)).slice(0, max);
 }
 
 function when(days: number): string {

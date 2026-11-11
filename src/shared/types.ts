@@ -74,6 +74,11 @@ export interface TmdbInfo {
   nextEpisode?: { airDate: string; season: number; episode: number };
   /** A movie's release date, "YYYY-MM-DD". */
   releaseDate?: string;
+  /**
+   * When a movie reaches streaming and online stores ("digital" on TMDB), by country code, "YYYY-MM-DD". An empty
+   * object means TMDB has no digital date yet; missing means this movie was fetched before dates were kept.
+   */
+  digitalDates?: Record<string, string>;
   status?: string;
   posterPath?: string;
   fetchedAt: number;
@@ -157,6 +162,7 @@ export type MessageAction =
   | { action: "enrich"; ids?: string[]; force?: boolean }
   | { action: "removeTmdbMatch"; id: string }
   | { action: "refreshStaleTmdb" }
+  | { action: "refreshDates"; force?: boolean }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }

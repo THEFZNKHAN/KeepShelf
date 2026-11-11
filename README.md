@@ -383,6 +383,19 @@ Get a desktop notification when something on your shelf is about to come out. It
 - It can only remind you about things TMDB knows the date of. Between seasons a series has no next date, so there is nothing to announce until TMDB lists one.
 - Turn the switch off at any time and the background checks stop.
 
+### Coming up
+
+The **calendar** button in the header opens **Coming up**: what is airing or releasing in the **next 2 weeks** (or **1 month** or **3 months**, picked with the buttons at the top and remembered) for titles you haven't finished, grouped by day (**Today**, **Tomorrow**, then the date). Each row shows the poster, the title, and **S2 E6** for an episode or **Release** for a movie. Tap a row to open that title's card.
+
+- It works without turning on reminders, but it needs your [TMDB token](#tmdb-info) and fetched info, because the dates come from TMDB.
+- Opening it quietly looks up new dates for titles whose saved dates may be out of date (the same rule reminders use, so each title is looked up about once a week at most), then redraws. If TMDB can't be reached it shows the dates already saved. It never sends a notification.
+- **Watched** and **Dropped** titles are left out, and so is anything TMDB has no date for. Between seasons a series has no next date.
+- **Streaming dates for movies.** For a movie, TMDB also knows when it reaches streaming and online stores (its "digital" release). A movie that is out in cinemas but not yet on streaming gets its own **Streaming** row on that day, and a movie still to come out says **Streaming 9 Dec** under its title. A film released straight to streaming has a single **Streaming** row. KeepShelf uses your browser's country first (for example India for `en-IN`) and falls back to the US, so the date is the one for where you are when TMDB has it; hover the pill to see which country. TMDB often has no streaming date until it is close, and it does not say which service.
+- **Movies and streaming** lists every movie you haven't watched that is unreleased or came out in the last five months, with where it stands: **On streaming** (since a date), a later streaming date, **No date** (TMDB has none yet) or **Not checked** (tap Check for new dates). It opens by itself when no streaming date is in the list above, so you can see why.
+- **No date yet** lists the shows you follow that TMDB says are still airing but gives no next episode date for (or whose saved date has passed). A long-running show such as a weekly anime often has none until the episode is close, so it can be missing from the dated list for that reason. The list opens by itself when it is all there is.
+- **Check for new dates** looks up dates right now for those shows, ignoring the once-a-week limit, and says how many still have none.
+- Movies saved before streaming dates existed pick them up the next time their dates are checked (about once a week), or straight away with **Check for new dates**.
+
 ---
 
 ## Book info

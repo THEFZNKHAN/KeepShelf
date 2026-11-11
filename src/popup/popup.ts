@@ -65,8 +65,18 @@ import {
   type StartMode,
   type StatusFilter,
 } from "../shared/status-view.js";
-
 import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, type EpisodeStep } from "../shared/seasons.js";
+import {
+  COMING_UP_WINDOWS,
+  airingWithoutDate,
+  comingUp,
+  groupByDay,
+  regionsFor,
+  sanitizeWindow,
+  shortDate,
+  streamingNote,
+  streamingStatuses,
+} from "../shared/coming-up.js";
 
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
@@ -116,6 +126,10 @@ const isTabView = new URLSearchParams(location.search).get("view") === "settings
 const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
 const statsView = document.getElementById("stats-view")!;
+const upcomingView = document.getElementById("upcoming-view")!;
+const upcomingBodyEl = document.getElementById("upcoming-body")!;
+const upcomingWindowEl = document.getElementById("upcoming-window")!;
+const upcomingFooterEl = document.getElementById("upcoming-footer")!;
 const listEl = document.getElementById("list")!;
 const emptyEl = document.getElementById("empty")!;
 const emptyHeadingEl = document.getElementById("empty-heading")!;
@@ -163,6 +177,10 @@ const statusFilterEl = document.getElementById("status-filter") as HTMLSelectEle
 const sortEl = document.getElementById("sort") as HTMLSelectElement;
 const pickRandomBtnEl = document.getElementById("pick-random") as HTMLButtonElement;
 const organiseRowEl = document.getElementById("organise-row")!;
+const moreFiltersEl = document.getElementById("more-filters")!;
+const toggleFiltersEl = document.getElementById("toggle-filters") as HTMLButtonElement;
+const copySelectedEl = document.getElementById("copy-selected") as HTMLButtonElement;
+const deleteSelectedEl = document.getElementById("delete-selected") as HTMLButtonElement;
 const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
 const tagPicker = createTagPicker(tagFilterEl, (tag) => {
   tagFilter = tag;
@@ -532,6 +550,235 @@ function closeStats(): void {
   appView.hidden = false;
 }
 
+/* ── Coming up ───────────────────────────────────────────── */
+
+/** What the line under the list says; set after a manual check. */
+let upcomingNote = "";
+
+/** Where to look for a movie's streaming date: the browser's own country first, then the US. */
+const userRegions = regionsFor(navigator.language);
+
+/** How many days ahead Coming up looks. A streaming date is often further away than two weeks, so it can be widened. */
+const UPCOMING_DAYS_KEY = "keepshelf.upcomingDays";
+let upcomingDays = (() => {
+  try {
+    return sanitizeWindow(localStorage.getItem(UPCOMING_DAYS_KEY));
+  } catch {
+    return sanitizeWindow(undefined);
+  }
+})();
+
+/** A shelf row without the details and actions: just the title, an optional note and the date on the right. */
+function upcomingRow(item: SavedItem, label: string, extra?: string, tip?: string, faint = false): HTMLLIElement {
+  const { li, typeIconEl, body } = createRowShell(item, false);
+  const note = document.createElement("div");
+  note.className = "item-facts";
+  note.textContent = [typeLabel(item.type), extra].filter(Boolean).join(" · ");
+  body.append(note);
+  const when = document.createElement("span");
+  when.className = faint ? "up-label is-faint" : "up-label";
+  when.textContent = label;
+  if (tip) when.title = tip;
+  li.append(typeIconEl, body, when);
+  li.tabIndex = 0;
+  li.addEventListener("click", () => showDetails(item, "info"));
+  li.addEventListener("keydown", (e) => {
+    if (e.target === li && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      showDetails(item, "info");
+    }
+  });
+  return li;
+}
+
+/** A section heading with its count in a smaller, lighter number right after the name. */
+function setSummary(summary: HTMLElement, label: string, count: number): void {
+  const number = document.createElement("span");
+  number.className = "up-count";
+  number.textContent = String(count);
+  summary.replaceChildren(label, number);
+}
+
+/** An empty list the rows of one group go into. */
+function upcomingList(): HTMLUListElement {
+  const ul = document.createElement("ul");
+  ul.className = "list";
+  return ul;
+}
+
+/** Draws what is airing or releasing soon, by day, and the shows that have no date yet. `checking` says dates are being looked up. */
+function renderUpcoming(checking = false): void {
+  const now = Date.now();
+  const groups = groupByDay(comingUp(allItems, now, upcomingDays, userRegions));
+  const missing = tmdbConfigured ? airingWithoutDate(allItems, now) : [];
+  upcomingBodyEl.replaceChildren();
+
+  const windowRow = document.createElement("div");
+  windowRow.className = "filters";
+  windowRow.setAttribute("role", "group");
+  windowRow.setAttribute("aria-label", "How far ahead to look");
+
+  for (const option of COMING_UP_WINDOWS) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `filter${option.days === upcomingDays ? " active" : ""}`;
+    chip.textContent = option.label;
+    chip.setAttribute("aria-pressed", String(option.days === upcomingDays));
+    chip.addEventListener("click", () => {
+      upcomingDays = option.days;
+      try {
+        localStorage.setItem(UPCOMING_DAYS_KEY, String(upcomingDays));
+      } catch {
+        /* the choice just won't be remembered */
+      }
+      renderUpcoming(false);
+    });
+    windowRow.append(chip);
+  }
+  // Outside the scrolling list, so it stays put like the footer.
+  upcomingWindowEl.replaceChildren(windowRow);
+
+  if (groups.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "up-empty";
+    const heading = document.createElement("strong");
+    const detail = document.createElement("span");
+    if (!tmdbConfigured) {
+      heading.textContent = "Add a TMDB token to see dates";
+      detail.textContent = "Air and release dates come from TMDB. Add your token in Settings, then fetch info for your shelf.";
+    } else if (checking) {
+      heading.textContent = "Checking for dates…";
+    } else if (missing.length > 0) {
+      heading.textContent = `Nothing dated in the next ${upcomingDays} days`;
+      detail.textContent = `${missing.length} airing title${missing.length === 1 ? " has" : "s have"} no date on TMDB yet. They are listed below.`;
+    } else {
+      heading.textContent = `Nothing in the next ${upcomingDays} days`;
+      detail.textContent = "Only titles you haven't finished are listed, and only when TMDB has a date for them.";
+    }
+    empty.append(heading, detail);
+    upcomingBodyEl.append(empty);
+  }
+
+  for (const group of groups) {
+    const heading = document.createElement("h2");
+    heading.className = `up-group${group.days <= 1 ? " is-soon" : ""}`;
+    heading.textContent = group.heading;
+    if (group.days > 1) {
+      const away = document.createElement("span");
+      away.className = "up-away";
+      away.textContent = `in ${group.days} days`;
+      heading.append(away);
+    }
+    const list = upcomingList();
+    upcomingBodyEl.append(heading, list);
+    for (const { item, label, region } of group.entries) {
+      if (label === "streaming") {
+        list.append(upcomingRow(item, "Streaming", undefined, `Streaming and online release${region ? ` (${region})` : ""}`));
+      } else if (label === "release") {
+        // A movie still to reach streaming says when, right under its title.
+        list.append(upcomingRow(item, "Release", streamingNote(item, now, userRegions)));
+      } else {
+        list.append(upcomingRow(item, label));
+      }
+    }
+  }
+
+  if (missing.length > 0) {
+    const details = document.createElement("details");
+    details.className = "up-nodate";
+    // When nothing is dated, this is the whole answer, so it starts open.
+    details.open = groups.length === 0;
+    const summary = document.createElement("summary");
+    setSummary(summary, "No date yet", missing.length);
+    summary.title = "Still airing, but TMDB has no next episode date yet. A long-running show often has none until the episode is close.";
+    details.append(summary);
+    const missingList = upcomingList();
+    for (const item of missing) missingList.append(upcomingRow(item, "No date", undefined, undefined, true));
+    details.append(missingList);
+    upcomingBodyEl.append(details);
+  }
+
+  // A movie already in the dated list above doesn't need a second row here.
+  const listed = new Set(groups.flatMap((g) => g.entries.map((e) => e.item.id)));
+  const movies = tmdbConfigured ? streamingStatuses(allItems, now, userRegions, upcomingDays).filter((m) => !listed.has(m.item.id)) : [];
+  if (movies.length > 0) {
+    const details = document.createElement("details");
+    details.className = "up-nodate";
+    // With no streaming dates in the list above, this is the explanation, so it starts open.
+    details.open = !groups.some((g) => g.entries.some((e) => e.label === "streaming"));
+    const summary = document.createElement("summary");
+    setSummary(summary, "Movies", movies.length);
+    summary.title = "Where each movie you haven't watched stands on streaming. It reaches the list above when its date is inside the window.";
+    details.append(summary);
+    const movieList = upcomingList();
+    details.append(movieList);
+    for (const { item, state, date, region } of movies) {
+      const tip = region ? `Streaming and online release (${region})` : undefined;
+      if (state === "since") movieList.append(upcomingRow(item, date ? `Since ${shortDate(date)}` : "Streaming", undefined, tip));
+      else if (state === "later") movieList.append(upcomingRow(item, date ? shortDate(date) : "Later", undefined, tip));
+      else if (state === "none") movieList.append(upcomingRow(item, "No date", undefined, undefined, true));
+      else movieList.append(upcomingRow(item, "Not checked", undefined, undefined, true));
+    }
+    upcomingBodyEl.append(details);
+  }
+
+  // The footer stays put at the bottom, however short the list is.
+  upcomingFooterEl.replaceChildren();
+  upcomingFooterEl.hidden = !tmdbConfigured;
+  if (tmdbConfigured) {
+    const note = document.createElement("span");
+    note.className = "up-note";
+    note.textContent = upcomingNote;
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "up-check";
+    check.disabled = checking;
+    check.textContent = checking ? "Checking…" : "Check for new dates";
+    check.addEventListener("click", () => void checkUpcomingDates());
+    upcomingFooterEl.append(note, check);
+  }
+}
+
+/** Looks up dates right now for titles that could have a new one, ignoring the once-a-week limit. */
+async function checkUpcomingDates(): Promise<void> {
+  upcomingNote = "";
+  renderUpcoming(true);
+  try {
+    const response = await sendToBackground({ action: "refreshDates", force: true });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    const left = airingWithoutDate(allItems, Date.now()).length;
+    upcomingNote = `Checked just now.${left ? ` ${left} still ${left === 1 ? "has" : "have"} no date on TMDB.` : ""}`;
+  } catch (err) {
+    upcomingNote = `Couldn't check: ${err instanceof Error ? err.message.replace(/\.$/, "") : "something went wrong"}.`;
+  }
+  if (!upcomingView.hidden) renderUpcoming(false);
+  render();
+}
+
+function openUpcoming(): void {
+  appView.hidden = true;
+  upcomingView.hidden = false;
+  upcomingNote = "";
+  renderUpcoming(tmdbConfigured);
+  if (!tmdbConfigured) return;
+  // Titles you haven't watched for a while may have new dates: look them up quietly, then redraw.
+  void sendToBackground({ action: "refreshDates" })
+    .then((response) => {
+      if (response.ok && "items" in response) allItems = response.items;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (!upcomingView.hidden) renderUpcoming(false);
+      render();
+    });
+}
+
+function closeUpcoming(): void {
+  upcomingView.hidden = true;
+  appView.hidden = false;
+}
+
 function closeSettings(): void {
   settingsView.hidden = true;
   appView.hidden = false;
@@ -812,6 +1059,38 @@ function textPart(text: string, className: string, title?: string): HTMLElement 
  * Up to two lines under the title. The facts line is short and truncates only in extreme cases (a long URL).
  * The details line wraps instead of cropping, so nothing is ever cut off.
  */
+/**
+ * The row every list uses: type icon or poster, then the title with its type badge. The shelf adds its details,
+ * actions and tick box to it; other screens add only what they need, so a title looks the same everywhere.
+ */
+function createRowShell(item: SavedItem, withBadge = true): { li: HTMLLIElement; typeIconEl: HTMLElement; body: HTMLDivElement } {
+  const li = document.createElement("li");
+  li.className = "list-item";
+  li.classList.toggle("done", Boolean(item.done));
+  li.dataset.id = item.id;
+
+  const typeIconEl = createLeadingEl(item);
+  typeIconEl.addEventListener("mouseenter", () => {
+    showItemTooltip(typeLabel(item.type), typeIconEl);
+  });
+  typeIconEl.addEventListener("mouseleave", hideItemTooltip);
+
+  const body = document.createElement("div");
+  body.className = "item-body";
+
+  const titleRow = document.createElement("div");
+  titleRow.className = "item-title-row";
+  const title = document.createElement("h3");
+  title.className = "item-title";
+  title.textContent = itemTitle(item);
+  titleRow.append(title);
+  const badge = withBadge ? createTypeBadge(item) : undefined;
+  if (badge) titleRow.append(badge);
+  body.append(titleRow);
+
+  return { li, typeIconEl, body };
+}
+
 function createItemLines(item: SavedItem): HTMLElement[] {
   const lines: HTMLElement[] = [];
 
@@ -900,7 +1179,18 @@ function render(): void {
   const items = filteredItems();
   const tabCount = tabItems().length;
 
-  countEl.textContent = `${tabCount} saved`;
+  // The count lives on each tab, so the header stays free for the actions.
+  const isBook = (i: SavedItem) => i.type === "book";
+  const isTabLike = (i: SavedItem) => i.type === "tab" || i.type === "link" || i.type === "note";
+  const counts = {
+    media: allItems.filter((i) => !isBook(i) && !isTabLike(i)).length,
+    books: allItems.filter(isBook).length,
+    tabs: allItems.filter(isTabLike).length,
+  };
+  for (const [tab, n] of Object.entries(counts)) {
+    const el = shelfTabsEl.querySelector<HTMLElement>(`[data-count="${tab}"]`);
+    if (el) el.textContent = n ? String(n) : "";
+  }
   listEl.innerHTML = "";
 
   filtersEl.hidden = activeTab !== "media";
@@ -920,7 +1210,8 @@ function render(): void {
   fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
   // Picking something to watch or read doesn't apply to bookmarks.
   pickRandomBtnEl.hidden = activeTab === "tabs";
-  updateSyncButton();
+  updateFiltersToggle();
+  updateSelectionUi();
 
   savePageBtnEl.textContent =
     activeTab === "books" ? "Save book" :
@@ -949,36 +1240,11 @@ function render(): void {
   }
 
   for (const item of items) {
-    const li = document.createElement("li");
-    li.className = "list-item";
-    li.classList.toggle("done", Boolean(item.done));
-    li.dataset.id = item.id;
+    const { li, typeIconEl, body } = createRowShell(item);
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.dataset.id = item.id;
-
-    const typeIconEl = createLeadingEl(item);
-
-    typeIconEl.addEventListener("mouseenter", () => {
-      showItemTooltip(typeLabel(item.type), typeIconEl);
-    });
-    typeIconEl.addEventListener("mouseleave", hideItemTooltip);
-
-    const body = document.createElement("div");
-    body.className = "item-body";
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "item-title-row";
-
-    const title = document.createElement("h3");
-    title.className = "item-title";
-    title.textContent = itemTitle(item);
-    titleRow.append(title);
-
-    const badge = createTypeBadge(item);
-    if (badge) titleRow.append(badge);
-    body.append(titleRow);
 
     body.append(...createItemLines(item));
 
@@ -1048,9 +1314,24 @@ function linkedText(noteId: string | undefined, noteUrl: string | undefined): st
   return "Not linked";
 }
 
-/** The sync button only appears when the Keep list for the tab you are on is switched on. */
+/** The sync button only appears when the Keep list for the tab you are on is switched on, and something is ticked. */
 function updateSyncButton(): void {
-  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings);
+  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings) || getSelectedIds().length === 0;
+}
+
+/** The buttons that act on ticked rows only appear while something is ticked, which keeps the header quiet. */
+function updateSelectionUi(): void {
+  const any = getSelectedIds().length > 0;
+  copySelectedEl.hidden = !any;
+  deleteSelectedEl.hidden = !any;
+  updateSyncButton();
+}
+
+/** The filter button shows a dot while the list is narrowed or re-sorted, since the controls are tucked away. */
+function updateFiltersToggle(): void {
+  const active = effectiveStatus() !== "all" || effectiveSort() !== "newest" || Boolean(tagFilter) || Boolean(listFilter);
+  toggleFiltersEl.classList.toggle("has-dot", active);
+  toggleFiltersEl.title = active ? "Filters and sorting (in use)" : "Filters and sorting";
 }
 
 function renderKeepStatus(): void {
@@ -3245,6 +3526,15 @@ sortEl.addEventListener("change", () => {
 
 syncSelectedEl.addEventListener("click", () => void syncToKeep(getSelectedIds()));
 
+listEl.addEventListener("change", (e) => {
+  if ((e.target as HTMLElement).matches('input[type="checkbox"]')) updateSelectionUi();
+});
+
+toggleFiltersEl.addEventListener("click", () => {
+  moreFiltersEl.hidden = !moreFiltersEl.hidden;
+  toggleFiltersEl.setAttribute("aria-expanded", String(!moreFiltersEl.hidden));
+});
+
 shelfTabsEl.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".shelf-tab");
   if (!btn) return;
@@ -3363,10 +3653,13 @@ document.addEventListener("keydown", (event) => {
   else if (!editDialogEl.hidden) closeEditDialog();
   else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden) closePick();
+  else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();
   else if (tagPicker.isOpen()) tagPicker.close();
 });
 
+document.getElementById("open-upcoming")!.addEventListener("click", openUpcoming);
+document.getElementById("close-upcoming")!.addEventListener("click", closeUpcoming);
 document.getElementById("open-stats")!.addEventListener("click", openStats);
 document.getElementById("close-stats")!.addEventListener("click", closeStats);
 document.getElementById("open-settings")!.addEventListener("click", openSettings);
