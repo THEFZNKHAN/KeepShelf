@@ -121,6 +121,7 @@ KeepShelf/
 │       ├── watch-sites.ts     # Watch sites: learn an address pattern from one example, build exact links
 │       ├── items.ts           # Builders for tab, link and note items
 │       ├── import.ts          # Backup JSON, Letterboxd and Goodreads CSV import
+│       ├── list-import.ts    # Pasted lists of titles: parse the lines, plan what to add (pure)
 │       ├── page-data.ts       # requestPageData: ask the content script, inject if missing
 │       ├── year.ts            # normalizeYear helper
 │       ├── keep-settings.ts   # Keep note config, routing, storage
@@ -147,6 +148,7 @@ KeepShelf/
 │   ├── seriesgraph.test.mjs
 │   ├── rottentomatoes.test.mjs
 │   ├── trakt.test.mjs
+│   ├── list-import.test.mjs   # Pasted lists: line formats, headings, duplicates
 │   └── import.test.mjs        # CSV parsing, Letterboxd / Goodreads / backup import
 ├── icons/
 │   ├── icon.png               # Master icon (source for all sizes)
