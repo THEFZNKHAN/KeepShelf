@@ -2288,6 +2288,12 @@ body.in-tab {
   list-style: none;
   overflow-y: auto;
   outline: none;
+  /* It still scrolls by wheel, touch and keys; the bar itself just isn't drawn. */
+  scrollbar-width: none;
+}
+
+.picker-list::-webkit-scrollbar {
+  display: none;
 }
 
 .picker-group {
@@ -2902,9 +2908,26 @@ body.in-tab {
   display: none;
 }
 
+/* Status, sort, tags and lists share one wrapping row of compact controls. */
+.more-filters {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.more-filters .view-row {
+  display: contents;
+}
+
+.more-filters .view-row[hidden] {
+  display: none;
+}
+
 .more-filters .view-select {
-  flex: 1;
+  flex: 1 1 80px;
   min-width: 0;
+  height: 24px;
+  font-size: 11px;
 }
 
 .shelf-tab-count {
