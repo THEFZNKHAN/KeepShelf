@@ -1497,54 +1497,63 @@ body.in-tab {
 .stats-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+  padding: 0 0 20px;
 }
 
+/* The headline numbers: one quiet row, no boxes. */
 .stat-tiles {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--outline-variant);
 }
 
 .stat-tile {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-xl);
-  background: var(--surface-container-low);
+  gap: 1px;
 }
 
 .stat-tile-label {
   font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--on-surface-variant);
 }
 
 .stat-tile-value {
-  font-size: 18px;
-  line-height: 22px;
+  font-size: 20px;
+  line-height: 26px;
   font-weight: 600;
   color: var(--on-surface);
 }
 
+/* Each block is a section like the ones on Coming up: a small heading, then its content. */
 .stats-card {
-  padding: 10px;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-xl);
+  padding: 0 12px 14px;
+  border-bottom: 1px solid var(--row-border);
 }
 
 .stats-card-title {
   margin: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--on-surface);
+  padding: 14px 0 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
 }
 
 .stats-card-sub {
-  margin: 2px 0 8px;
+  margin: 2px 0 10px;
   font-size: 11px;
-  color: var(--on-surface-variant);
+  color: var(--outline);
+}
+
+.stats-card-title + .bar-list {
+  margin-top: 8px;
 }
 
 .col-chart {
@@ -1591,7 +1600,12 @@ body.in-tab {
 .col-bar {
   width: 70%;
   max-width: 24px;
-  border-radius: 4px 4px 0 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--outline-variant);
+}
+
+.col-bar.is-peak,
+.bar-fill.is-peak {
   background: var(--primary);
 }
 
@@ -1661,8 +1675,8 @@ body.in-tab {
 .bar-fill {
   height: 100%;
   min-width: 2px;
-  border-radius: 0 4px 4px 0;
-  background: var(--primary);
+  border-radius: 0 3px 3px 0;
+  background: var(--outline-variant);
 }
 
 .bar-value {
@@ -1680,6 +1694,8 @@ body.in-tab {
 
 .stats-table summary {
   cursor: pointer;
+  font-size: 10.5px;
+  color: var(--outline);
 }
 
 .stats-table table {
@@ -1705,10 +1721,39 @@ body.in-tab {
   text-align: right;
 }
 
-.stats-footnote {
-  margin: 0;
+.stats-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--row-border);
+}
+
+.stats-progress-track {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--outline-variant);
+}
+
+.stats-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--primary);
+}
+
+.stats-progress-text {
+  flex-shrink: 0;
   font-size: 11px;
+  font-weight: 600;
   color: var(--on-surface-variant);
+}
+
+.stats-footnote {
+  margin: 14px 12px 0;
+  font-size: 11px;
+  color: var(--outline);
 }
 
 /* ── TMDB ────────────────────────────────────────────────── */
@@ -2243,6 +2288,12 @@ body.in-tab {
   list-style: none;
   overflow-y: auto;
   outline: none;
+  /* It still scrolls by wheel, touch and keys; the bar itself just isn't drawn. */
+  scrollbar-width: none;
+}
+
+.picker-list::-webkit-scrollbar {
+  display: none;
 }
 
 .picker-group {
@@ -3069,9 +3120,26 @@ body.in-tab {
   display: none;
 }
 
+/* Status, sort, tags and lists share one wrapping row of compact controls. */
+.more-filters {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.more-filters .view-row {
+  display: contents;
+}
+
+.more-filters .view-row[hidden] {
+  display: none;
+}
+
 .more-filters .view-select {
-  flex: 1;
+  flex: 1 1 80px;
   min-width: 0;
+  height: 24px;
+  font-size: 11px;
 }
 
 .shelf-tab-count {
