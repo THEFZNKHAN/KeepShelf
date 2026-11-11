@@ -2724,6 +2724,14 @@ body.in-tab {
 
 .link-btn {
   padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* The top of the suggestion: the heading, a filter button, and the filters when open. */
@@ -2819,6 +2827,8 @@ body.in-tab {
   font-size: 11.5px;
   font-weight: 700;
   color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 /* Coming up: what is airing or releasing soon, by day. Same rows and filters as the shelf. */
@@ -2980,6 +2990,8 @@ body.in-tab {
 
 .pref-select strong {
   font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface);
 }
 
 /* Paste a list: the box, the "These are" choice and the summary line. */
