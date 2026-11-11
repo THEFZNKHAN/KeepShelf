@@ -34,6 +34,16 @@ import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, totalPages } 
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
+import {
+  NO_PICK_FILTERS,
+  PICK_LENGTHS,
+  activeFilterCount,
+  applyPickFilters,
+  pickGenres,
+  sanitizePickFilters,
+  type PickFilters,
+  type PickType,
+} from "../shared/pick-filters.js";
 import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 import { snapshotItems } from "../shared/undo.js";
 import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, sumProgress } from "../shared/seasons.js";
@@ -2444,6 +2454,7 @@ const pickReviewEl = document.getElementById("pick-review")!;
 const pickMoreEl = document.getElementById("pick-more") as HTMLButtonElement;
 const pickWatchEl = document.getElementById("pick-watch")!;
 const pickKickerEl = document.getElementById("pick-heading")!;
+const pickTopEl = document.getElementById("pick-top")!;
 const pickPanelEl = pickDialogEl.querySelector<HTMLElement>(".pick-panel")!;
 const pickActionsEl = document.getElementById("pick-actions")!;
 const pickFooterEl = document.getElementById("pick-footer")!;
@@ -2475,7 +2486,7 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickPanelEl.classList.add("is-card");
   pickPanelEl.classList.toggle("is-info", info);
   pickPanelEl.classList.toggle("is-pick", !info);
-  pickKickerEl.hidden = info;
+  pickTopEl.hidden = info;
   pickKickerEl.textContent = "How about this?";
   pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
@@ -2538,12 +2549,89 @@ function showPick(item: SavedItem): void {
   showDetails(item, "pick");
 }
 
-function pickForMe(excludeId?: string): void {
-  const pool = filteredItems({ ignoreStatus: true });
+/* The suggestion's filters: what it may choose from, kept between visits. */
+
+const PICK_FILTERS_KEY = "keepshelf.pickFilters";
+const pickFilterToggleEl = document.getElementById("pick-filter-toggle") as HTMLButtonElement;
+const pickFilterCountEl = document.getElementById("pick-filter-count")!;
+const pickFiltersEl = document.getElementById("pick-filters")!;
+const pickTypeEl = document.getElementById("pick-f-type") as HTMLSelectElement;
+const pickLengthEl = document.getElementById("pick-f-length") as HTMLSelectElement;
+const pickGenreEl = document.getElementById("pick-f-genre") as HTMLSelectElement;
+const pickClearEl = document.getElementById("pick-f-clear") as HTMLButtonElement;
+
+function loadPickFilters(): PickFilters {
+  try {
+    return sanitizePickFilters(JSON.parse(localStorage.getItem(PICK_FILTERS_KEY) ?? "null"));
+  } catch {
+    return { ...NO_PICK_FILTERS };
+  }
+}
+
+let pickFilters: PickFilters = loadPickFilters();
+let pickFiltersOpen = false;
+
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Fills the choices from what is on the shelf, shows the current ones, and the count on the button. */
+function renderPickFilters(base: SavedItem[]): void {
+  const genres = pickGenres(base);
+  if (pickFilters.genre && !genres.includes(pickFilters.genre)) genres.push(pickFilters.genre);
+  fillOptions(pickTypeEl, [["all", "All types"], ["movie", "Movies"], ["series", "Series"], ["anime", "Anime"]], pickFilters.type);
+  fillOptions(pickLengthEl, [["", "Any length"], ...PICK_LENGTHS.map((l): [string, string] => [String(l.minutes), l.label])], pickFilters.maxMinutes ? String(pickFilters.maxMinutes) : "");
+  fillOptions(pickGenreEl, [["", "Any genre"], ...genres.map((g): [string, string] => [g, capitalise(g)])], pickFilters.genre ?? "");
+  const count = activeFilterCount(pickFilters);
+  pickFilterCountEl.textContent = String(count);
+  pickFilterCountEl.hidden = count === 0;
+  pickClearEl.hidden = count === 0;
+  pickFiltersEl.hidden = !(pickFiltersOpen || count > 0);
+  pickFilterToggleEl.setAttribute("aria-expanded", String(!pickFiltersEl.hidden));
+}
+
+function savePickFilters(): void {
+  try {
+    localStorage.setItem(PICK_FILTERS_KEY, JSON.stringify(pickFilters));
+  } catch {
+    /* the filters just won't be remembered */
+  }
+}
+
+/** The card when the filters leave nothing to pick: say so, and keep the filters in reach. */
+function showPickEmpty(): void {
+  cancelRowHover();
+  pickedId = undefined;
+  pickPanelEl.classList.add("is-card", "is-pick");
+  pickPanelEl.classList.remove("is-info", "is-clamped", "is-expanded");
+  pickTopEl.hidden = false;
+  pickKickerEl.textContent = "How about this?";
+  pickLeadingEl.replaceChildren(createTypeIconEl("movie"));
+  pickTitleEl.textContent = "Nothing matches";
+  pickTitleEl.title = "";
+  pickDetailEl.textContent = "Try a longer length or another genre, or tap Clear.";
+  for (const el of [pickChipsEl, pickOverviewEl, pickMoreEl, pickReviewEl, pickActionsEl, pickWatchEl, pickOpenEl, pickAgainEl, pickEditEl]) {
+    el.hidden = true;
+  }
+  pickCloseEl.hidden = false;
+  pickCloseEl.className = "btn btn-outline btn-sm";
+  pickFooterEl.hidden = false;
+  pickDialogEl.hidden = false;
+}
+
+function pickForMe(excludeId?: string, options: { keepCurrent?: boolean } = {}): void {
+  const base = filteredItems({ ignoreStatus: true });
+  renderPickFilters(base);
+  const pool = applyPickFilters(base, pickFilters);
+  // Changing a filter shouldn't throw away a suggestion that still fits it.
+  if (options.keepCurrent && pickedId && !pickDialogEl.hidden && pickCandidates(pool).some((i) => i.id === pickedId)) return;
   const item = pickRandom(pool, { excludeId });
   if (!item) {
+    // Something could be picked without the filters: they are what is in the way, so keep the card open.
+    if (activeFilterCount(pickFilters) > 0 && pickRandom(base, { excludeId })) {
+      showPickEmpty();
+      return;
+    }
     showStatus(
-      pool.length === 0 ? "Nothing here to pick from." : "Nothing left to pick. Everything here is done or dropped.",
+      base.length === 0 ? "Nothing here to pick from." : "Nothing left to pick. Everything here is done or dropped.",
       true
     );
     return;
@@ -2552,6 +2640,32 @@ function pickForMe(excludeId?: string): void {
   showPick(item);
   if (nothingPlanned) pickKickerEl.textContent = "Nothing planned, so here's one you started";
 }
+
+function onPickFilterChange(): void {
+  const maxMinutes = Number(pickLengthEl.value);
+  pickFilters = {
+    type: pickTypeEl.value as PickType,
+    ...(maxMinutes ? { maxMinutes } : {}),
+    ...(pickGenreEl.value ? { genre: pickGenreEl.value } : {}),
+  };
+  savePickFilters();
+  pickForMe(undefined, { keepCurrent: true });
+}
+
+for (const el of [pickTypeEl, pickLengthEl, pickGenreEl]) el.addEventListener("change", onPickFilterChange);
+document.getElementById("pick-f-clear")!.addEventListener("click", () => {
+  pickFilters = { ...NO_PICK_FILTERS };
+  pickFiltersOpen = false;
+  savePickFilters();
+  // Fewer filters can only add choices, so the current suggestion stays (unless there was none: "Nothing matches").
+  pickForMe(undefined, { keepCurrent: true });
+});
+pickFilterToggleEl.addEventListener("click", () => {
+  pickFiltersOpen = pickFiltersEl.hidden;
+  pickFiltersEl.hidden = !pickFiltersOpen;
+  pickFilterToggleEl.setAttribute("aria-expanded", String(pickFiltersOpen));
+});
+
 
 function closePick(): void {
   pickDialogEl.hidden = true;

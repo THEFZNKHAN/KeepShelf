@@ -282,7 +282,13 @@ Can't decide? Click the **dice** button in the toolbar. KeepShelf suggests one i
 - **Pick another** draws again without repeating the last suggestion.
 - **Start watching / Start reading** moves it to *In progress*, and **Open page** jumps to it.
 
-Tip: filter to a tag like `weekend` or a type like **Series** first to narrow the pool.
+**Filters on the suggestion.** The small **filter** button at the top right of the card opens three choices: **Type** (movies, series or anime), **Length** (under 90 minutes, 2 hours or 2½ hours) and **Genre** (the genres on your shelf). Changing one keeps the suggestion if it still fits, and picks a new one if it doesn't. A badge on the button shows how many are on.
+
+- **Length** means a movie that fits. A series or anime is judged by one episode, so it fits unless its episodes are longer than that. A movie with no known length is never promised to fit.
+- If nothing matches, the card says **Nothing matches** and keeps the filters in reach; **Clear** (shown while any filter is on) removes them all and keeps the suggestion you have.
+- Your filters are remembered, and they stack on top of what you are looking at (tab, type, tag, list and search).
+
+Tip: you can still filter to a tag like `weekend` first to narrow the pool.
 
 ### Duplicates
 

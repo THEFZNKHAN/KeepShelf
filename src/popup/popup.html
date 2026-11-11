@@ -595,7 +595,21 @@
     <div id="pick-dialog" class="confirm-dialog" hidden>
       <div class="confirm-backdrop" data-pick-dismiss></div>
       <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-heading">
-        <p class="pick-kicker" id="pick-heading">How about this?</p>
+        <div class="pick-top" id="pick-top">
+          <div class="pick-top-row">
+            <p class="pick-kicker" id="pick-heading">How about this?</p>
+            <button type="button" id="pick-filter-toggle" class="pick-filter-toggle" aria-label="Filter what I pick" aria-expanded="false" title="Filter what I pick">
+              <span class="material-symbols-outlined">tune</span>
+              <span id="pick-filter-count" class="pick-filter-count" hidden></span>
+            </button>
+          </div>
+          <div id="pick-filters" class="pick-filters" hidden>
+            <select id="pick-f-type" class="view-select" aria-label="Type"></select>
+            <select id="pick-f-length" class="view-select" aria-label="Length"></select>
+            <select id="pick-f-genre" class="view-select" aria-label="Genre"></select>
+            <button type="button" id="pick-f-clear" class="pick-clear">Clear</button>
+          </div>
+        </div>
         <div id="pick-leading" class="pick-leading"></div>
         <h2 id="pick-title" class="confirm-title"></h2>
         <p id="pick-detail" class="confirm-message"></p>

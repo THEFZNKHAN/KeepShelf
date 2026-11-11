@@ -2640,7 +2640,7 @@ body.in-tab {
   grid-template-rows: auto auto auto 1fr auto;
 }
 
-.pick-panel.is-pick .pick-kicker {
+.pick-panel.is-pick .pick-top {
   grid-row: 1;
 }
 
@@ -2675,4 +2675,101 @@ body.in-tab {
 
 .pick-footer .btn-icon {
   font-size: 14px;
+}
+
+/* The top of the suggestion: the heading, a filter button, and the filters when open. */
+.pick-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick-top[hidden] {
+  display: none;
+}
+
+.pick-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.pick-top .pick-kicker {
+  margin: 0;
+}
+
+.pick-filter-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: -4px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+}
+
+.pick-filter-toggle:hover,
+.pick-filter-toggle[aria-expanded="true"] {
+  background: var(--surface-container);
+  color: var(--on-surface);
+}
+
+.pick-filter-toggle .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.pick-filter-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-primary);
+}
+
+.pick-filter-count[hidden] {
+  display: none;
+}
+
+.pick-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.pick-filters[hidden] {
+  display: none;
+}
+
+.pick-filters .view-select {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+}
+
+.pick-clear {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
 }
