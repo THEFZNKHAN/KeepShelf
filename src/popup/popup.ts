@@ -1329,7 +1329,7 @@ function updateSelectionUi(): void {
 
 /** The filter button shows a dot while the list is narrowed or re-sorted, since the controls are tucked away. */
 function updateFiltersToggle(): void {
-  const active = effectiveStatus() !== "all" || effectiveSort() !== "newest" || Boolean(tagFilter) || Boolean(listFilter);
+  const active = effectiveStatus() !== effectiveStatusFilter(defaultStatusFilter(defaultView), availableStatuses()) || effectiveSort() !== "newest" || Boolean(tagFilter) || Boolean(listFilter);
   toggleFiltersEl.classList.toggle("has-dot", active);
   toggleFiltersEl.title = active ? "Filters and sorting (in use)" : "Filters and sorting";
 }
