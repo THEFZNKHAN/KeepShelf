@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   distributeProgress, lastWatched, markSeasonDone, mergeSeasonProgress, nextToWatch,
-  seasonTotals, statusFromSeasons, sumProgress, validateSeasonProgress,
+  seasonTotals, statusFromSeasons, stepEpisode, sumProgress, validateSeasonProgress,
 } from "../dist-test/seasons.js";
 
 const totals = [10, 8, 6];
@@ -80,4 +80,61 @@ test("mergeSeasonProgress takes the best of each season and tolerates different 
   assert.deepEqual(mergeSeasonProgress([undefined, [1]]), [1]);
   assert.equal(mergeSeasonProgress([undefined, undefined]), undefined);
   assert.equal(mergeSeasonProgress([]), undefined);
+});
+
+// Marking the next episode watched.
+const show = (extra = {}) => ({ tmdb: { seasonEpisodes: [10, 10, 10] }, ...extra });
+
+test("stepEpisode moves on within a season and keeps the show in progress", () => {
+  const step = stepEpisode(show({ status: "in_progress", seasonProgress: [10, 4, 0], progressCurrent: 14 }));
+  assert.deepEqual(step, { changes: { seasonProgress: [10, 5, 0], status: "in_progress" }, label: "S2 E5", finishes: false });
+});
+
+test("stepEpisode crosses into the next season", () => {
+  const step = stepEpisode(show({ status: "in_progress", seasonProgress: [10, 10, 0], progressCurrent: 20 }));
+  assert.equal(step.label, "S3 E1");
+  assert.deepEqual(step.changes.seasonProgress, [10, 10, 1]);
+});
+
+test("stepEpisode starts a show that wasn't started, and picks up a dropped one", () => {
+  const fresh = stepEpisode(show({ status: "plan" }));
+  assert.deepEqual(fresh.changes, { seasonProgress: [1, 0, 0], status: "in_progress" });
+  assert.equal(fresh.label, "S1 E1");
+  assert.equal(stepEpisode(show({ status: "dropped", seasonProgress: [2, 0, 0] })).changes.status, "in_progress");
+  assert.equal(stepEpisode(show({})).changes.status, "in_progress");
+});
+
+test("stepEpisode finishes the show on its last episode", () => {
+  const step = stepEpisode(show({ status: "in_progress", seasonProgress: [10, 10, 9], progressCurrent: 29 }));
+  assert.deepEqual(step, { changes: { seasonProgress: [10, 10, 10], status: "done" }, label: "S3 E10", finishes: true });
+});
+
+test("stepEpisode has nothing to do once everything is watched, or the item is done", () => {
+  assert.equal(stepEpisode(show({ status: "in_progress", seasonProgress: [10, 10, 10] })), undefined);
+  assert.equal(stepEpisode(show({ status: "done", seasonProgress: [1, 0, 0] })), undefined);
+  assert.equal(stepEpisode(show({ done: true })), undefined);
+});
+
+test("stepEpisode spreads an old overall count over the seasons first", () => {
+  const step = stepEpisode({ status: "in_progress", progressCurrent: 12, tmdb: { seasonEpisodes: [10, 10] } });
+  assert.deepEqual(step.changes.seasonProgress, [10, 3]);
+  assert.equal(step.label, "S2 E3");
+});
+
+test("stepEpisode without seasons counts plain episodes, up to the total", () => {
+  const step = stepEpisode({ status: "in_progress", progressCurrent: 119 }, 1180);
+  assert.deepEqual(step, { changes: { progressCurrent: 120, status: "in_progress" }, label: "ep. 120", finishes: false });
+  assert.deepEqual(stepEpisode({ status: "in_progress", progressCurrent: 1179 }, 1180).changes, { progressCurrent: 1180, status: "done" });
+  assert.equal(stepEpisode({ status: "in_progress", progressCurrent: 1180 }, 1180), undefined);
+  // Not started, and no total known.
+  assert.deepEqual(stepEpisode({}).changes, { progressCurrent: 1, status: "in_progress" });
+  assert.equal(stepEpisode({}).finishes, false);
+  assert.equal(stepEpisode({ progressCurrent: 400 }).label, "ep. 401");
+});
+
+test("stepEpisode leaves the item it was given alone", () => {
+  const item = show({ status: "plan", seasonProgress: [1, 0, 0] });
+  const copy = JSON.parse(JSON.stringify(item));
+  stepEpisode(item);
+  assert.deepEqual(item, copy);
 });

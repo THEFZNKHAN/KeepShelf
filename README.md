@@ -250,6 +250,15 @@ KeepShelf opens on **Not watched**: what is still to watch or in progress. Watch
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
 - In **Settings > General**, **When I open KeepShelf** chooses between **Start with my default view** and **Remember where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
 
+### Mark the next episode watched
+
+Series and anime that aren't finished have a **+1 episode** button on the row (it shows when you hover, like the other row buttons) and a small black **+ S2 E6** pill among the chips on the item's card (**+ ep. 120** for a show without seasons). One tap marks that episode watched and moves on to the next.
+
+- It starts a show you hadn't started, and picks up one you had dropped.
+- The last episode finishes the show and, if the rating prompt is on, offers the rating box.
+- A message at the bottom says what changed, with **Undo** for a few seconds.
+- A [watch site](#watch-sites) address that includes an episode follows your progress, so its button always opens the next episode.
+
 ### Season-by-season progress
 
 For series and anime that have [TMDB info](#tmdb-info), the Edit dialog shows **one box per season** instead of a single number, with each season's episode count as a hint (`/10`).
