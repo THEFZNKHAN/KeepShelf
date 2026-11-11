@@ -75,3 +75,45 @@ export function mergeSeasonProgress(lists: Array<number[] | undefined>): number[
   const length = Math.max(...present.map((l) => l.length));
   return Array.from({ length }, (_, i) => Math.max(...present.map((l) => l[i] ?? 0)));
 }
+
+export interface EpisodeStep {
+  /** What to save to move on by one episode. */
+  changes: { progressCurrent?: number; seasonProgress?: number[]; status: ItemStatus };
+  /** The episode this marks as watched: "S2 E6" for a show with seasons, "ep. 120" otherwise. */
+  label: string;
+  /** True when it is the last episode, so the show is finished. */
+  finishes: boolean;
+}
+
+type StepItem = Pick<SavedItem, "status" | "done" | "progressCurrent" | "seasonProgress" | "tmdb">;
+
+/**
+ * Marks the next episode as watched: the one after the last you watched. Undefined when there is nothing to
+ * mark (everything is watched, or the item is already done). `total` is the episode count when it is known.
+ * Starting a show, or picking up a dropped one, makes it in progress; the last episode finishes it.
+ */
+export function stepEpisode(item: StepItem, total?: number): EpisodeStep | undefined {
+  const now: ItemStatus = item.status ?? (item.done ? "done" : "plan");
+  if (now === "done") return undefined;
+  const restart = (status: ItemStatus): ItemStatus => (status === "plan" || status === "dropped" ? "in_progress" : status);
+
+  const totals = seasonTotals(item);
+  if (totals) {
+    const seen = item.seasonProgress ?? ((item.progressCurrent ?? 0) > 0 ? distributeProgress(item.progressCurrent ?? 0, totals) : []);
+    const progress = totals.map((_, i) => seen[i] ?? 0);
+    const next = nextToWatch(progress, totals);
+    if (!next) return undefined;
+    progress[next.season - 1] += 1;
+    const finishes = nextToWatch(progress, totals) === undefined;
+    return {
+      changes: { seasonProgress: progress, status: finishes ? "done" : restart(now) },
+      label: `S${next.season} E${next.episode}`,
+      finishes,
+    };
+  }
+
+  const next = (item.progressCurrent ?? 0) + 1;
+  if (total !== undefined && total > 0 && next > total) return undefined;
+  const finishes = total !== undefined && total > 0 && next >= total;
+  return { changes: { progressCurrent: next, status: finishes ? "done" : restart(now) }, label: `ep. ${next}`, finishes };
+}

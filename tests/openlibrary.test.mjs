@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   MIN_REQUEST_GAP_MS, MAX_BOOK_GENRES, MIN_RATINGS, bookRating, OpenLibraryError, authorsMatch, bookCoverUrl, bookGenres, cleanDescription, cleanSubjects, createOpenLibraryClient,
-  lookupBook, mainTitle, pickBestBook, sanitizeBookInfo, toBookInfo, totalPages,
+  lookupBook, mainTitle, needsBookInfo, pickBestBook, sanitizeBookInfo, toBookInfo, totalPages,
 } from "../dist-test/openlibrary.js";
 import { allTags, genreTags, genreText } from "../dist-test/tmdb.js";
 import { buildBackup, parseImportFile } from "../dist-test/import.js";
@@ -228,4 +228,11 @@ test("book subjects count as genres in the stats", () => {
     { ...base, id: "2", title: "B", bookInfo: { workKey: "/works/OL2W", subjects: ["Self-help"], fetchedAt: 1 } },
   ], Date.UTC(2026, 10, 9));
   assert.deepEqual(stats.topGenres[0], { name: "Self-help", count: 2 });
+});
+
+test("needsBookInfo: books with no details yet, unless a wrong match was removed", () => {
+  assert.equal(needsBookInfo({ type: "book" }), true);
+  assert.equal(needsBookInfo({ type: "book", bookInfo: { workKey: "/works/OL1W", subjects: [], fetchedAt: 1 } }), false);
+  assert.equal(needsBookInfo({ type: "book", bookInfoOptOut: true }), false);
+  for (const type of ["movie", "series", "anime", "tab"]) assert.equal(needsBookInfo({ type }), false, type);
 });

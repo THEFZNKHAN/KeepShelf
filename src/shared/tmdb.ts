@@ -70,6 +70,11 @@ export function isEnrichable(item: Pick<SavedItem, "type">): boolean {
   return item.type === "movie" || item.type === "series" || item.type === "anime";
 }
 
+/** A movie, series or anime with no TMDB info yet, where the user hasn't removed a wrong match. */
+export function needsTmdbInfo(item: Pick<SavedItem, "type" | "tmdb" | "tmdbOptOut">): boolean {
+  return isEnrichable(item) && !item.tmdb && !item.tmdbOptOut;
+}
+
 export function imdbIdFromUrl(url: string | undefined): string | undefined {
   return /\/title\/(tt\d{5,})/.exec(url ?? "")?.[1];
 }
@@ -135,7 +140,12 @@ interface Details {
   poster_path?: string | null;
   imdb_id?: string | null;
   external_ids?: { imdb_id?: string | null };
-  release_dates?: { results?: Array<{ iso_3166_1?: string; release_dates?: Array<{ certification?: string }> }> };
+  release_dates?: {
+    results?: Array<{
+      iso_3166_1?: string;
+      release_dates?: Array<{ certification?: string; release_date?: string; type?: number }>;
+    }>;
+  };
   content_ratings?: { results?: Array<{ iso_3166_1?: string; rating?: string }> };
 }
 
@@ -148,6 +158,25 @@ function certificationOf(kind: TmdbKind, d: Details): string | undefined {
 }
 
 const isIsoDay = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
+/** TMDB's release type for streaming and online stores. */
+const DIGITAL_RELEASE = 4;
+
+/** The earliest digital release in each country, "2026-12-09". Other kinds of release (theatrical, physical) are ignored. */
+function digitalDatesOf(d: Details): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const country of d.release_dates?.results ?? []) {
+    const code = country.iso_3166_1;
+    if (typeof code !== "string" || !/^[A-Z]{2}$/.test(code)) continue;
+    const days = (country.release_dates ?? [])
+      .filter((r) => r.type === DIGITAL_RELEASE && typeof r.release_date === "string")
+      .map((r) => r.release_date!.slice(0, 10))
+      .filter(isIsoDay)
+      .sort();
+    if (days.length > 0) out[code] = days[0];
+  }
+  return out;
+}
 
 function nextEpisodeOf(kind: TmdbKind, d: Details): TmdbInfo["nextEpisode"] {
   const next = d.next_episode_to_air;
@@ -196,6 +225,7 @@ export function toTmdbInfo(kind: TmdbKind, d: Details, now = Date.now()): TmdbIn
   const nextEpisode = nextEpisodeOf(kind, d);
   if (nextEpisode) info.nextEpisode = nextEpisode;
   if (kind === "movie" && isIsoDay(d.release_date)) info.releaseDate = d.release_date;
+  if (kind === "movie") info.digitalDates = digitalDatesOf(d);
   if (d.status) info.status = d.status;
   if (d.poster_path) info.posterPath = d.poster_path;
   return info;
@@ -280,7 +310,17 @@ export function sanitizeTmdb(raw: unknown, now = Date.now()): TmdbInfo | undefin
     next && typeof next === "object" && isIsoDay(next.airDate) && Number.isInteger(next.season) && Number.isInteger(next.episode)
       ? { airDate: next.airDate, season: next.season as number, episode: next.episode as number }
       : undefined;
+  const rawDigital = r.digitalDates;
+  const digitalDates =
+    rawDigital && typeof rawDigital === "object" && !Array.isArray(rawDigital)
+      ? Object.fromEntries(
+          Object.entries(rawDigital as Record<string, unknown>)
+            .filter(([code, day]) => /^[A-Z]{2}$/.test(code) && isIsoDay(day))
+            .slice(0, 300)
+        ) as Record<string, string>
+      : undefined;
   const optional: Partial<TmdbInfo> = {
+    digitalDates,
     seasonEpisodes,
     nextEpisode,
     releaseDate: isIsoDay(r.releaseDate) ? r.releaseDate : undefined,

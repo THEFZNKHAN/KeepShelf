@@ -96,18 +96,6 @@ body {
   gap: var(--gap-sm);
 }
 
-.count-badge {
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--on-surface-variant);
-  background: var(--surface-container);
-  padding: var(--gap-xs) var(--gap-sm);
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-}
-
 .top-bar-spacer {
   width: 36px;
 }
@@ -1509,54 +1497,63 @@ body.in-tab {
 .stats-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+  padding: 0 0 20px;
 }
 
+/* The headline numbers: one quiet row, no boxes. */
 .stat-tiles {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--outline-variant);
 }
 
 .stat-tile {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-xl);
-  background: var(--surface-container-low);
+  gap: 1px;
 }
 
 .stat-tile-label {
   font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   color: var(--on-surface-variant);
 }
 
 .stat-tile-value {
-  font-size: 18px;
-  line-height: 22px;
+  font-size: 20px;
+  line-height: 26px;
   font-weight: 600;
   color: var(--on-surface);
 }
 
+/* Each block is a section like the ones on Coming up: a small heading, then its content. */
 .stats-card {
-  padding: 10px;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-xl);
+  padding: 0 12px 14px;
+  border-bottom: 1px solid var(--row-border);
 }
 
 .stats-card-title {
   margin: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--on-surface);
+  padding: 14px 0 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
 }
 
 .stats-card-sub {
-  margin: 2px 0 8px;
+  margin: 2px 0 10px;
   font-size: 11px;
-  color: var(--on-surface-variant);
+  color: var(--outline);
+}
+
+.stats-card-title + .bar-list {
+  margin-top: 8px;
 }
 
 .col-chart {
@@ -1603,7 +1600,12 @@ body.in-tab {
 .col-bar {
   width: 70%;
   max-width: 24px;
-  border-radius: 4px 4px 0 0;
+  border-radius: 3px 3px 0 0;
+  background: var(--outline-variant);
+}
+
+.col-bar.is-peak,
+.bar-fill.is-peak {
   background: var(--primary);
 }
 
@@ -1673,8 +1675,8 @@ body.in-tab {
 .bar-fill {
   height: 100%;
   min-width: 2px;
-  border-radius: 0 4px 4px 0;
-  background: var(--primary);
+  border-radius: 0 3px 3px 0;
+  background: var(--outline-variant);
 }
 
 .bar-value {
@@ -1692,6 +1694,8 @@ body.in-tab {
 
 .stats-table summary {
   cursor: pointer;
+  font-size: 10.5px;
+  color: var(--outline);
 }
 
 .stats-table table {
@@ -1717,10 +1721,39 @@ body.in-tab {
   text-align: right;
 }
 
-.stats-footnote {
-  margin: 0;
+.stats-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--row-border);
+}
+
+.stats-progress-track {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--outline-variant);
+}
+
+.stats-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--primary);
+}
+
+.stats-progress-text {
+  flex-shrink: 0;
   font-size: 11px;
+  font-weight: 600;
   color: var(--on-surface-variant);
+}
+
+.stats-footnote {
+  margin: 14px 12px 0;
+  font-size: 11px;
+  color: var(--outline);
 }
 
 /* ── TMDB ────────────────────────────────────────────────── */
@@ -1841,9 +1874,7 @@ body.in-tab {
 
 .s-card {
   flex-shrink: 0;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-xl);
-  background: var(--surface);
+  border-bottom: 1px solid var(--row-border);
 }
 
 .s-card > summary {
@@ -1862,12 +1893,6 @@ body.in-tab {
 
 .s-card > summary:hover {
   background: var(--surface-container-low);
-  border-radius: var(--radius-xl);
-}
-
-.s-card[open] > summary {
-  border-bottom: 1px solid var(--row-border);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .s-card-icon {
@@ -1886,16 +1911,12 @@ body.in-tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--surface-container);
   font-size: 11px;
   line-height: 16px;
-  color: var(--on-surface-variant);
+  color: var(--outline);
 }
 
 .s-card-summary.is-ok {
-  background: var(--success-bg);
   color: var(--success-text);
 }
 
@@ -1921,7 +1942,7 @@ body.in-tab {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 12px 12px;
+  padding: 2px 12px 14px;
 }
 
 .s-hint {
@@ -2255,6 +2276,12 @@ body.in-tab {
   list-style: none;
   overflow-y: auto;
   outline: none;
+  /* It still scrolls by wheel, touch and keys; the bar itself just isn't drawn. */
+  scrollbar-width: none;
+}
+
+.picker-list::-webkit-scrollbar {
+  display: none;
 }
 
 .picker-group {
@@ -2559,7 +2586,9 @@ body.in-tab {
 /* ── Settings: groups, a quieter card list ───────────────── */
 
 .s-group {
-  margin: 10px 2px 0;
+  margin: 0;
+  padding: 14px 12px 4px;
+  border-bottom: 1px solid var(--row-border);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -2567,12 +2596,10 @@ body.in-tab {
   color: var(--on-surface-variant);
 }
 
-.s-group:first-child {
-  margin-top: 6px;
-}
-
-.s-card[open] {
-  border-color: var(--outline);
+/* The page is a flat list of full-width rows, like Coming up and Stats. */
+#settings-view .settings-body {
+  gap: 0;
+  padding: 0 0 20px;
 }
 
 /* "How it works"-style disclosure inside a card, so long explanations don't crowd the controls. */
@@ -2644,7 +2671,7 @@ body.in-tab {
   grid-template-rows: auto auto auto 1fr auto;
 }
 
-.pick-panel.is-pick .pick-kicker {
+.pick-panel.is-pick .pick-top {
   grid-row: 1;
 }
 
@@ -2707,6 +2734,247 @@ body.in-tab {
   cursor: pointer;
 }
 
+/* The top of the suggestion: the heading, a filter button, and the filters when open. */
+.pick-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick-top[hidden] {
+  display: none;
+}
+
+.pick-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.pick-top .pick-kicker {
+  margin: 0;
+}
+
+.pick-filter-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: -4px;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+}
+
+.pick-filter-toggle:hover,
+.pick-filter-toggle[aria-expanded="true"] {
+  background: var(--surface-container);
+  color: var(--on-surface);
+}
+
+.pick-filter-toggle .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.pick-filter-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-primary);
+}
+
+.pick-filter-count[hidden] {
+  display: none;
+}
+
+.pick-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.pick-filters[hidden] {
+  display: none;
+}
+
+.pick-filters .view-select {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+}
+
+.pick-clear {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Coming up: what is airing or releasing soon, by day. Same rows and filters as the shelf. */
+.upcoming-body {
+  gap: 0;
+  padding: 0 0 20px;
+}
+
+.up-window {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.up-window .filters {
+  padding-bottom: 0;
+}
+
+.up-group,
+.up-nodate > summary {
+  display: block;
+  margin: 0;
+  padding: 10px 12px 4px;
+  border-bottom: 1px solid var(--row-border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.up-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.up-empty {
+  margin: 24px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.up-empty strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.up-note {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--outline);
+}
+
+.up-nodate > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.up-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-container);
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--on-surface-variant);
+}
+
+/* Day headings stay in view while their rows scroll past, and say how far off the day is. */
+.up-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--background);
+}
+
+.up-away {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--outline);
+}
+
+.up-label.is-faint {
+  font-weight: 500;
+  color: var(--outline);
+}
+
+/* Titles without a date, folded away unless they are all there is. */
+.up-nodate > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.up-nodate > summary::-webkit-details-marker {
+  display: none;
+}
+
+.up-nodate > summary::before {
+  content: "+ ";
+}
+
+.up-nodate[open] > summary::before {
+  content: "– ";
+}
+
+.up-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--outline-variant);
+  background: var(--surface);
+}
+
+.up-footer[hidden] {
+  display: none;
+}
+
+.up-check {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* A setting with a dropdown: the text, then the dropdown underneath. */
 .pref-select {
   display: flex;
@@ -2726,6 +2994,42 @@ body.in-tab {
   color: var(--on-surface);
 }
 
+/* Paste a list: the box, the "These are" choice and the summary line. */
+.s-more-body .mono {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--surface-container);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+}
+
+.paste-text {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  outline: none;
+  resize: none;
+}
+
+.paste-text:focus {
+  border-color: var(--primary);
+}
+
+.paste-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
 .pref-select span {
   font-size: 11.5px;
   line-height: 16px;
@@ -2735,4 +3039,120 @@ body.in-tab {
 .pref-select .view-select {
   width: 100%;
   height: 28px;
+}
+
+/* A small "+ S2 E4" pill among an item's chips: one tap marks the next episode watched, and adds no extra row. */
+.pick-chip-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 8px 1px 4px;
+  border-color: var(--primary);
+  background: var(--primary);
+  font-family: inherit;
+  color: var(--on-primary);
+  cursor: pointer;
+}
+
+.pick-chip-action:hover {
+  background: #333;
+}
+
+.pick-chip-action .material-symbols-outlined {
+  font-size: 13px;
+}
+
+.paste-kind .view-select {
+  flex: 1;
+  height: 28px;
+}
+
+#paste-summary {
+  min-height: 14px;
+}
+
+#paste-add:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.up-check:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.up-check:disabled {
+  cursor: default;
+  text-decoration: none;
+}
+
+/* Home header: the filter controls sit behind one button; selection actions appear only with a selection. */
+.more-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.more-filters[hidden] {
+  display: none;
+}
+
+.filters-toggle {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filters-toggle[aria-expanded="true"] {
+  background: var(--surface-container-high);
+}
+
+.filters-toggle.has-dot::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.btn[hidden] {
+  display: none;
+}
+
+/* Status, sort, tags and lists share one wrapping row of compact controls. */
+.more-filters {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.more-filters .view-row {
+  display: contents;
+}
+
+.more-filters .view-row[hidden] {
+  display: none;
+}
+
+.more-filters .view-select {
+  flex: 1 1 80px;
+  min-width: 0;
+  height: 24px;
+  font-size: 11px;
+}
+
+.shelf-tab-count {
+  margin-left: 5px;
+  font-weight: 500;
+  color: var(--outline);
+}
+
+/* An open card is tinted so its controls read as belonging to its row. */
+.s-card[open] {
+  background: var(--surface-container-low);
+}
+
+.s-card[open] > summary:hover {
+  background: none;
 }

@@ -1,12 +1,18 @@
 import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
-import { buildBackup, parseImportFile } from "../shared/import.js";
+import { buildBackup, parseImportFile, settingsFromBackupJson } from "../shared/import.js";
+import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } from "../shared/settings-backup.js";
+import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
+import { REMINDERS_KEY } from "../shared/reminders-settings.js";
+import { TMDB_TOKEN_KEY } from "../shared/tmdb-settings.js";
+
+import { listToItems, parseList, planListImport } from "../shared/list-import.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
-import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
+import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   WATCH_MEDIA_TYPES,
   addExampleToSite,
@@ -21,6 +27,7 @@ import {
   normalizeTypes,
   removeWatchSite,
   saveWatchSite,
+  WATCH_SITES_KEY,
   siteFromLearned,
   supportedKinds,
   titleFacts,
@@ -30,10 +37,20 @@ import {
 } from "../shared/watch-sites.js";
 import { groupTags } from "../shared/tag-filter.js";
 import { createTagPicker } from "./tag-picker.js";
-import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, totalPages } from "../shared/openlibrary.js";
+import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, needsBookInfo, totalPages } from "../shared/openlibrary.js";
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
+import {
+  NO_PICK_FILTERS,
+  PICK_LENGTHS,
+  activeFilterCount,
+  applyPickFilters,
+  pickGenres,
+  sanitizePickFilters,
+  type PickFilters,
+  type PickType,
+} from "../shared/pick-filters.js";
 import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 import { snapshotItems } from "../shared/undo.js";
 import {
@@ -48,7 +65,18 @@ import {
   type StartMode,
   type StatusFilter,
 } from "../shared/status-view.js";
-import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, sumProgress } from "../shared/seasons.js";
+import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, type EpisodeStep } from "../shared/seasons.js";
+import {
+  COMING_UP_WINDOWS,
+  airingWithoutDate,
+  comingUp,
+  groupByDay,
+  regionsFor,
+  sanitizeWindow,
+  shortDate,
+  streamingNote,
+  streamingStatuses,
+} from "../shared/coming-up.js";
 
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
@@ -98,6 +126,10 @@ const isTabView = new URLSearchParams(location.search).get("view") === "settings
 const appView = document.getElementById("app-view")!;
 const settingsView = document.getElementById("settings-view")!;
 const statsView = document.getElementById("stats-view")!;
+const upcomingView = document.getElementById("upcoming-view")!;
+const upcomingBodyEl = document.getElementById("upcoming-body")!;
+const upcomingWindowEl = document.getElementById("upcoming-window")!;
+const upcomingFooterEl = document.getElementById("upcoming-footer")!;
 const listEl = document.getElementById("list")!;
 const emptyEl = document.getElementById("empty")!;
 const emptyHeadingEl = document.getElementById("empty-heading")!;
@@ -145,6 +177,10 @@ const statusFilterEl = document.getElementById("status-filter") as HTMLSelectEle
 const sortEl = document.getElementById("sort") as HTMLSelectElement;
 const pickRandomBtnEl = document.getElementById("pick-random") as HTMLButtonElement;
 const organiseRowEl = document.getElementById("organise-row")!;
+const moreFiltersEl = document.getElementById("more-filters")!;
+const toggleFiltersEl = document.getElementById("toggle-filters") as HTMLButtonElement;
+const copySelectedEl = document.getElementById("copy-selected") as HTMLButtonElement;
+const deleteSelectedEl = document.getElementById("delete-selected") as HTMLButtonElement;
 const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
 const tagPicker = createTagPicker(tagFilterEl, (tag) => {
   tagFilter = tag;
@@ -514,6 +550,235 @@ function closeStats(): void {
   appView.hidden = false;
 }
 
+/* ── Coming up ───────────────────────────────────────────── */
+
+/** What the line under the list says; set after a manual check. */
+let upcomingNote = "";
+
+/** Where to look for a movie's streaming date: the browser's own country first, then the US. */
+const userRegions = regionsFor(navigator.language);
+
+/** How many days ahead Coming up looks. A streaming date is often further away than two weeks, so it can be widened. */
+const UPCOMING_DAYS_KEY = "keepshelf.upcomingDays";
+let upcomingDays = (() => {
+  try {
+    return sanitizeWindow(localStorage.getItem(UPCOMING_DAYS_KEY));
+  } catch {
+    return sanitizeWindow(undefined);
+  }
+})();
+
+/** A shelf row without the details and actions: just the title, an optional note and the date on the right. */
+function upcomingRow(item: SavedItem, label: string, extra?: string, tip?: string, faint = false): HTMLLIElement {
+  const { li, typeIconEl, body } = createRowShell(item, false);
+  const note = document.createElement("div");
+  note.className = "item-facts";
+  note.textContent = [typeLabel(item.type), extra].filter(Boolean).join(" · ");
+  body.append(note);
+  const when = document.createElement("span");
+  when.className = faint ? "up-label is-faint" : "up-label";
+  when.textContent = label;
+  if (tip) when.title = tip;
+  li.append(typeIconEl, body, when);
+  li.tabIndex = 0;
+  li.addEventListener("click", () => showDetails(item, "info"));
+  li.addEventListener("keydown", (e) => {
+    if (e.target === li && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      showDetails(item, "info");
+    }
+  });
+  return li;
+}
+
+/** A section heading with its count in a smaller, lighter number right after the name. */
+function setSummary(summary: HTMLElement, label: string, count: number): void {
+  const number = document.createElement("span");
+  number.className = "up-count";
+  number.textContent = String(count);
+  summary.replaceChildren(label, number);
+}
+
+/** An empty list the rows of one group go into. */
+function upcomingList(): HTMLUListElement {
+  const ul = document.createElement("ul");
+  ul.className = "list";
+  return ul;
+}
+
+/** Draws what is airing or releasing soon, by day, and the shows that have no date yet. `checking` says dates are being looked up. */
+function renderUpcoming(checking = false): void {
+  const now = Date.now();
+  const groups = groupByDay(comingUp(allItems, now, upcomingDays, userRegions));
+  const missing = tmdbConfigured ? airingWithoutDate(allItems, now) : [];
+  upcomingBodyEl.replaceChildren();
+
+  const windowRow = document.createElement("div");
+  windowRow.className = "filters";
+  windowRow.setAttribute("role", "group");
+  windowRow.setAttribute("aria-label", "How far ahead to look");
+
+  for (const option of COMING_UP_WINDOWS) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `filter${option.days === upcomingDays ? " active" : ""}`;
+    chip.textContent = option.label;
+    chip.setAttribute("aria-pressed", String(option.days === upcomingDays));
+    chip.addEventListener("click", () => {
+      upcomingDays = option.days;
+      try {
+        localStorage.setItem(UPCOMING_DAYS_KEY, String(upcomingDays));
+      } catch {
+        /* the choice just won't be remembered */
+      }
+      renderUpcoming(false);
+    });
+    windowRow.append(chip);
+  }
+  // Outside the scrolling list, so it stays put like the footer.
+  upcomingWindowEl.replaceChildren(windowRow);
+
+  if (groups.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "up-empty";
+    const heading = document.createElement("strong");
+    const detail = document.createElement("span");
+    if (!tmdbConfigured) {
+      heading.textContent = "Add a TMDB token to see dates";
+      detail.textContent = "Air and release dates come from TMDB. Add your token in Settings, then fetch info for your shelf.";
+    } else if (checking) {
+      heading.textContent = "Checking for dates…";
+    } else if (missing.length > 0) {
+      heading.textContent = `Nothing dated in the next ${upcomingDays} days`;
+      detail.textContent = `${missing.length} airing title${missing.length === 1 ? " has" : "s have"} no date on TMDB yet. They are listed below.`;
+    } else {
+      heading.textContent = `Nothing in the next ${upcomingDays} days`;
+      detail.textContent = "Only titles you haven't finished are listed, and only when TMDB has a date for them.";
+    }
+    empty.append(heading, detail);
+    upcomingBodyEl.append(empty);
+  }
+
+  for (const group of groups) {
+    const heading = document.createElement("h2");
+    heading.className = `up-group${group.days <= 1 ? " is-soon" : ""}`;
+    heading.textContent = group.heading;
+    if (group.days > 1) {
+      const away = document.createElement("span");
+      away.className = "up-away";
+      away.textContent = `in ${group.days} days`;
+      heading.append(away);
+    }
+    const list = upcomingList();
+    upcomingBodyEl.append(heading, list);
+    for (const { item, label, region } of group.entries) {
+      if (label === "streaming") {
+        list.append(upcomingRow(item, "Streaming", undefined, `Streaming and online release${region ? ` (${region})` : ""}`));
+      } else if (label === "release") {
+        // A movie still to reach streaming says when, right under its title.
+        list.append(upcomingRow(item, "Release", streamingNote(item, now, userRegions)));
+      } else {
+        list.append(upcomingRow(item, label));
+      }
+    }
+  }
+
+  if (missing.length > 0) {
+    const details = document.createElement("details");
+    details.className = "up-nodate";
+    // When nothing is dated, this is the whole answer, so it starts open.
+    details.open = groups.length === 0;
+    const summary = document.createElement("summary");
+    setSummary(summary, "No date yet", missing.length);
+    summary.title = "Still airing, but TMDB has no next episode date yet. A long-running show often has none until the episode is close.";
+    details.append(summary);
+    const missingList = upcomingList();
+    for (const item of missing) missingList.append(upcomingRow(item, "No date", undefined, undefined, true));
+    details.append(missingList);
+    upcomingBodyEl.append(details);
+  }
+
+  // A movie already in the dated list above doesn't need a second row here.
+  const listed = new Set(groups.flatMap((g) => g.entries.map((e) => e.item.id)));
+  const movies = tmdbConfigured ? streamingStatuses(allItems, now, userRegions, upcomingDays).filter((m) => !listed.has(m.item.id)) : [];
+  if (movies.length > 0) {
+    const details = document.createElement("details");
+    details.className = "up-nodate";
+    // With no streaming dates in the list above, this is the explanation, so it starts open.
+    details.open = !groups.some((g) => g.entries.some((e) => e.label === "streaming"));
+    const summary = document.createElement("summary");
+    setSummary(summary, "Movies", movies.length);
+    summary.title = "Where each movie you haven't watched stands on streaming. It reaches the list above when its date is inside the window.";
+    details.append(summary);
+    const movieList = upcomingList();
+    details.append(movieList);
+    for (const { item, state, date, region } of movies) {
+      const tip = region ? `Streaming and online release (${region})` : undefined;
+      if (state === "since") movieList.append(upcomingRow(item, date ? `Since ${shortDate(date)}` : "Streaming", undefined, tip));
+      else if (state === "later") movieList.append(upcomingRow(item, date ? shortDate(date) : "Later", undefined, tip));
+      else if (state === "none") movieList.append(upcomingRow(item, "No date", undefined, undefined, true));
+      else movieList.append(upcomingRow(item, "Not checked", undefined, undefined, true));
+    }
+    upcomingBodyEl.append(details);
+  }
+
+  // The footer stays put at the bottom, however short the list is.
+  upcomingFooterEl.replaceChildren();
+  upcomingFooterEl.hidden = !tmdbConfigured;
+  if (tmdbConfigured) {
+    const note = document.createElement("span");
+    note.className = "up-note";
+    note.textContent = upcomingNote;
+    const check = document.createElement("button");
+    check.type = "button";
+    check.className = "up-check";
+    check.disabled = checking;
+    check.textContent = checking ? "Checking…" : "Check for new dates";
+    check.addEventListener("click", () => void checkUpcomingDates());
+    upcomingFooterEl.append(note, check);
+  }
+}
+
+/** Looks up dates right now for titles that could have a new one, ignoring the once-a-week limit. */
+async function checkUpcomingDates(): Promise<void> {
+  upcomingNote = "";
+  renderUpcoming(true);
+  try {
+    const response = await sendToBackground({ action: "refreshDates", force: true });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    const left = airingWithoutDate(allItems, Date.now()).length;
+    upcomingNote = `Checked just now.${left ? ` ${left} still ${left === 1 ? "has" : "have"} no date on TMDB.` : ""}`;
+  } catch (err) {
+    upcomingNote = `Couldn't check: ${err instanceof Error ? err.message.replace(/\.$/, "") : "something went wrong"}.`;
+  }
+  if (!upcomingView.hidden) renderUpcoming(false);
+  render();
+}
+
+function openUpcoming(): void {
+  appView.hidden = true;
+  upcomingView.hidden = false;
+  upcomingNote = "";
+  renderUpcoming(tmdbConfigured);
+  if (!tmdbConfigured) return;
+  // Titles you haven't watched for a while may have new dates: look them up quietly, then redraw.
+  void sendToBackground({ action: "refreshDates" })
+    .then((response) => {
+      if (response.ok && "items" in response) allItems = response.items;
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      if (!upcomingView.hidden) renderUpcoming(false);
+      render();
+    });
+}
+
+function closeUpcoming(): void {
+  upcomingView.hidden = true;
+  appView.hidden = false;
+}
+
 function closeSettings(): void {
   settingsView.hidden = true;
   appView.hidden = false;
@@ -662,6 +927,11 @@ function createRowActions(item: SavedItem): HTMLElement {
     actions.append(createRowAction("open_in_new", "Open source page", () => void chrome.tabs.create({ url: item.sourceUrl })));
   }
 
+  const step = episodeStep(item);
+  if (step) {
+    actions.append(createRowAction("exposure_plus_1", `Mark ${step.label} as watched`, () => void watchedNextEpisode(item)));
+  }
+
   const links = watchLinks(item, watchSites);
   if (links.length <= MAX_ROW_WATCH_BUTTONS) {
     for (const link of links) {
@@ -789,6 +1059,38 @@ function textPart(text: string, className: string, title?: string): HTMLElement 
  * Up to two lines under the title. The facts line is short and truncates only in extreme cases (a long URL).
  * The details line wraps instead of cropping, so nothing is ever cut off.
  */
+/**
+ * The row every list uses: type icon or poster, then the title with its type badge. The shelf adds its details,
+ * actions and tick box to it; other screens add only what they need, so a title looks the same everywhere.
+ */
+function createRowShell(item: SavedItem, withBadge = true): { li: HTMLLIElement; typeIconEl: HTMLElement; body: HTMLDivElement } {
+  const li = document.createElement("li");
+  li.className = "list-item";
+  li.classList.toggle("done", Boolean(item.done));
+  li.dataset.id = item.id;
+
+  const typeIconEl = createLeadingEl(item);
+  typeIconEl.addEventListener("mouseenter", () => {
+    showItemTooltip(typeLabel(item.type), typeIconEl);
+  });
+  typeIconEl.addEventListener("mouseleave", hideItemTooltip);
+
+  const body = document.createElement("div");
+  body.className = "item-body";
+
+  const titleRow = document.createElement("div");
+  titleRow.className = "item-title-row";
+  const title = document.createElement("h3");
+  title.className = "item-title";
+  title.textContent = itemTitle(item);
+  titleRow.append(title);
+  const badge = withBadge ? createTypeBadge(item) : undefined;
+  if (badge) titleRow.append(badge);
+  body.append(titleRow);
+
+  return { li, typeIconEl, body };
+}
+
 function createItemLines(item: SavedItem): HTMLElement[] {
   const lines: HTMLElement[] = [];
 
@@ -877,7 +1179,18 @@ function render(): void {
   const items = filteredItems();
   const tabCount = tabItems().length;
 
-  countEl.textContent = `${tabCount} saved`;
+  // The count lives on each tab, so the header stays free for the actions.
+  const isBook = (i: SavedItem) => i.type === "book";
+  const isTabLike = (i: SavedItem) => i.type === "tab" || i.type === "link" || i.type === "note";
+  const counts = {
+    media: allItems.filter((i) => !isBook(i) && !isTabLike(i)).length,
+    books: allItems.filter(isBook).length,
+    tabs: allItems.filter(isTabLike).length,
+  };
+  for (const [tab, n] of Object.entries(counts)) {
+    const el = shelfTabsEl.querySelector<HTMLElement>(`[data-count="${tab}"]`);
+    if (el) el.textContent = n ? String(n) : "";
+  }
   listEl.innerHTML = "";
 
   filtersEl.hidden = activeTab !== "media";
@@ -897,7 +1210,8 @@ function render(): void {
   fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
   // Picking something to watch or read doesn't apply to bookmarks.
   pickRandomBtnEl.hidden = activeTab === "tabs";
-  updateSyncButton();
+  updateFiltersToggle();
+  updateSelectionUi();
 
   savePageBtnEl.textContent =
     activeTab === "books" ? "Save book" :
@@ -926,36 +1240,11 @@ function render(): void {
   }
 
   for (const item of items) {
-    const li = document.createElement("li");
-    li.className = "list-item";
-    li.classList.toggle("done", Boolean(item.done));
-    li.dataset.id = item.id;
+    const { li, typeIconEl, body } = createRowShell(item);
 
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.dataset.id = item.id;
-
-    const typeIconEl = createLeadingEl(item);
-
-    typeIconEl.addEventListener("mouseenter", () => {
-      showItemTooltip(typeLabel(item.type), typeIconEl);
-    });
-    typeIconEl.addEventListener("mouseleave", hideItemTooltip);
-
-    const body = document.createElement("div");
-    body.className = "item-body";
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "item-title-row";
-
-    const title = document.createElement("h3");
-    title.className = "item-title";
-    title.textContent = itemTitle(item);
-    titleRow.append(title);
-
-    const badge = createTypeBadge(item);
-    if (badge) titleRow.append(badge);
-    body.append(titleRow);
 
     body.append(...createItemLines(item));
 
@@ -1025,9 +1314,24 @@ function linkedText(noteId: string | undefined, noteUrl: string | undefined): st
   return "Not linked";
 }
 
-/** The sync button only appears when the Keep list for the tab you are on is switched on. */
+/** The sync button only appears when the Keep list for the tab you are on is switched on, and something is ticked. */
 function updateSyncButton(): void {
-  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings);
+  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings) || getSelectedIds().length === 0;
+}
+
+/** The buttons that act on ticked rows only appear while something is ticked, which keeps the header quiet. */
+function updateSelectionUi(): void {
+  const any = getSelectedIds().length > 0;
+  copySelectedEl.hidden = !any;
+  deleteSelectedEl.hidden = !any;
+  updateSyncButton();
+}
+
+/** The filter button shows a dot while the list is narrowed or re-sorted, since the controls are tucked away. */
+function updateFiltersToggle(): void {
+  const active = effectiveStatus() !== effectiveStatusFilter(defaultStatusFilter(defaultView), availableStatuses()) || effectiveSort() !== "newest" || Boolean(tagFilter) || Boolean(listFilter);
+  toggleFiltersEl.classList.toggle("has-dot", active);
+  toggleFiltersEl.title = active ? "Filters and sorting (in use)" : "Filters and sorting";
 }
 
 function renderKeepStatus(): void {
@@ -1950,6 +2254,41 @@ function maybeAskRating(id: string): void {
   if (item && shouldAskForRating(item, askRatingEnabled())) openRateDialog(item);
 }
 
+/** The next episode a +1 would mark as watched, for series and anime that aren't finished. */
+function episodeStep(item: SavedItem): EpisodeStep | undefined {
+  if (item.type !== "series" && item.type !== "anime") return undefined;
+  return stepEpisode(item, totalEpisodes(item));
+}
+
+/** One tap: marks the next episode as watched, starts the show if needed, finishes it on the last episode. */
+async function watchedNextEpisode(item: SavedItem): Promise<void> {
+  const step = episodeStep(item);
+  if (!step) return;
+  const before = {
+    progressCurrent: item.progressCurrent ?? null,
+    seasonProgress: item.seasonProgress ?? null,
+    status: statusOf(item),
+  };
+  const error = await updateItemFields(item.id, step.changes);
+  if (error) {
+    showStatus(error, true);
+    return;
+  }
+  showStatus(`${item.title}: ${step.label} watched`, false, 6000, async () => {
+    const undoError = await updateItemFields(item.id, before);
+    showStatus(undoError ?? "Undone.", Boolean(undoError));
+    refreshOpenCard(item.id);
+  });
+  refreshOpenCard(item.id);
+  if (step.finishes) maybeAskRating(item.id);
+}
+
+/** If the item's own card is open, redraws it so its progress and the next episode are current. */
+function refreshOpenCard(id: string): void {
+  const fresh = allItems.find((i) => i.id === id);
+  if (fresh && !pickDialogEl.hidden && pickedId === id && pickPanelEl.classList.contains("is-info")) showDetails(fresh, "info");
+}
+
 /** Marks an item finished (or not). Finishing is saved first, so closing the rating box never loses it. */
 async function toggleDone(item: SavedItem): Promise<void> {
   const finishing = !item.done;
@@ -2092,7 +2431,7 @@ async function testTmdbToken(): Promise<void> {
 }
 
 async function enrichShelf(): Promise<void> {
-  const ids = allItems.filter((i) => isEnrichable(i) && !i.tmdb && !i.tmdbOptOut).map((i) => i.id);
+  const ids = allItems.filter(needsTmdbInfo).map((i) => i.id);
   if (ids.length === 0) {
     showTmdbStatus("Every movie, series and anime already has TMDB info.");
     return;
@@ -2507,6 +2846,7 @@ const pickReviewEl = document.getElementById("pick-review")!;
 const pickMoreEl = document.getElementById("pick-more") as HTMLButtonElement;
 const pickWatchEl = document.getElementById("pick-watch")!;
 const pickKickerEl = document.getElementById("pick-heading")!;
+const pickTopEl = document.getElementById("pick-top")!;
 const pickPanelEl = pickDialogEl.querySelector<HTMLElement>(".pick-panel")!;
 const pickActionsEl = document.getElementById("pick-actions")!;
 const pickFooterEl = document.getElementById("pick-footer")!;
@@ -2538,7 +2878,7 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickPanelEl.classList.add("is-card");
   pickPanelEl.classList.toggle("is-info", info);
   pickPanelEl.classList.toggle("is-pick", !info);
-  pickKickerEl.hidden = info;
+  pickTopEl.hidden = info;
   pickKickerEl.textContent = "How about this?";
   pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
@@ -2550,8 +2890,26 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
 
   // The suggestion doesn't need your tags and review; the item's own card shows everything.
   const chips = detailChips(item).filter((chip) => info || !chip.className.includes("pick-chip-tag"));
-  pickChipsEl.replaceChildren(...chips.map(({ text, className }) => textPart(text, className)));
-  pickChipsEl.hidden = chips.length === 0;
+  const chipEls: HTMLElement[] = chips.map(({ text, className }) => textPart(text, className));
+  // On the item's own card, a small "+ S2 E4" pill among the chips marks the next episode watched: no extra row.
+  const step = info ? episodeStep(item) : undefined;
+  if (step) {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "pick-chip pick-chip-action";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "add";
+    add.append(icon, document.createTextNode(step.label));
+    add.title = `Mark ${step.label} as watched`;
+    add.setAttribute("aria-label", `Mark ${step.label} as watched`);
+    add.addEventListener("click", () => void watchedNextEpisode(item));
+    // Right after the status and progress chips, before any tags, so it stays next to what it changes.
+    const firstTag = chips.findIndex((chip) => chip.className.includes("pick-chip-tag"));
+    chipEls.splice(firstTag === -1 ? chipEls.length : firstTag, 0, add);
+  }
+  pickChipsEl.replaceChildren(...chipEls);
+  pickChipsEl.hidden = chipEls.length === 0;
   pickReviewEl.textContent = info && item.review ? item.review : "";
   pickReviewEl.hidden = !(info && item.review);
 
@@ -2601,12 +2959,89 @@ function showPick(item: SavedItem): void {
   showDetails(item, "pick");
 }
 
-function pickForMe(excludeId?: string): void {
-  const pool = filteredItems({ ignoreStatus: true });
+/* The suggestion's filters: what it may choose from, kept between visits. */
+
+const PICK_FILTERS_KEY = "keepshelf.pickFilters";
+const pickFilterToggleEl = document.getElementById("pick-filter-toggle") as HTMLButtonElement;
+const pickFilterCountEl = document.getElementById("pick-filter-count")!;
+const pickFiltersEl = document.getElementById("pick-filters")!;
+const pickTypeEl = document.getElementById("pick-f-type") as HTMLSelectElement;
+const pickLengthEl = document.getElementById("pick-f-length") as HTMLSelectElement;
+const pickGenreEl = document.getElementById("pick-f-genre") as HTMLSelectElement;
+const pickClearEl = document.getElementById("pick-f-clear") as HTMLButtonElement;
+
+function loadPickFilters(): PickFilters {
+  try {
+    return sanitizePickFilters(JSON.parse(localStorage.getItem(PICK_FILTERS_KEY) ?? "null"));
+  } catch {
+    return { ...NO_PICK_FILTERS };
+  }
+}
+
+let pickFilters: PickFilters = loadPickFilters();
+let pickFiltersOpen = false;
+
+const capitalise = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Fills the choices from what is on the shelf, shows the current ones, and the count on the button. */
+function renderPickFilters(base: SavedItem[]): void {
+  const genres = pickGenres(base);
+  if (pickFilters.genre && !genres.includes(pickFilters.genre)) genres.push(pickFilters.genre);
+  fillOptions(pickTypeEl, [["all", "All types"], ["movie", "Movies"], ["series", "Series"], ["anime", "Anime"]], pickFilters.type);
+  fillOptions(pickLengthEl, [["", "Any length"], ...PICK_LENGTHS.map((l): [string, string] => [String(l.minutes), l.label])], pickFilters.maxMinutes ? String(pickFilters.maxMinutes) : "");
+  fillOptions(pickGenreEl, [["", "Any genre"], ...genres.map((g): [string, string] => [g, capitalise(g)])], pickFilters.genre ?? "");
+  const count = activeFilterCount(pickFilters);
+  pickFilterCountEl.textContent = String(count);
+  pickFilterCountEl.hidden = count === 0;
+  pickClearEl.hidden = count === 0;
+  pickFiltersEl.hidden = !(pickFiltersOpen || count > 0);
+  pickFilterToggleEl.setAttribute("aria-expanded", String(!pickFiltersEl.hidden));
+}
+
+function savePickFilters(): void {
+  try {
+    localStorage.setItem(PICK_FILTERS_KEY, JSON.stringify(pickFilters));
+  } catch {
+    /* the filters just won't be remembered */
+  }
+}
+
+/** The card when the filters leave nothing to pick: say so, and keep the filters in reach. */
+function showPickEmpty(): void {
+  cancelRowHover();
+  pickedId = undefined;
+  pickPanelEl.classList.add("is-card", "is-pick");
+  pickPanelEl.classList.remove("is-info", "is-clamped", "is-expanded");
+  pickTopEl.hidden = false;
+  pickKickerEl.textContent = "How about this?";
+  pickLeadingEl.replaceChildren(createTypeIconEl("movie"));
+  pickTitleEl.textContent = "Nothing matches";
+  pickTitleEl.title = "";
+  pickDetailEl.textContent = "Try a longer length or another genre, or tap Clear.";
+  for (const el of [pickChipsEl, pickOverviewEl, pickMoreEl, pickReviewEl, pickActionsEl, pickWatchEl, pickOpenEl, pickAgainEl, pickEditEl]) {
+    el.hidden = true;
+  }
+  pickCloseEl.hidden = false;
+  pickCloseEl.className = "btn btn-outline btn-sm";
+  pickFooterEl.hidden = false;
+  pickDialogEl.hidden = false;
+}
+
+function pickForMe(excludeId?: string, options: { keepCurrent?: boolean } = {}): void {
+  const base = filteredItems({ ignoreStatus: true });
+  renderPickFilters(base);
+  const pool = applyPickFilters(base, pickFilters);
+  // Changing a filter shouldn't throw away a suggestion that still fits it.
+  if (options.keepCurrent && pickedId && !pickDialogEl.hidden && pickCandidates(pool).some((i) => i.id === pickedId)) return;
   const item = pickRandom(pool, { excludeId });
   if (!item) {
+    // Something could be picked without the filters: they are what is in the way, so keep the card open.
+    if (activeFilterCount(pickFilters) > 0 && pickRandom(base, { excludeId })) {
+      showPickEmpty();
+      return;
+    }
     showStatus(
-      pool.length === 0 ? "Nothing here to pick from." : "Nothing left to pick. Everything here is done or dropped.",
+      base.length === 0 ? "Nothing here to pick from." : "Nothing left to pick. Everything here is done or dropped.",
       true
     );
     return;
@@ -2615,6 +3050,32 @@ function pickForMe(excludeId?: string): void {
   showPick(item);
   if (nothingPlanned) pickKickerEl.textContent = "Nothing planned, so here's one you started";
 }
+
+function onPickFilterChange(): void {
+  const maxMinutes = Number(pickLengthEl.value);
+  pickFilters = {
+    type: pickTypeEl.value as PickType,
+    ...(maxMinutes ? { maxMinutes } : {}),
+    ...(pickGenreEl.value ? { genre: pickGenreEl.value } : {}),
+  };
+  savePickFilters();
+  pickForMe(undefined, { keepCurrent: true });
+}
+
+for (const el of [pickTypeEl, pickLengthEl, pickGenreEl]) el.addEventListener("change", onPickFilterChange);
+document.getElementById("pick-f-clear")!.addEventListener("click", () => {
+  pickFilters = { ...NO_PICK_FILTERS };
+  pickFiltersOpen = false;
+  savePickFilters();
+  // Fewer filters can only add choices, so the current suggestion stays (unless there was none: "Nothing matches").
+  pickForMe(undefined, { keepCurrent: true });
+});
+pickFilterToggleEl.addEventListener("click", () => {
+  pickFiltersOpen = pickFiltersEl.hidden;
+  pickFiltersEl.hidden = !pickFiltersOpen;
+  pickFilterToggleEl.setAttribute("aria-expanded", String(pickFiltersOpen));
+});
+
 
 function closePick(): void {
   pickDialogEl.hidden = true;
@@ -2767,18 +3228,71 @@ function showBackupStatus(msg: string, err = false, ms = 6000, onUndo?: () => vo
   showSectionStatus(backupSettingsStatusEl, backupSettingsStatusTextEl, backupSettingsStatusIconEl, backupStatusTimer, msg, err, ms, onUndo);
 }
 
+const backupIncludeSettingsEl = document.getElementById("backup-include-settings") as HTMLInputElement;
+
+/** Reads the settings that go into a backup. Everything is checked on the way out. */
+async function gatherSettings(): Promise<SettingsBackup | undefined> {
+  const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, BOOK_INFO_KEY]);
+  const keep = await sendToBackground({ action: "getKeepSettings" });
+  const prefs: Record<string, string | null> = {};
+  for (const key of Object.keys(PREF_CHOICES)) prefs[key] = localStorage.getItem(key);
+  return collectSettings(
+    {
+      tmdbToken: stored[TMDB_TOKEN_KEY],
+      keep: keep.ok && "settings" in keep ? keep.settings : undefined,
+      watchSites: stored[WATCH_SITES_KEY],
+      remindersEnabled: stored[REMINDERS_KEY],
+      bookInfoEnabled: stored[BOOK_INFO_KEY],
+      prefs,
+    },
+    { includeToken: true }
+  );
+}
+
+/** "a", "a and b", "a, b and c". */
+function joinWords(parts: string[]): string {
+  return parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** Puts a backup's settings in place, then refreshes everything on the page that shows them. */
+async function applySettings(settings: SettingsBackup): Promise<void> {
+  const ask = async (message: Parameters<typeof sendToBackground>[0]) => {
+    const response = await sendToBackground(message);
+    if (!response.ok) throw new Error(response.error);
+  };
+  // The token first: reminders need it.
+  if (settings.tmdbToken) await ask({ action: "setTmdbToken", token: settings.tmdbToken });
+  if (settings.keep) await ask({ action: "setKeepSettings", settings: settings.keep });
+  if (settings.watchSites) await chrome.storage.local.set({ [WATCH_SITES_KEY]: settings.watchSites });
+  if (settings.remindersEnabled !== undefined) await ask({ action: "setRemindersEnabled", enabled: settings.remindersEnabled });
+  if (settings.bookInfoEnabled !== undefined) await ask({ action: "setBookInfoEnabled", enabled: settings.bookInfoEnabled });
+  for (const [key, value] of Object.entries(settings.prefs ?? {})) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* the preference just won't be restored */
+    }
+  }
+  await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites()]);
+  renderPrefs();
+}
+
 async function exportBackup(): Promise<void> {
   try {
     const response = await sendToBackground({ action: "getAll" });
     if (!response.ok || !("items" in response)) throw new Error("Could not read your shelf.");
-    const blob = new Blob([buildBackup(response.items)], { type: "application/json" });
+    const settings = backupIncludeSettingsEl.checked ? await gatherSettings() : undefined;
+    const blob = new Blob([buildBackup(response.items, settings)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `keepshelf-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    showBackupStatus(`Exported ${response.items.length} item${response.items.length === 1 ? "" : "s"}.`);
+    showBackupStatus(
+      `Exported ${response.items.length} item${response.items.length === 1 ? "" : "s"}` +
+        (settings ? " and your settings." : ".")
+    );
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
   }
@@ -2786,27 +3300,167 @@ async function exportBackup(): Promise<void> {
 
 async function importFile(file: File): Promise<void> {
   try {
-    const { source, items } = parseImportFile(await file.text(), file.name);
-    if (items.length === 0) {
+    const text = await file.text();
+    const { source, items } = parseImportFile(text, file.name);
+    const settings = source === "KeepShelf backup" ? settingsFromBackupJson(text) : undefined;
+    if (items.length === 0 && !settings) {
       showBackupStatus(`No items found in this ${source} file.`, true);
       return;
     }
-    const response = await sendToBackground({ action: "import", items });
-    if (!response.ok) throw new Error(response.error);
-    if ("items" in response) {
-      allItems = response.items;
-      render();
+    const before = new Set(allItems.map((i) => i.id));
+    let added = 0;
+    let skipped = 0;
+    if (items.length > 0) {
+      const response = await sendToBackground({ action: "import", items });
+      if (!response.ok) throw new Error(response.error);
+      if ("items" in response) {
+        allItems = response.items;
+        render();
+      }
+      added = "added" in response ? response.added ?? 0 : 0;
+      skipped = "skipped" in response ? response.skipped ?? 0 : 0;
     }
-    const added = "added" in response ? response.added ?? 0 : 0;
-    const skipped = "skipped" in response ? response.skipped ?? 0 : 0;
-    showBackupStatus(
-      `Imported ${added} item${added === 1 ? "" : "s"} from ${source}` +
-        (skipped ? `; ${skipped} already on your shelf.` : ".")
-    );
+    let tail = "";
+    if (settings) {
+      const restore = await showConfirm({
+        title: "Restore your settings?",
+        message: `This backup also has ${joinWords(describeSettings(settings))}. Restoring replaces the ones you have now.`,
+        confirmLabel: "Restore settings",
+        cancelLabel: "Skip",
+      });
+      if (restore) await applySettings(settings);
+      tail = restore ? " Settings restored." : " Settings skipped.";
+    }
+    const base =
+      `Imported ${added} item${added === 1 ? "" : "s"} from ${source}` + (skipped ? `; ${skipped} already on your shelf.` : ".") + tail;
+    showBackupStatus(base, false, 120000);
+    // Letterboxd and Goodreads files have no posters or genres; a KeepShelf backup already has them.
+    const addedIds = allItems.filter((i) => !before.has(i.id)).map((i) => i.id);
+    const info = await fetchInfoForNew(addedIds, (progress) => showBackupStatus(`${base} ${progress}`, false, 120000));
+    showBackupStatus(base + info);
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Import failed.", true);
   }
 }
+
+/* ── Info for newly added titles ─────────────────────────── */
+
+/**
+ * After titles are added, fetches their TMDB info (and Open Library details for books, when that is switched on),
+ * a few at a time so progress shows and what is done stays done. Never fails the import: it returns what to say.
+ */
+async function fetchInfoForNew(ids: string[], report: (progress: string) => void): Promise<string> {
+  const added = allItems.filter((i) => ids.includes(i.id));
+  const media = tmdbConfigured ? added.filter(needsTmdbInfo).map((i) => i.id) : [];
+  const books = bookInfoEnabled ? added.filter(needsBookInfo).map((i) => i.id) : [];
+  const total = media.length + books.length;
+  if (total === 0) return "";
+
+  let done = 0;
+  let enriched = 0;
+  let unmatched = 0;
+  try {
+    for (const [action, list, size] of [["enrich", media, 10], ["enrichBooks", books, 4]] as const) {
+      for (let i = 0; i < list.length; i += size) {
+        report(`Fetching info… ${done}/${total}`);
+        const response = await sendToBackground({ action, ids: list.slice(i, i + size) });
+        if (!response.ok) throw new Error(response.error);
+        if ("items" in response) {
+          allItems = response.items;
+          enriched += response.enriched ?? 0;
+          unmatched += response.unmatched ?? 0;
+          render();
+        }
+        done += Math.min(size, list.length - i);
+      }
+    }
+  } catch (err) {
+    const why = err instanceof Error ? err.message.replace(/\.$/, "") : "something went wrong";
+    return ` Couldn't fetch all the info (${why}). "Fetch info for my shelf" finishes the rest.`;
+  }
+  return ` Info added to ${enriched}` + (unmatched ? `; ${unmatched} had no match.` : ".");
+}
+
+/* ── Paste a list ────────────────────────────────────────── */
+
+const pasteTextEl = document.getElementById("paste-text") as HTMLTextAreaElement;
+const pasteStatusEl = document.getElementById("paste-status") as HTMLSelectElement;
+const pasteSummaryEl = document.getElementById("paste-summary")!;
+const pasteAddEl = document.getElementById("paste-add") as HTMLButtonElement;
+
+/** What the pasted text would do to the shelf right now. */
+function pastedPlan() {
+  const parsed = parseList(pasteTextEl.value, pasteStatusEl.value === "done");
+  return { parsed, plan: planListImport(listToItems(parsed.entries), allItems) };
+}
+
+function renderPasteSummary(): void {
+  if (!pasteTextEl.value.trim()) {
+    pasteSummaryEl.textContent = "";
+    pasteAddEl.disabled = true;
+    pasteAddEl.textContent = "Add to shelf";
+    return;
+  }
+  const { parsed, plan } = pastedPlan();
+  const watched = parsed.entries.filter((e) => e.watched).length;
+  const parts = [
+    parsed.entries.length === 0 ? "No titles found." : `${parsed.entries.length} found: ${watched} watched, ${parsed.entries.length - watched} to watch.`,
+  ];
+  if (plan.duplicates.length) parts.push(`${plan.duplicates.length} already on your shelf.`);
+  if (plan.similar.length) parts.push(`${plan.similar.length} look like ones you have and will be skipped.`);
+  if (parsed.unreadable.length) parts.push(`${parsed.unreadable.length} line${parsed.unreadable.length === 1 ? "" : "s"} couldn't be read.`);
+  pasteSummaryEl.textContent = parts.join(" ");
+  pasteAddEl.disabled = plan.fresh.length === 0;
+  pasteAddEl.textContent = plan.fresh.length ? `Add ${plan.fresh.length} to shelf` : "Add to shelf";
+}
+
+async function addPastedList(): Promise<void> {
+  const { plan } = pastedPlan();
+  if (plan.fresh.length === 0) return;
+  pasteAddEl.disabled = true;
+  try {
+    const before = new Set(allItems.map((i) => i.id));
+    const response = await sendToBackground({ action: "import", items: plan.fresh });
+    if (!response.ok) throw new Error(response.error);
+    if (!("items" in response)) throw new Error("Could not add the titles.");
+    allItems = response.items;
+    render();
+    const addedIds = allItems.filter((i) => !before.has(i.id)).map((i) => i.id);
+    pasteTextEl.value = "";
+    renderPasteSummary();
+
+    const similar = plan.similar.slice(0, 3).map((s) => `${s.item.title} (like ${s.like})`);
+    const base =
+      `Added ${addedIds.length} title${addedIds.length === 1 ? "" : "s"}.` +
+      (plan.similar.length ? ` Skipped ${plan.similar.length} that look like ones you have: ${similar.join(", ")}${plan.similar.length > 3 ? "…" : ""}.` : "");
+    const undo = async () => {
+      const undone = await sendToBackground({ action: "delete", ids: addedIds });
+      if (undone.ok && "items" in undone) {
+        allItems = undone.items;
+        render();
+        showBackupStatus(`Removed the ${addedIds.length} titles you just added.`);
+      } else {
+        showBackupStatus(undone.ok ? "Could not undo." : undone.error, true);
+      }
+    };
+    showBackupStatus(base, false, 120000, undo);
+    const info = await fetchInfoForNew(addedIds, (progress) => showBackupStatus(`${base} ${progress}`, false, 120000, undo));
+    const missingToken = !tmdbConfigured && addedIds.some((id) => allItems.some((i) => i.id === id && isEnrichable(i)));
+    showBackupStatus(
+      base + info + (missingToken ? " Add a TMDB token (TMDB info) and posters and genres fill in automatically." : ""),
+      false,
+      UNDO_MS * 2,
+      undo
+    );
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Could not add the titles.", true);
+    renderPasteSummary();
+  }
+}
+
+pasteTextEl.addEventListener("input", renderPasteSummary);
+pasteStatusEl.addEventListener("change", renderPasteSummary);
+pasteAddEl.addEventListener("click", () => void addPastedList());
 
 document.getElementById("export-backup")!.addEventListener("click", () => void exportBackup());
 
@@ -2871,6 +3525,15 @@ sortEl.addEventListener("change", () => {
 });
 
 syncSelectedEl.addEventListener("click", () => void syncToKeep(getSelectedIds()));
+
+listEl.addEventListener("change", (e) => {
+  if ((e.target as HTMLElement).matches('input[type="checkbox"]')) updateSelectionUi();
+});
+
+toggleFiltersEl.addEventListener("click", () => {
+  moreFiltersEl.hidden = !moreFiltersEl.hidden;
+  toggleFiltersEl.setAttribute("aria-expanded", String(!moreFiltersEl.hidden));
+});
 
 shelfTabsEl.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".shelf-tab");
@@ -2990,10 +3653,13 @@ document.addEventListener("keydown", (event) => {
   else if (!editDialogEl.hidden) closeEditDialog();
   else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden) closePick();
+  else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();
   else if (tagPicker.isOpen()) tagPicker.close();
 });
 
+document.getElementById("open-upcoming")!.addEventListener("click", openUpcoming);
+document.getElementById("close-upcoming")!.addEventListener("click", closeUpcoming);
 document.getElementById("open-stats")!.addEventListener("click", openStats);
 document.getElementById("close-stats")!.addEventListener("click", closeStats);
 document.getElementById("open-settings")!.addEventListener("click", openSettings);

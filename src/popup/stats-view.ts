@@ -94,6 +94,7 @@ function columnChart(data: Datum[], hooks: StatsHooks): HTMLElement {
     const bar = el("div", "col-bar");
     bar.style.height = `${(d.value / top) * 100}%`;
     bar.hidden = d.value === 0;
+    bar.classList.toggle("is-peak", max > 0 && i === peak);
     slot.append(bar);
     // Only the peak is labelled directly; the axis and tooltip carry the rest.
     if (max > 0 && i === peak) {
@@ -112,16 +113,18 @@ function columnChart(data: Datum[], hooks: StatsHooks): HTMLElement {
 function barList(data: Datum[], hooks: StatsHooks): HTMLElement {
   const max = Math.max(...data.map((d) => d.value), 1);
   const list = el("div", "bar-list");
-  for (const d of data) {
+  const top = data.findIndex((d) => d.value === max);
+  data.forEach((d, i) => {
     const row = el("div", "bar-row");
     attachHover(row, d.detail, hooks);
     const track = el("div", "bar-track");
     const bar = el("div", "bar-fill");
     bar.style.width = `${(d.value / max) * 100}%`;
+    bar.classList.toggle("is-peak", i === top);
     track.append(bar);
     row.append(el("span", "bar-label", d.label), track, el("span", "bar-value", String(d.value)));
     list.append(row);
-  }
+  });
   return list;
 }
 
@@ -145,6 +148,19 @@ export function renderStats(container: HTMLElement, items: SavedItem[], hooks: S
   );
   container.append(tiles);
 
+  // How much of the shelf is finished, as a slim bar right under the headline numbers.
+  if (stats.completionRate !== undefined) {
+    const progress = el("div", "stats-progress");
+    progress.setAttribute("role", "img");
+    progress.setAttribute("aria-label", `${stats.completionRate}% finished`);
+    const track = el("div", "stats-progress-track");
+    const fill = el("div", "stats-progress-fill");
+    fill.style.width = `${stats.completionRate}%`;
+    track.append(fill);
+    progress.append(track, el("span", "stats-progress-text", `${stats.completionRate}% finished`));
+    container.append(progress);
+  }
+
   const finished = stats.finishedPerMonth.map<Datum>(({ month, count }) => {
     const [year, m] = month.split("-");
     const name = `${MONTHS[Number(m) - 1]} ${year}`;
@@ -161,7 +177,7 @@ export function renderStats(container: HTMLElement, items: SavedItem[], hooks: S
       value: count,
       detail: `${i + 1}/10: ${plural(count, "item")}`,
     }));
-    const card = section("Your ratings", `${plural(stats.rating.rated, "rated item")}`);
+    const card = section("Your ratings", `${plural(stats.rating.rated, "rated item")}${stats.rating.average !== undefined ? ` · average ${stats.rating.average}/10` : ""}`);
     card.append(columnChart(ratings, hooks), tableView("Ratings", ratings));
     container.append(card);
   }
@@ -194,7 +210,4 @@ export function renderStats(container: HTMLElement, items: SavedItem[], hooks: S
     container.append(card);
   }
 
-  if (stats.completionRate !== undefined) {
-    container.append(el("p", "stats-footnote", `${stats.completionRate}% of your movies, series, anime and books are finished.`));
-  }
 }

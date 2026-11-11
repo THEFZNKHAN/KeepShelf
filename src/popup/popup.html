@@ -32,7 +32,15 @@
             <span class="material-symbols-outlined btn-icon">bookmark_add</span>
             Save page
           </button>
-          <span id="count" class="count-badge">0 saved</span>
+          <button
+            type="button"
+            id="open-upcoming"
+            class="icon-btn"
+            aria-label="Coming up"
+            title="Coming up"
+          >
+            <span class="material-symbols-outlined">event</span>
+          </button>
           <button
             type="button"
             id="open-stats"
@@ -55,9 +63,9 @@
       </header>
 
       <nav id="shelf-tabs" class="shelf-tabs">
-        <button type="button" class="shelf-tab active" data-tab="media">Media</button>
-        <button type="button" class="shelf-tab" data-tab="books">Books</button>
-        <button type="button" class="shelf-tab" data-tab="tabs">Tabs</button>
+        <button type="button" class="shelf-tab active" data-tab="media">Media<span class="shelf-tab-count" data-count="media"></span></button>
+        <button type="button" class="shelf-tab" data-tab="books">Books<span class="shelf-tab-count" data-count="books"></span></button>
+        <button type="button" class="shelf-tab" data-tab="tabs">Tabs<span class="shelf-tab-count" data-count="tabs"></span></button>
       </nav>
 
       <div class="toolbar">
@@ -91,6 +99,20 @@
               aria-label="Search saved items"
             />
           </div>
+          <button
+            type="button"
+            id="toggle-filters"
+            class="icon-btn filters-toggle"
+            aria-label="Filters and sorting"
+            title="Filters and sorting"
+            aria-expanded="false"
+          >
+            <span class="material-symbols-outlined">tune</span>
+          </button>
+        </div>
+
+        <div id="more-filters" class="more-filters" hidden>
+        <div class="view-row">
           <select id="status-filter" class="view-select" aria-label="Status filter">
             <option value="all">All</option>
             <option value="pending">Not watched</option>
@@ -115,6 +137,7 @@
             <span class="material-symbols-outlined">expand_more</span>
           </button>
           <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
+        </div>
         </div>
 
         <p id="hidden-note" class="hidden-note" hidden>
@@ -238,6 +261,19 @@
     </div>
 
     <div id="item-tooltip" class="item-tooltip" role="tooltip" hidden></div>
+
+    <div id="upcoming-view" class="view settings-view" hidden>
+      <header class="top-bar">
+        <button type="button" id="close-upcoming" class="icon-btn" aria-label="Back">
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <h1 class="settings-title">Coming up</h1>
+        <span class="top-bar-spacer"></span>
+      </header>
+      <div id="upcoming-window" class="up-window"></div>
+      <div id="upcoming-body" class="settings-body upcoming-body"></div>
+      <footer id="upcoming-footer" class="up-footer" hidden></footer>
+    </div>
 
     <div id="stats-view" class="view settings-view" hidden>
       <header class="top-bar">
@@ -551,6 +587,19 @@
               Your shelf lives only in this browser, so export a backup now and then. Import accepts a KeepShelf backup or a
               Letterboxd or Goodreads CSV. Items already on your shelf are skipped.
             </p>
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Include my settings</strong>
+                <span>
+                  Your TMDB token, Keep links, watch sites and switches, so a new install needs no re-typing. The file then
+                  contains your TMDB token, so keep it private.
+                </span>
+              </div>
+              <label class="switch" title="Include my settings in the backup">
+                <input type="checkbox" id="backup-include-settings" aria-label="Include my settings in the backup" checked />
+                <span class="switch-track"></span>
+              </label>
+            </div>
             <div class="settings-button-row">
               <button type="button" id="export-backup" class="btn btn-outline">
                 <span class="material-symbols-outlined btn-icon">download</span>
@@ -562,6 +611,33 @@
               </button>
               <input type="file" id="import-file" accept=".json,.csv,application/json,text/csv" hidden />
             </div>
+            <details class="s-more" id="paste-list">
+              <summary>Add titles from a pasted list</summary>
+              <div class="s-more-body">
+                <p>
+                  Paste lines like <span class="mono">Drishyam (2015) | 2h 43m | IMDb 8.2</span> from a Keep note or Copy
+                  all. A heading such as "Watched" switches the lines under it, and a ticked box means watched. Movies,
+                  series and anime (<span class="mono">(A)</span> marks anime).
+                </p>
+                <textarea
+                  id="paste-text"
+                  class="paste-text"
+                  rows="6"
+                  spellcheck="false"
+                  aria-label="Titles to add"
+                  placeholder="Drishyam (2015) | 2h 43m | IMDb 8.2&#10;Fargo (2014) | S05 | IMDb 8.8&#10;86 (2021) | S01 | IMDb 8.3 (A)"
+                ></textarea>
+                <label class="paste-kind">
+                  <span>These are</span>
+                  <select id="paste-status" class="view-select" aria-label="Are these watched?">
+                    <option value="plan">To watch</option>
+                    <option value="done">Already watched</option>
+                  </select>
+                </label>
+                <p id="paste-summary" class="s-fine"></p>
+                <button type="button" id="paste-add" class="btn btn-primary btn-wide" disabled>Add to shelf</button>
+              </div>
+            </details>
             <div id="backup-settings-status" class="settings-toast" hidden>
               <div class="settings-toast-content">
                 <span id="backup-settings-status-icon" class="material-symbols-outlined">check_circle</span>
@@ -624,7 +700,21 @@
     <div id="pick-dialog" class="confirm-dialog" hidden>
       <div class="confirm-backdrop" data-pick-dismiss></div>
       <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-heading">
-        <p class="pick-kicker" id="pick-heading">How about this?</p>
+        <div class="pick-top" id="pick-top">
+          <div class="pick-top-row">
+            <p class="pick-kicker" id="pick-heading">How about this?</p>
+            <button type="button" id="pick-filter-toggle" class="pick-filter-toggle" aria-label="Filter what I pick" aria-expanded="false" title="Filter what I pick">
+              <span class="material-symbols-outlined">tune</span>
+              <span id="pick-filter-count" class="pick-filter-count" hidden></span>
+            </button>
+          </div>
+          <div id="pick-filters" class="pick-filters" hidden>
+            <select id="pick-f-type" class="view-select" aria-label="Type"></select>
+            <select id="pick-f-length" class="view-select" aria-label="Length"></select>
+            <select id="pick-f-genre" class="view-select" aria-label="Genre"></select>
+            <button type="button" id="pick-f-clear" class="pick-clear">Clear</button>
+          </div>
+        </div>
         <div id="pick-leading" class="pick-leading"></div>
         <h2 id="pick-title" class="confirm-title"></h2>
         <p id="pick-detail" class="confirm-message"></p>

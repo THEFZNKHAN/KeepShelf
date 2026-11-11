@@ -213,7 +213,7 @@ Optionally append every save to your own Google Keep checklists. No Google Cloud
 
 ### Backup, import and export
 
-Export your whole shelf as JSON, import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
+Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
 
 ### Clipboard export
 
@@ -249,6 +249,15 @@ KeepShelf opens on **Not watched**: what is still to watch or in progress. Watch
 - A line under the filters says how many are hidden, such as **3 watched or dropped hidden · Show all**. Tap **Show all** to see everything. The next time you open KeepShelf it is back to the default view.
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
 - In **Settings > General**, **When I open KeepShelf** chooses between **Start with my default view** and **Remember where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
+
+### Mark the next episode watched
+
+Series and anime that aren't finished have a **+1 episode** button on the row (it shows when you hover, like the other row buttons) and a small black **+ S2 E6** pill among the chips on the item's card (**+ ep. 120** for a show without seasons). One tap marks that episode watched and moves on to the next.
+
+- It starts a show you hadn't started, and picks up one you had dropped.
+- The last episode finishes the show and, if the rating prompt is on, offers the rating box.
+- A message at the bottom says what changed, with **Undo** for a few seconds.
+- A [watch site](#watch-sites) address that includes an episode follows your progress, so its button always opens the next episode.
 
 ### Season-by-season progress
 
@@ -290,7 +299,13 @@ Can't decide? Click the **dice** button in the toolbar. KeepShelf suggests one i
 - **Pick another** draws again without repeating the last suggestion.
 - **Start watching / Start reading** moves it to *In progress*, and **Open page** jumps to it.
 
-Tip: filter to a tag like `weekend` or a type like **Series** first to narrow the pool.
+**Filters on the suggestion.** The small **filter** button at the top right of the card opens three choices: **Type** (movies, series or anime), **Length** (under 90 minutes, 2 hours or 2½ hours) and **Genre** (the genres on your shelf). Changing one keeps the suggestion if it still fits, and picks a new one if it doesn't. A badge on the button shows how many are on.
+
+- **Length** means a movie that fits. A series or anime is judged by one episode, so it fits unless its episodes are longer than that. A movie with no known length is never promised to fit.
+- If nothing matches, the card says **Nothing matches** and keeps the filters in reach; **Clear** (shown while any filter is on) removes them all and keeps the suggestion you have.
+- Your filters are remembered, and they stack on top of what you are looking at (tab, type, tag, list and search).
+
+Tip: you can still filter to a tag like `weekend` first to narrow the pool.
 
 ### Duplicates
 
@@ -367,6 +382,19 @@ Get a desktop notification when something on your shelf is about to come out. It
 **Good to know**
 - It can only remind you about things TMDB knows the date of. Between seasons a series has no next date, so there is nothing to announce until TMDB lists one.
 - Turn the switch off at any time and the background checks stop.
+
+### Coming up
+
+The **calendar** button in the header opens **Coming up**: what is airing or releasing in the **next 2 weeks** (or **1 month** or **3 months**, picked with the buttons at the top and remembered) for titles you haven't finished, grouped by day (**Today**, **Tomorrow**, then the date). Each row shows the poster, the title, and **S2 E6** for an episode or **Release** for a movie. Tap a row to open that title's card.
+
+- It works without turning on reminders, but it needs your [TMDB token](#tmdb-info) and fetched info, because the dates come from TMDB.
+- Opening it quietly looks up new dates for titles whose saved dates may be out of date (the same rule reminders use, so each title is looked up about once a week at most), then redraws. If TMDB can't be reached it shows the dates already saved. It never sends a notification.
+- **Watched** and **Dropped** titles are left out, and so is anything TMDB has no date for. Between seasons a series has no next date.
+- **Streaming dates for movies.** For a movie, TMDB also knows when it reaches streaming and online stores (its "digital" release). A movie that is out in cinemas but not yet on streaming gets its own **Streaming** row on that day, and a movie still to come out says **Streaming 9 Dec** under its title. A film released straight to streaming has a single **Streaming** row. KeepShelf uses your browser's country first (for example India for `en-IN`) and falls back to the US, so the date is the one for where you are when TMDB has it; hover the pill to see which country. TMDB often has no streaming date until it is close, and it does not say which service.
+- **Movies and streaming** lists every movie you haven't watched that is unreleased or came out in the last five months, with where it stands: **On streaming** (since a date), a later streaming date, **No date** (TMDB has none yet) or **Not checked** (tap Check for new dates). It opens by itself when no streaming date is in the list above, so you can see why.
+- **No date yet** lists the shows you follow that TMDB says are still airing but gives no next episode date for (or whose saved date has passed). A long-running show such as a weekly anime often has none until the episode is close, so it can be missing from the dated list for that reason. The list opens by itself when it is all there is.
+- **Check for new dates** looks up dates right now for those shows, ignoring the once-a-week limit, and says how many still have none.
+- Movies saved before streaming dates existed pick them up the next time their dates are checked (about once a week), or straight away with **Check for new dates**.
 
 ---
 
@@ -627,12 +655,30 @@ Google Keep only persists list items entered through trusted browser input. Keep
 Your shelf lives only in this browser, so export a backup now and then.
 
 - **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress (per season too).
+- **Include my settings** (on by default, next to the export button) also saves your TMDB token, Keep links, watch sites, the reminders and book-info switches, and your other preferences. **The file then contains your TMDB token, so keep it private**; turn the switch off to export only your shelf.
 - **Import** accepts:
   - a **KeepShelf backup** (`.json`)
   - a **Letterboxd** export CSV (watchlist, watched, diary or ratings)
   - a **Goodreads** library export CSV
 - Items already on your shelf are skipped, and imported items are not sent to Keep.
+- If a backup has settings, KeepShelf asks **"Restore your settings?"** and lists what is in it. **Restore settings** replaces the ones you have now; **Skip** imports only the items. Older backups have no settings and import as before.
 - Letterboxd and Goodreads imports mark watched and read items as finished.
+
+### Add titles from a pasted list
+
+Under **Backup & import**, **Add titles from a pasted list** takes lines like the ones KeepShelf's **Copy all** writes, or a Keep checklist:
+
+```
+Drishyam (2015) | 2h 43m | IMDb 8.2
+Fargo (2014) | S05 | IMDb 8.8
+86 (2021) | S01 | IMDb 8.3 (A)
+```
+
+- `S05` is a series with five seasons, `(A)` at the end marks anime, and anything else with a runtime is a movie. The year is optional, bullets and boxes are ignored, and other parts of a line (other sites' ratings, certificates) are skipped.
+- A heading line such as **Watched** or **To watch** switches the lines under it, a ticked box (`[x]`, `☑`) means watched, and **These are** sets the default for lines with neither.
+- A summary under the box says how many titles were found, how many are watched, how many are already on your shelf, and how many look like ones you have under another spelling (those are skipped and named). The button shows how many it will add.
+- **Undo** removes exactly the titles you just added.
+- If you have a [TMDB token](#tmdb-info), posters, genres and episode counts are **fetched automatically** right after the titles are added, ten at a time with progress in the message at the bottom (and Open Library details for books, when book info is on). Titles TMDB can't match are left as they are, and if TMDB is unreachable the titles are still added; **Fetch info for my shelf** finishes the rest. Without a token, a hint says how to turn this on. The same happens after importing a Letterboxd or Goodreads file.
 
 Importing from a file picker opens Settings in a full tab, because Chrome closes the popup when a file dialog opens.
 
@@ -761,7 +807,7 @@ Planned items in the current view. If none are planned it suggests something in 
 
 **Will my shelf survive an extension update?**
 
-Yes, if you reload the extension rather than removing and reinstalling it. Removing it clears `chrome.storage.local`, so keep a backup.
+Yes, if you reload the extension rather than removing and reinstalling it. Removing it clears `chrome.storage.local`, so keep a backup. When you update by loading the new version from a different folder, Chrome treats it as a new extension. Export a backup (with **Include my settings** on) from the old one, import it into the new one, and choose **Restore settings**: nothing needs re-typing. Updating in place (put the new files in the same folder and click **Reload**) needs no backup at all.
 
 **Can I move my shelf to another computer?**
 
