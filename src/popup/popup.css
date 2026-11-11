@@ -96,18 +96,6 @@ body {
   gap: var(--gap-sm);
 }
 
-.count-badge {
-  font-size: 12px;
-  line-height: 16px;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--on-surface-variant);
-  background: var(--surface-container);
-  padding: var(--gap-xs) var(--gap-sm);
-  border-radius: var(--radius-full);
-  white-space: nowrap;
-}
-
 .top-bar-spacer {
   width: 36px;
 }
@@ -2679,4 +2667,203 @@ body.in-tab {
 
 .pick-footer .btn-icon {
   font-size: 14px;
+}
+
+/* Coming up: what is airing or releasing soon, by day. Same rows and filters as the shelf. */
+.upcoming-body {
+  gap: 0;
+  padding: 0 0 20px;
+}
+
+.up-window {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.up-window .filters {
+  padding-bottom: 0;
+}
+
+.up-group,
+.up-nodate > summary {
+  display: block;
+  margin: 0;
+  padding: 10px 12px 4px;
+  border-bottom: 1px solid var(--row-border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.up-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+}
+
+.up-empty {
+  margin: 24px 12px;
+  text-align: center;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--on-surface-variant);
+}
+
+.up-empty strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.up-note {
+  min-width: 0;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--outline);
+}
+
+.up-nodate > summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.up-count {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-container);
+  font-size: 10px;
+  letter-spacing: 0;
+  color: var(--on-surface-variant);
+}
+
+/* Day headings stay in view while their rows scroll past, and say how far off the day is. */
+.up-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--background);
+}
+
+.up-away {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--outline);
+}
+
+.up-label.is-faint {
+  font-weight: 500;
+  color: var(--outline);
+}
+
+/* Titles without a date, folded away unless they are all there is. */
+.up-nodate > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.up-nodate > summary::-webkit-details-marker {
+  display: none;
+}
+
+.up-nodate > summary::before {
+  content: "+ ";
+}
+
+.up-nodate[open] > summary::before {
+  content: "– ";
+}
+
+.up-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--outline-variant);
+  background: var(--surface);
+}
+
+.up-footer[hidden] {
+  display: none;
+}
+
+.up-check {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--on-surface-variant);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.up-check:hover:not(:disabled) {
+  color: var(--primary);
+}
+
+.up-check:disabled {
+  cursor: default;
+  text-decoration: none;
+}
+
+/* Home header: the filter controls sit behind one button; selection actions appear only with a selection. */
+.more-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.more-filters[hidden] {
+  display: none;
+}
+
+.filters-toggle {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.filters-toggle[aria-expanded="true"] {
+  background: var(--surface-container-high);
+}
+
+.filters-toggle.has-dot::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
+.btn[hidden] {
+  display: none;
+}
+
+.more-filters .view-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.shelf-tab-count {
+  margin-left: 5px;
+  font-weight: 500;
+  color: var(--outline);
 }

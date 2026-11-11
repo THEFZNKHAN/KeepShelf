@@ -81,6 +81,7 @@ test("toTmdbInfo maps movie and tv details", () => {
   assert.deepEqual(movie, {
     id: 27205, kind: "movie", genres: ["Action", "Science Fiction"], fetchedAt: 1000, imdbId: "tt1375666",
     overview: "A thief.", rating: 8.4, votes: 36000, certification: "PG-13", runtimeMinutes: 148, status: "Released", posterPath: "/p.jpg",
+    digitalDates: {},
   });
   const tv = toTmdbInfo("tv", {
     id: 1396, genres: [{ name: "Drama" }], vote_average: 8.9, vote_count: 14000, episode_run_time: [47], number_of_seasons: 5,
@@ -284,4 +285,42 @@ test("sanitizeTmdb keeps valid reminder dates and drops malformed ones", () => {
     assert.equal(sanitizeTmdb({ ...base, nextEpisode: bad }).nextEpisode, undefined);
   }
   assert.equal(sanitizeTmdb({ ...base, releaseDate: "tomorrow" }).releaseDate, undefined);
+});
+
+test("a movie's digital (streaming) dates are kept per country, earliest first, ignoring other release types", () => {
+  const movie = toTmdbInfo("movie", {
+    id: 1,
+    release_dates: {
+      results: [
+        { iso_3166_1: "US", release_dates: [
+          { type: 3, release_date: "2026-11-18T00:00:00.000Z" },
+          { type: 4, release_date: "2026-12-30T00:00:00.000Z" },
+          { type: 4, release_date: "2026-12-09T00:00:00.000Z" },
+          { type: 5, release_date: "2027-01-05T00:00:00.000Z" },
+        ] },
+        { iso_3166_1: "IN", release_dates: [{ type: 4, release_date: "2026-12-12T00:00:00.000Z" }] },
+        { iso_3166_1: "GB", release_dates: [{ type: 3, release_date: "2026-11-18T00:00:00.000Z" }] },
+        { iso_3166_1: "de", release_dates: [{ type: 4, release_date: "2026-12-10T00:00:00.000Z" }] },
+        { iso_3166_1: "FR", release_dates: [{ type: 4, release_date: "soon" }, { type: 4 }] },
+        { release_dates: [{ type: 4, release_date: "2026-12-01T00:00:00.000Z" }] },
+      ],
+    },
+  }, 1000);
+  assert.deepEqual(movie.digitalDates, { US: "2026-12-09", IN: "2026-12-12" });
+});
+
+test("a movie with no digital date gets an empty record, so it is known to have been checked; a show gets none", () => {
+  assert.deepEqual(toTmdbInfo("movie", { id: 1 }, 1000).digitalDates, {});
+  assert.equal("digitalDates" in toTmdbInfo("tv", { id: 2, release_dates: { results: [] } }, 1000), false);
+});
+
+test("digital dates survive saving and are checked when read back", () => {
+  const info = { id: 1, kind: "movie", genres: [], fetchedAt: 1000, digitalDates: { US: "2026-12-09", IN: "2026-12-12" } };
+  assert.deepEqual(sanitizeTmdb(info, 1000).digitalDates, { US: "2026-12-09", IN: "2026-12-12" });
+  assert.deepEqual(sanitizeTmdb({ ...info, digitalDates: {} }, 1000).digitalDates, {}, "empty means checked, none yet");
+  assert.deepEqual(sanitizeTmdb({ ...info, digitalDates: { US: "2026-12-09", usa: "2026-12-09", GB: "yesterday", FR: 5, "<b>": "2026-01-01" } }, 1000).digitalDates, { US: "2026-12-09" });
+  assert.equal(sanitizeTmdb({ ...info, digitalDates: "soon" }, 1000).digitalDates, undefined);
+  assert.equal(sanitizeTmdb({ ...info, digitalDates: [1, 2] }, 1000).digitalDates, undefined);
+  const { digitalDates: _gone, ...older } = info;
+  assert.equal("digitalDates" in sanitizeTmdb(older, 1000), false, "older saved data stays 'never checked'");
 });

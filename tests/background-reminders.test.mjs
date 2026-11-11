@@ -202,3 +202,54 @@ test("old announcement records are cleaned up when the check runs", async () => 
   await fireAlarm();
   assert.deepEqual(Object.keys(store.keepshelf_reminders_notified).sort(), [`Severance:${iso(0)}`]);
 });
+
+test("refreshDates quietly refreshes stale dates, even with reminders off, and never notifies", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  const stale = show("Severance", -2);
+  stale.tmdb.fetchedAt = Date.now() - 10 * DAY;
+  const fresh = show("Fresh", -2);
+  store.trackbuddy_items = [stale, fresh];
+  nextOnRefresh = { air_date: iso(4), season_number: 4, episode_number: 1 };
+  assert.equal((await send({ action: "getReminderSettings" })).reminders.enabled, false);
+
+  const response = await send({ action: "refreshDates" });
+  assert.equal(response.ok, true);
+  assert.equal(fetched.length, 1, "only the stale title is requested");
+  const updated = response.items.find((i) => i.id === "Severance");
+  assert.equal(updated.tmdb.nextEpisode.airDate, iso(4));
+  assert.equal(updated.tmdb.nextEpisode.season, 4);
+  assert.equal(response.items.find((i) => i.id === "Fresh").tmdb.nextEpisode.airDate, iso(-2), "fresh data is left alone");
+  assert.equal(calls.notifications.length, 0, "refreshing never announces anything");
+});
+
+test("refreshDates without a token, or with TMDB down, just returns the shelf", async () => {
+  const stale = show("Severance", -2);
+  stale.tmdb.fetchedAt = Date.now() - 10 * DAY;
+  store.trackbuddy_items = [stale];
+  const noToken = await send({ action: "refreshDates" });
+  assert.equal(noToken.ok, true);
+  assert.equal(fetched.length, 0);
+
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  fetchBehaviour = "down";
+  const down = await send({ action: "refreshDates" });
+  assert.equal(down.ok, true);
+  assert.equal(down.items[0].tmdb.nextEpisode.airDate, iso(-2), "the saved date is kept");
+});
+
+test("refreshDates with force looks again even at a title checked today, so a new date shows up", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  const between = show("Between seasons", 0);
+  between.tmdb.nextEpisode = undefined;
+  store.trackbuddy_items = [between];
+  nextOnRefresh = { air_date: iso(3), season_number: 2, episode_number: 1 };
+
+  const normal = await send({ action: "refreshDates" });
+  assert.equal(fetched.length, 0, "fetched just now, so the normal check leaves it");
+  assert.equal(normal.items[0].tmdb.nextEpisode, undefined);
+
+  const forced = await send({ action: "refreshDates", force: true });
+  assert.equal(fetched.length, 1);
+  assert.deepEqual(forced.items[0].tmdb.nextEpisode, { airDate: iso(3), season: 2, episode: 1 });
+  assert.equal(calls.notifications.length, 0);
+});

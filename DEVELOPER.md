@@ -99,6 +99,7 @@ KeepShelf/
 │       ├── undo.ts            # Snapshots of items for the Undo toast
 │       ├── seasons.ts         # Season-by-season progress (pure helpers)
 │       ├── reminders.ts       # Release reminders: due dates, refresh rules, notification text (pure)
+│       ├── coming-up.ts       # Coming up screen: what airs or releases soon, grouped by day (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
 │       ├── tmdb-settings.ts   # TMDB token storage
@@ -137,6 +138,7 @@ KeepShelf/
 │   ├── fuzzy.test.mjs         # Duplicates and merging
 │   ├── seasons.test.mjs       # Season-by-season progress helpers
 │   ├── reminders.test.mjs     # Due dates, refresh rules, notification text
+│   ├── coming-up.test.mjs     # Window, grouping and headings for the Coming up screen
 │   ├── undo.test.mjs
 │   ├── tmdb.test.mjs
 │   ├── openlibrary.test.mjs

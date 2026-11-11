@@ -57,6 +57,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "enrich",
   "removeTmdbMatch",
   "refreshStaleTmdb",
+  "refreshDates",
   "clear",
   "setKeepSettings",
   "testKeepAppend",
@@ -231,21 +232,28 @@ async function syncReminderAlarm(): Promise<void> {
  * Refreshes release dates that may have moved (a few requests at most), then announces what comes out today or
  * tomorrow. Returns how many releases were announced.
  */
+/**
+ * Re-fetches the air and release dates of titles whose saved dates may have gone stale, a few at a time.
+ * Quiet: it never notifies, and a request that fails just keeps the dates already saved.
+ */
+async function refreshDatesQuietly(now: number, force = false): Promise<void> {
+  const client = await tmdbClient();
+  if (!client) return;
+  for (const item of selectForRefresh(await getAllItems(), now, undefined, force)) {
+    const info = item.tmdb;
+    if (!info) continue;
+    try {
+      await updateItem(item.id, { tmdb: await fetchDetails(client, info.kind, info.id, now) });
+    } catch {
+      /* keep the dates we have; the next check tries again */
+    }
+  }
+}
+
 async function runReminderCheck(now = Date.now()): Promise<number> {
   if (!(await isRemindersEnabled())) return 0;
 
-  const client = await tmdbClient();
-  if (client) {
-    for (const item of selectForRefresh(await getAllItems(), now)) {
-      const info = item.tmdb;
-      if (!info) continue;
-      try {
-        await updateItem(item.id, { tmdb: await fetchDetails(client, info.kind, info.id, now) });
-      } catch {
-        /* keep the dates we have; the next check tries again */
-      }
-    }
-  }
+  await refreshDatesQuietly(now);
 
   const notified = await getNotified();
   const due = dueReminders(await getAllItems(), now, notified);
@@ -425,6 +433,10 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     case "removeTmdbMatch": {
       const items = await updateItem(message.id, { tmdb: undefined, tmdbOptOut: true });
       return { ok: true, items };
+    }
+    case "refreshDates": {
+      await refreshDatesQuietly(Date.now(), Boolean(message.force));
+      return { ok: true, items: await getAllItems() };
     }
     case "refreshStaleTmdb": {
       return { ok: true, items: await refreshStaleTmdb() };

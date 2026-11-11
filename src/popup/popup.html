@@ -32,7 +32,15 @@
             <span class="material-symbols-outlined btn-icon">bookmark_add</span>
             Save page
           </button>
-          <span id="count" class="count-badge">0 saved</span>
+          <button
+            type="button"
+            id="open-upcoming"
+            class="icon-btn"
+            aria-label="Coming up"
+            title="Coming up"
+          >
+            <span class="material-symbols-outlined">event</span>
+          </button>
           <button
             type="button"
             id="open-stats"
@@ -55,9 +63,9 @@
       </header>
 
       <nav id="shelf-tabs" class="shelf-tabs">
-        <button type="button" class="shelf-tab active" data-tab="media">Media</button>
-        <button type="button" class="shelf-tab" data-tab="books">Books</button>
-        <button type="button" class="shelf-tab" data-tab="tabs">Tabs</button>
+        <button type="button" class="shelf-tab active" data-tab="media">Media<span class="shelf-tab-count" data-count="media"></span></button>
+        <button type="button" class="shelf-tab" data-tab="books">Books<span class="shelf-tab-count" data-count="books"></span></button>
+        <button type="button" class="shelf-tab" data-tab="tabs">Tabs<span class="shelf-tab-count" data-count="tabs"></span></button>
       </nav>
 
       <div class="toolbar">
@@ -91,6 +99,20 @@
               aria-label="Search saved items"
             />
           </div>
+          <button
+            type="button"
+            id="toggle-filters"
+            class="icon-btn filters-toggle"
+            aria-label="Filters and sorting"
+            title="Filters and sorting"
+            aria-expanded="false"
+          >
+            <span class="material-symbols-outlined">tune</span>
+          </button>
+        </div>
+
+        <div id="more-filters" class="more-filters" hidden>
+        <div class="view-row">
           <select id="status-filter" class="view-select" aria-label="Status filter">
             <option value="all">All</option>
             <option value="todo">To watch</option>
@@ -114,6 +136,7 @@
             <span class="material-symbols-outlined">expand_more</span>
           </button>
           <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
+        </div>
         </div>
 
         <div class="action-row">
@@ -232,6 +255,19 @@
     </div>
 
     <div id="item-tooltip" class="item-tooltip" role="tooltip" hidden></div>
+
+    <div id="upcoming-view" class="view settings-view" hidden>
+      <header class="top-bar">
+        <button type="button" id="close-upcoming" class="icon-btn" aria-label="Back">
+          <span class="material-symbols-outlined">arrow_back</span>
+        </button>
+        <h1 class="settings-title">Coming up</h1>
+        <span class="top-bar-spacer"></span>
+      </header>
+      <div id="upcoming-window" class="up-window"></div>
+      <div id="upcoming-body" class="settings-body upcoming-body"></div>
+      <footer id="upcoming-footer" class="up-footer" hidden></footer>
+    </div>
 
     <div id="stats-view" class="view settings-view" hidden>
       <header class="top-bar">

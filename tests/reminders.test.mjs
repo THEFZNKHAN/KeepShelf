@@ -101,7 +101,7 @@ test("needsDateRefresh only asks for airing series whose next date is missing or
   ended.tmdb.status = "Ended";
   assert.equal(needsDateRefresh(ended, NOW), false);
   assert.equal(needsDateRefresh(stale(film("f", 20)), NOW), true, "release date may have moved");
-  assert.equal(needsDateRefresh(stale(film("f", -20)), NOW), false, "already out");
+  assert.equal(needsDateRefresh(stale(film("f", -200)), NOW), false, "out long ago");
   assert.equal(needsDateRefresh(stale(show("a", -2, { status: "done" })), NOW), false);
   assert.equal(needsDateRefresh({ ...show("a", -2), tmdb: undefined }, NOW), false);
 });
@@ -119,4 +119,42 @@ test("describeReminders words one release by itself and several as a list", () =
   const many = describeReminders(dueReminders([show("Severance", 1), film("Dune", 0)], NOW, {}));
   assert.equal(many.title, "2 things coming up on your shelf");
   assert.equal(many.message, "Dune: out today\nSeverance: S2 E5 tomorrow");
+});
+
+test("forcing a check skips the once-a-week rule, but only for titles that could have a new date", () => {
+  const noDate = show("a", 0);
+  noDate.tmdb.nextEpisode = undefined;
+  assert.equal(needsDateRefresh(noDate, NOW), false, "looked up today, so not again by itself");
+  assert.equal(needsDateRefresh(noDate, NOW, true), true, "the user asked to check now");
+  assert.equal(needsDateRefresh(show("a", -2), NOW, true), true, "date passed");
+  assert.equal(needsDateRefresh(show("a", 5), NOW, true), false, "a date still ahead needs no look");
+  const ended = show("a", -2);
+  ended.tmdb.status = "Ended";
+  assert.equal(needsDateRefresh(ended, NOW, true), false, "ended shows have no next date");
+  assert.equal(needsDateRefresh(show("a", -2, { status: "done" }), NOW, true), false, "finished titles are left alone");
+  const items = Array.from({ length: 40 }, (_, n) => show(`s${n}`, -2));
+  assert.equal(selectForRefresh(items, NOW).length, 0);
+  assert.equal(selectForRefresh(items, NOW, 25, true).length, 25);
+});
+
+test("a movie that is already out is looked at again until its streaming date has passed", () => {
+  const out = (offset, digital) => {
+    const f = film("f", offset);
+    f.tmdb.fetchedAt = NOW - 8 * DAY;
+    if (digital !== undefined) f.tmdb.digitalDates = digital;
+    return f;
+  };
+  const day = (offset) => iso(offset);
+  assert.equal(needsDateRefresh(out(-20), NOW), true, "saved before streaming dates were kept");
+  assert.equal(needsDateRefresh(out(-20, {}), NOW), true, "checked, but TMDB had none yet");
+  assert.equal(needsDateRefresh(out(-20, { US: day(10) }), NOW), true, "streaming date still ahead, which can move");
+  assert.equal(needsDateRefresh(out(-20, { US: day(-3), IN: day(-1) }), NOW), false, "already on streaming everywhere known");
+  assert.equal(needsDateRefresh(out(-20, { US: day(-3), IN: day(12) }), NOW), true, "one country still to come");
+  assert.equal(needsDateRefresh(out(-151), NOW), false, "out for too long to keep asking");
+  assert.equal(needsDateRefresh(out(-150), NOW), true);
+  const fresh = out(-20); fresh.tmdb.fetchedAt = NOW - DAY;
+  assert.equal(needsDateRefresh(fresh, NOW), false, "looked up this week already");
+  assert.equal(needsDateRefresh(fresh, NOW, true), true, "unless the user asked to check now");
+  const watched = out(-20); watched.status = "done"; watched.done = true;
+  assert.equal(needsDateRefresh(watched, NOW), false, "finished titles are left alone");
 });
