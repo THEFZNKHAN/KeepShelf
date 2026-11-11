@@ -94,6 +94,7 @@ KeepShelf/
 │       ├── user-data.ts       # Status, tags, rating, progress rules (buildUserPatch, import cleaning)
 │       ├── fuzzy.ts           # Near-duplicate detection and merging
 │       ├── random-pick.ts     # "Pick something for me"
+│       ├── pick-filters.ts    # Filters for the suggestion: type, length, genre (pure)
 │       ├── stats.ts           # Stats dashboard numbers
 │       ├── tag-filter.ts      # Groups tags for the filter dropdown
 │       ├── undo.ts            # Snapshots of items for the Undo toast
@@ -139,6 +140,7 @@ KeepShelf/
 │   ├── storage.test.mjs       # Dedupe keys, URL normalisation, restoring items
 │   ├── user-data.test.mjs     # Status, tags, rating, progress and per-season rules
 │   ├── fuzzy.test.mjs         # Duplicates and merging
+│   ├── pick-filters.test.mjs  # Which items a type, length or genre filter keeps
 │   ├── seasons.test.mjs       # Season-by-season progress helpers
 │   ├── status-view.test.mjs   # Which items each status filter keeps, and the default view
 │   ├── reminders.test.mjs     # Due dates, refresh rules, notification text
