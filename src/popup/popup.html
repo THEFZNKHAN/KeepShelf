@@ -93,6 +93,7 @@
           </div>
           <select id="status-filter" class="view-select" aria-label="Status filter">
             <option value="all">All</option>
+            <option value="pending">Not watched</option>
             <option value="todo">To watch</option>
             <option value="progress">In progress</option>
             <option value="done">Watched</option>
@@ -115,6 +116,11 @@
           </button>
           <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
         </div>
+
+        <p id="hidden-note" class="hidden-note" hidden>
+          <span id="hidden-note-text"></span>
+          <button type="button" id="show-all" class="link-btn">Show all</button>
+        </p>
 
         <div class="action-row">
           <div class="action-group">
@@ -275,6 +281,26 @@
                 <input type="checkbox" id="pref-ask-rating" aria-label="Ask for a rating when I finish something" />
                 <span class="switch-track"></span>
               </label>
+            </div>
+            <div class="pref-select">
+              <label for="pref-start">
+                <strong>When I open KeepShelf</strong>
+                <span>The default view, or exactly where you left off: tab, type, status and list.</span>
+              </label>
+              <select id="pref-start" class="view-select">
+                <option value="fresh">Start with my default view</option>
+                <option value="remember">Remember where I left off</option>
+              </select>
+            </div>
+            <div class="pref-select">
+              <label for="pref-default-view">
+                <strong>Default view</strong>
+                <span>Hiding watched items also hides dropped ones. Show all is always one tap away. Applies the next time you open KeepShelf.</span>
+              </label>
+              <select id="pref-default-view" class="view-select">
+                <option value="hide">Hide watched and dropped</option>
+                <option value="all">Show everything</option>
+              </select>
             </div>
           </div>
         </details>

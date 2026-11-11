@@ -190,7 +190,7 @@ Deleted something by mistake, or merged the wrong duplicates? An **Undo** button
 ### Find things fast
 
 - **Search** across title, author, genre, URL, notes, tags, lists and your reviews
-- **Filter** by type, status, tag and list
+- **Filter** by type, status, tag and list. KeepShelf opens with watched items hidden (see [Default view](#default-view-hide-what-youve-watched))
 - **Sort** by newest, oldest, title, year, source rating or your own rating
 - **Poster and cover thumbnails** next to each item. **Tap a row** to open a card with everything about it: the full description, your status, rating, tags and review, a **Watch** button for each [watch site](#watch-sites) you added, and **Open page** to jump back to where you saved it. Only the tick box selects a row. Hovering a row still shows a short preview
 
@@ -241,6 +241,14 @@ Every movie, series, anime and book has a status. Each row also shows a small **
 | **Dropped** | Gave up on it |
 
 For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Movies have no progress fields. The total episode count fills in automatically from TMDB or the source page, and you can still override it. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
+
+### Default view: hide what you've watched
+
+KeepShelf opens on **Not watched**: what is still to watch or in progress. Watched and dropped items stay out of the way, so the list is what you actually want to pick from. (On Books it is "Not read", on Tabs it is "To do".)
+
+- A line under the filters says how many are hidden, such as **3 watched or dropped hidden · Show all**. Tap **Show all** to see everything. The next time you open KeepShelf it is back to the default view.
+- The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
+- In **Settings > General**, **When I open KeepShelf** chooses between **Start with my default view** and **Remember where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
 
 ### Season-by-season progress
 
