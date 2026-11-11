@@ -242,6 +242,15 @@ Every movie, series, anime and book has a status. Each row also shows a small **
 
 For series, anime and books you can also record progress, such as episodes done out of total, or pages read out of total. Movies have no progress fields. The total episode count fills in automatically from TMDB or the source page, and you can still override it. Rows show a compact line like `In progress · ep. 3/12 · ★ 8/10`.
 
+### Mark the next episode watched
+
+Series and anime that aren't finished have a **+1 episode** button on the row (it shows when you hover, like the other row buttons) and a small black **+ S2 E6** pill among the chips on the item's card (**+ ep. 120** for a show without seasons). One tap marks that episode watched and moves on to the next.
+
+- It starts a show you hadn't started, and picks up one you had dropped.
+- The last episode finishes the show and, if the rating prompt is on, offers the rating box.
+- A message at the bottom says what changed, with **Undo** for a few seconds.
+- A [watch site](#watch-sites) address that includes an episode follows your progress, so its button always opens the next episode.
+
 ### Season-by-season progress
 
 For series and anime that have [TMDB info](#tmdb-info), the Edit dialog shows **one box per season** instead of a single number, with each season's episode count as a hint (`/10`).

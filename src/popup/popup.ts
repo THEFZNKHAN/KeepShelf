@@ -36,7 +36,7 @@ import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 import { snapshotItems } from "../shared/undo.js";
-import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, sumProgress } from "../shared/seasons.js";
+import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, type EpisodeStep } from "../shared/seasons.js";
 
 type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
@@ -647,6 +647,11 @@ function createRowActions(item: SavedItem): HTMLElement {
   // For movies and series the Watch buttons and the detail card (which has "Open page") replace this.
   if (item.type === "book" && isHttpUrl(item.sourceUrl ?? "")) {
     actions.append(createRowAction("open_in_new", "Open source page", () => void chrome.tabs.create({ url: item.sourceUrl })));
+  }
+
+  const step = episodeStep(item);
+  if (step) {
+    actions.append(createRowAction("exposure_plus_1", `Mark ${step.label} as watched`, () => void watchedNextEpisode(item)));
   }
 
   const links = watchLinks(item, watchSites);
@@ -1898,6 +1903,41 @@ function maybeAskRating(id: string): void {
   if (item && shouldAskForRating(item, askRatingEnabled())) openRateDialog(item);
 }
 
+/** The next episode a +1 would mark as watched, for series and anime that aren't finished. */
+function episodeStep(item: SavedItem): EpisodeStep | undefined {
+  if (item.type !== "series" && item.type !== "anime") return undefined;
+  return stepEpisode(item, totalEpisodes(item));
+}
+
+/** One tap: marks the next episode as watched, starts the show if needed, finishes it on the last episode. */
+async function watchedNextEpisode(item: SavedItem): Promise<void> {
+  const step = episodeStep(item);
+  if (!step) return;
+  const before = {
+    progressCurrent: item.progressCurrent ?? null,
+    seasonProgress: item.seasonProgress ?? null,
+    status: statusOf(item),
+  };
+  const error = await updateItemFields(item.id, step.changes);
+  if (error) {
+    showStatus(error, true);
+    return;
+  }
+  showStatus(`${item.title}: ${step.label} watched`, false, 6000, async () => {
+    const undoError = await updateItemFields(item.id, before);
+    showStatus(undoError ?? "Undone.", Boolean(undoError));
+    refreshOpenCard(item.id);
+  });
+  refreshOpenCard(item.id);
+  if (step.finishes) maybeAskRating(item.id);
+}
+
+/** If the item's own card is open, redraws it so its progress and the next episode are current. */
+function refreshOpenCard(id: string): void {
+  const fresh = allItems.find((i) => i.id === id);
+  if (fresh && !pickDialogEl.hidden && pickedId === id && pickPanelEl.classList.contains("is-info")) showDetails(fresh, "info");
+}
+
 /** Marks an item finished (or not). Finishing is saved first, so closing the rating box never loses it. */
 async function toggleDone(item: SavedItem): Promise<void> {
   const finishing = !item.done;
@@ -2498,8 +2538,26 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
 
   // The suggestion doesn't need your tags and review; the item's own card shows everything.
   const chips = detailChips(item).filter((chip) => info || !chip.className.includes("pick-chip-tag"));
-  pickChipsEl.replaceChildren(...chips.map(({ text, className }) => textPart(text, className)));
-  pickChipsEl.hidden = chips.length === 0;
+  const chipEls: HTMLElement[] = chips.map(({ text, className }) => textPart(text, className));
+  // On the item's own card, a small "+ S2 E4" pill among the chips marks the next episode watched: no extra row.
+  const step = info ? episodeStep(item) : undefined;
+  if (step) {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "pick-chip pick-chip-action";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "add";
+    add.append(icon, document.createTextNode(step.label));
+    add.title = `Mark ${step.label} as watched`;
+    add.setAttribute("aria-label", `Mark ${step.label} as watched`);
+    add.addEventListener("click", () => void watchedNextEpisode(item));
+    // Right after the status and progress chips, before any tags, so it stays next to what it changes.
+    const firstTag = chips.findIndex((chip) => chip.className.includes("pick-chip-tag"));
+    chipEls.splice(firstTag === -1 ? chipEls.length : firstTag, 0, add);
+  }
+  pickChipsEl.replaceChildren(...chipEls);
+  pickChipsEl.hidden = chipEls.length === 0;
   pickReviewEl.textContent = info && item.review ? item.review : "";
   pickReviewEl.hidden = !(info && item.review);
 
