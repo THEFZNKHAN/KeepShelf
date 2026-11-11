@@ -4,13 +4,15 @@ import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } 
 import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
 import { REMINDERS_KEY } from "../shared/reminders-settings.js";
 import { TMDB_TOKEN_KEY } from "../shared/tmdb-settings.js";
+
+import { listToItems, parseList, planListImport } from "../shared/list-import.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
-import { allTags, durationText, genreTags, genreText, isEnrichable, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
+import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   WATCH_MEDIA_TYPES,
   addExampleToSite,
@@ -35,7 +37,7 @@ import {
 } from "../shared/watch-sites.js";
 import { groupTags } from "../shared/tag-filter.js";
 import { createTagPicker } from "./tag-picker.js";
-import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, totalPages } from "../shared/openlibrary.js";
+import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, needsBookInfo, totalPages } from "../shared/openlibrary.js";
 import { renderStats } from "./stats-view.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
@@ -2138,7 +2140,7 @@ async function testTmdbToken(): Promise<void> {
 }
 
 async function enrichShelf(): Promise<void> {
-  const ids = allItems.filter((i) => isEnrichable(i) && !i.tmdb && !i.tmdbOptOut).map((i) => i.id);
+  const ids = allItems.filter(needsTmdbInfo).map((i) => i.id);
   if (ids.length === 0) {
     showTmdbStatus("Every movie, series and anime already has TMDB info.");
     return;
@@ -2910,6 +2912,7 @@ async function importFile(file: File): Promise<void> {
       showBackupStatus(`No items found in this ${source} file.`, true);
       return;
     }
+    const before = new Set(allItems.map((i) => i.id));
     let added = 0;
     let skipped = 0;
     if (items.length > 0) {
@@ -2933,13 +2936,136 @@ async function importFile(file: File): Promise<void> {
       if (restore) await applySettings(settings);
       tail = restore ? " Settings restored." : " Settings skipped.";
     }
-    showBackupStatus(
-      `Imported ${added} item${added === 1 ? "" : "s"} from ${source}` + (skipped ? `; ${skipped} already on your shelf.` : ".") + tail
-    );
+    const base =
+      `Imported ${added} item${added === 1 ? "" : "s"} from ${source}` + (skipped ? `; ${skipped} already on your shelf.` : ".") + tail;
+    showBackupStatus(base, false, 120000);
+    // Letterboxd and Goodreads files have no posters or genres; a KeepShelf backup already has them.
+    const addedIds = allItems.filter((i) => !before.has(i.id)).map((i) => i.id);
+    const info = await fetchInfoForNew(addedIds, (progress) => showBackupStatus(`${base} ${progress}`, false, 120000));
+    showBackupStatus(base + info);
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Import failed.", true);
   }
 }
+
+/* ── Info for newly added titles ─────────────────────────── */
+
+/**
+ * After titles are added, fetches their TMDB info (and Open Library details for books, when that is switched on),
+ * a few at a time so progress shows and what is done stays done. Never fails the import: it returns what to say.
+ */
+async function fetchInfoForNew(ids: string[], report: (progress: string) => void): Promise<string> {
+  const added = allItems.filter((i) => ids.includes(i.id));
+  const media = tmdbConfigured ? added.filter(needsTmdbInfo).map((i) => i.id) : [];
+  const books = bookInfoEnabled ? added.filter(needsBookInfo).map((i) => i.id) : [];
+  const total = media.length + books.length;
+  if (total === 0) return "";
+
+  let done = 0;
+  let enriched = 0;
+  let unmatched = 0;
+  try {
+    for (const [action, list, size] of [["enrich", media, 10], ["enrichBooks", books, 4]] as const) {
+      for (let i = 0; i < list.length; i += size) {
+        report(`Fetching info… ${done}/${total}`);
+        const response = await sendToBackground({ action, ids: list.slice(i, i + size) });
+        if (!response.ok) throw new Error(response.error);
+        if ("items" in response) {
+          allItems = response.items;
+          enriched += response.enriched ?? 0;
+          unmatched += response.unmatched ?? 0;
+          render();
+        }
+        done += Math.min(size, list.length - i);
+      }
+    }
+  } catch (err) {
+    const why = err instanceof Error ? err.message.replace(/\.$/, "") : "something went wrong";
+    return ` Couldn't fetch all the info (${why}). "Fetch info for my shelf" finishes the rest.`;
+  }
+  return ` Info added to ${enriched}` + (unmatched ? `; ${unmatched} had no match.` : ".");
+}
+
+/* ── Paste a list ────────────────────────────────────────── */
+
+const pasteTextEl = document.getElementById("paste-text") as HTMLTextAreaElement;
+const pasteStatusEl = document.getElementById("paste-status") as HTMLSelectElement;
+const pasteSummaryEl = document.getElementById("paste-summary")!;
+const pasteAddEl = document.getElementById("paste-add") as HTMLButtonElement;
+
+/** What the pasted text would do to the shelf right now. */
+function pastedPlan() {
+  const parsed = parseList(pasteTextEl.value, pasteStatusEl.value === "done");
+  return { parsed, plan: planListImport(listToItems(parsed.entries), allItems) };
+}
+
+function renderPasteSummary(): void {
+  if (!pasteTextEl.value.trim()) {
+    pasteSummaryEl.textContent = "";
+    pasteAddEl.disabled = true;
+    pasteAddEl.textContent = "Add to shelf";
+    return;
+  }
+  const { parsed, plan } = pastedPlan();
+  const watched = parsed.entries.filter((e) => e.watched).length;
+  const parts = [
+    parsed.entries.length === 0 ? "No titles found." : `${parsed.entries.length} found: ${watched} watched, ${parsed.entries.length - watched} to watch.`,
+  ];
+  if (plan.duplicates.length) parts.push(`${plan.duplicates.length} already on your shelf.`);
+  if (plan.similar.length) parts.push(`${plan.similar.length} look like ones you have and will be skipped.`);
+  if (parsed.unreadable.length) parts.push(`${parsed.unreadable.length} line${parsed.unreadable.length === 1 ? "" : "s"} couldn't be read.`);
+  pasteSummaryEl.textContent = parts.join(" ");
+  pasteAddEl.disabled = plan.fresh.length === 0;
+  pasteAddEl.textContent = plan.fresh.length ? `Add ${plan.fresh.length} to shelf` : "Add to shelf";
+}
+
+async function addPastedList(): Promise<void> {
+  const { plan } = pastedPlan();
+  if (plan.fresh.length === 0) return;
+  pasteAddEl.disabled = true;
+  try {
+    const before = new Set(allItems.map((i) => i.id));
+    const response = await sendToBackground({ action: "import", items: plan.fresh });
+    if (!response.ok) throw new Error(response.error);
+    if (!("items" in response)) throw new Error("Could not add the titles.");
+    allItems = response.items;
+    render();
+    const addedIds = allItems.filter((i) => !before.has(i.id)).map((i) => i.id);
+    pasteTextEl.value = "";
+    renderPasteSummary();
+
+    const similar = plan.similar.slice(0, 3).map((s) => `${s.item.title} (like ${s.like})`);
+    const base =
+      `Added ${addedIds.length} title${addedIds.length === 1 ? "" : "s"}.` +
+      (plan.similar.length ? ` Skipped ${plan.similar.length} that look like ones you have: ${similar.join(", ")}${plan.similar.length > 3 ? "…" : ""}.` : "");
+    const undo = async () => {
+      const undone = await sendToBackground({ action: "delete", ids: addedIds });
+      if (undone.ok && "items" in undone) {
+        allItems = undone.items;
+        render();
+        showBackupStatus(`Removed the ${addedIds.length} titles you just added.`);
+      } else {
+        showBackupStatus(undone.ok ? "Could not undo." : undone.error, true);
+      }
+    };
+    showBackupStatus(base, false, 120000, undo);
+    const info = await fetchInfoForNew(addedIds, (progress) => showBackupStatus(`${base} ${progress}`, false, 120000, undo));
+    const missingToken = !tmdbConfigured && addedIds.some((id) => allItems.some((i) => i.id === id && isEnrichable(i)));
+    showBackupStatus(
+      base + info + (missingToken ? " Add a TMDB token (TMDB info) and posters and genres fill in automatically." : ""),
+      false,
+      UNDO_MS * 2,
+      undo
+    );
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Could not add the titles.", true);
+    renderPasteSummary();
+  }
+}
+
+pasteTextEl.addEventListener("input", renderPasteSummary);
+pasteStatusEl.addEventListener("change", renderPasteSummary);
+pasteAddEl.addEventListener("click", () => void addPastedList());
 
 document.getElementById("export-backup")!.addEventListener("click", () => void exportBackup());
 

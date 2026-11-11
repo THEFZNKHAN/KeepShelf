@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   createTmdbClient, genreText, imdbIdFromUrl, isStale, lookupInfo, mustPurge, parseTmdbToken,
-  pickBestMatch, sanitizeTmdb, toTmdbInfo, tmdbPosterUrl,
+  needsTmdbInfo, pickBestMatch, sanitizeTmdb, toTmdbInfo, tmdbPosterUrl,
 } from "../dist-test/tmdb.js";
 import { buildBackup, parseImportFile } from "../dist-test/import.js";
 
@@ -284,4 +284,12 @@ test("sanitizeTmdb keeps valid reminder dates and drops malformed ones", () => {
     assert.equal(sanitizeTmdb({ ...base, nextEpisode: bad }).nextEpisode, undefined);
   }
   assert.equal(sanitizeTmdb({ ...base, releaseDate: "tomorrow" }).releaseDate, undefined);
+});
+
+test("needsTmdbInfo: media with no info yet, unless a wrong match was removed", () => {
+  const info = { id: 1, kind: "movie", genres: [], fetchedAt: 1 };
+  for (const type of ["movie", "series", "anime"]) assert.equal(needsTmdbInfo({ type }), true, type);
+  assert.equal(needsTmdbInfo({ type: "movie", tmdb: info }), false);
+  assert.equal(needsTmdbInfo({ type: "movie", tmdbOptOut: true }), false);
+  for (const type of ["book", "tab", "link", "note"]) assert.equal(needsTmdbInfo({ type }), false, type);
 });

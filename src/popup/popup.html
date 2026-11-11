@@ -575,6 +575,33 @@
               </button>
               <input type="file" id="import-file" accept=".json,.csv,application/json,text/csv" hidden />
             </div>
+            <details class="s-more" id="paste-list">
+              <summary>Add titles from a pasted list</summary>
+              <div class="s-more-body">
+                <p>
+                  Paste lines like <span class="mono">Drishyam (2015) | 2h 43m | IMDb 8.2</span> from a Keep note or Copy
+                  all. A heading such as "Watched" switches the lines under it, and a ticked box means watched. Movies,
+                  series and anime (<span class="mono">(A)</span> marks anime).
+                </p>
+                <textarea
+                  id="paste-text"
+                  class="paste-text"
+                  rows="6"
+                  spellcheck="false"
+                  aria-label="Titles to add"
+                  placeholder="Drishyam (2015) | 2h 43m | IMDb 8.2&#10;Fargo (2014) | S05 | IMDb 8.8&#10;86 (2021) | S01 | IMDb 8.3 (A)"
+                ></textarea>
+                <label class="paste-kind">
+                  <span>These are</span>
+                  <select id="paste-status" class="view-select" aria-label="Are these watched?">
+                    <option value="plan">To watch</option>
+                    <option value="done">Already watched</option>
+                  </select>
+                </label>
+                <p id="paste-summary" class="s-fine"></p>
+                <button type="button" id="paste-add" class="btn btn-primary btn-wide" disabled>Add to shelf</button>
+              </div>
+            </details>
             <div id="backup-settings-status" class="settings-toast" hidden>
               <div class="settings-toast-content">
                 <span id="backup-settings-status-icon" class="material-symbols-outlined">check_circle</span>

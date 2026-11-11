@@ -2722,6 +2722,40 @@ body.in-tab {
 
 .pref-select strong {
   font-size: 12.5px;
+}
+
+/* Paste a list: the box, the "These are" choice and the summary line. */
+.s-more-body .mono {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--surface-container);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10.5px;
+}
+
+.paste-text {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  color: var(--on-surface);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 16px;
+  outline: none;
+  resize: none;
+}
+
+.paste-text:focus {
+  border-color: var(--primary);
+}
+
+.paste-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--on-surface);
 }
@@ -2756,4 +2790,18 @@ body.in-tab {
 
 .pick-chip-action .material-symbols-outlined {
   font-size: 13px;
+}
+
+.paste-kind .view-select {
+  flex: 1;
+  height: 28px;
+}
+
+#paste-summary {
+  min-height: 14px;
+}
+
+#paste-add:disabled {
+  opacity: 0.45;
+  cursor: default;
 }

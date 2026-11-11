@@ -645,6 +645,22 @@ Your shelf lives only in this browser, so export a backup now and then.
 - If a backup has settings, KeepShelf asks **"Restore your settings?"** and lists what is in it. **Restore settings** replaces the ones you have now; **Skip** imports only the items. Older backups have no settings and import as before.
 - Letterboxd and Goodreads imports mark watched and read items as finished.
 
+### Add titles from a pasted list
+
+Under **Backup & import**, **Add titles from a pasted list** takes lines like the ones KeepShelf's **Copy all** writes, or a Keep checklist:
+
+```
+Drishyam (2015) | 2h 43m | IMDb 8.2
+Fargo (2014) | S05 | IMDb 8.8
+86 (2021) | S01 | IMDb 8.3 (A)
+```
+
+- `S05` is a series with five seasons, `(A)` at the end marks anime, and anything else with a runtime is a movie. The year is optional, bullets and boxes are ignored, and other parts of a line (other sites' ratings, certificates) are skipped.
+- A heading line such as **Watched** or **To watch** switches the lines under it, a ticked box (`[x]`, `☑`) means watched, and **These are** sets the default for lines with neither.
+- A summary under the box says how many titles were found, how many are watched, how many are already on your shelf, and how many look like ones you have under another spelling (those are skipped and named). The button shows how many it will add.
+- **Undo** removes exactly the titles you just added.
+- If you have a [TMDB token](#tmdb-info), posters, genres and episode counts are **fetched automatically** right after the titles are added, ten at a time with progress in the message at the bottom (and Open Library details for books, when book info is on). Titles TMDB can't match are left as they are, and if TMDB is unreachable the titles are still added; **Fetch info for my shelf** finishes the rest. Without a token, a hint says how to turn this on. The same happens after importing a Letterboxd or Goodreads file.
+
 Importing from a file picker opens Settings in a full tab, because Chrome closes the popup when a file dialog opens.
 
 ---

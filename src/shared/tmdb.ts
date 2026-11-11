@@ -70,6 +70,11 @@ export function isEnrichable(item: Pick<SavedItem, "type">): boolean {
   return item.type === "movie" || item.type === "series" || item.type === "anime";
 }
 
+/** A movie, series or anime with no TMDB info yet, where the user hasn't removed a wrong match. */
+export function needsTmdbInfo(item: Pick<SavedItem, "type" | "tmdb" | "tmdbOptOut">): boolean {
+  return isEnrichable(item) && !item.tmdb && !item.tmdbOptOut;
+}
+
 export function imdbIdFromUrl(url: string | undefined): string | undefined {
   return /\/title\/(tt\d{5,})/.exec(url ?? "")?.[1];
 }

@@ -123,6 +123,8 @@ KeepShelf/
 │       ├── items.ts           # Builders for tab, link and note items
 │       ├── import.ts          # Backup JSON, Letterboxd and Goodreads CSV import
 │       ├── settings-backup.ts # Settings that travel with a backup: collect, validate, describe (pure)
+
+│       ├── list-import.ts    # Pasted lists of titles: parse the lines, plan what to add (pure)
 │       ├── page-data.ts       # requestPageData: ask the content script, inject if missing
 │       ├── year.ts            # normalizeYear helper
 │       ├── keep-settings.ts   # Keep note config, routing, storage
@@ -151,6 +153,8 @@ KeepShelf/
 │   ├── rottentomatoes.test.mjs
 │   ├── trakt.test.mjs
 │   ├── settings-backup.test.mjs # Settings in backups: what is saved, what is checked on the way in
+
+│   ├── list-import.test.mjs   # Pasted lists: line formats, headings, duplicates
 │   └── import.test.mjs        # CSV parsing, Letterboxd / Goodreads / backup import
 ├── icons/
 │   ├── icon.png               # Master icon (source for all sizes)

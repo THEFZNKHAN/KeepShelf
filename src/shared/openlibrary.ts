@@ -76,6 +76,11 @@ export function isBookItem(item: Pick<SavedItem, "type">): boolean {
   return item.type === "book";
 }
 
+/** A book with no Open Library details yet, where the user hasn't removed a wrong match. */
+export function needsBookInfo(item: Pick<SavedItem, "type" | "bookInfo" | "bookInfoOptOut">): boolean {
+  return isBookItem(item) && !item.bookInfo && !item.bookInfoOptOut;
+}
+
 interface SearchDoc {
   key: string;
   title?: string;
