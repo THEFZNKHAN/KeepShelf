@@ -2680,3 +2680,59 @@ body.in-tab {
 .pick-footer .btn-icon {
   font-size: 14px;
 }
+
+/* The default view hides watched items; this line says how many and gives the way back. */
+.hidden-note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--on-surface-variant);
+}
+
+.hidden-note[hidden] {
+  display: none;
+}
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* A setting with a dropdown: the text, then the dropdown underneath. */
+.pref-select {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pref-select label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pref-select strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.pref-select span {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--on-surface-variant);
+}
+
+.pref-select .view-select {
+  width: 100%;
+  height: 28px;
+}

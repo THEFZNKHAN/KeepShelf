@@ -36,12 +36,22 @@ import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import { normalizeTags, shouldAskForRating, statusOf } from "../shared/user-data.js";
 import { snapshotItems } from "../shared/undo.js";
+import {
+  DEFAULT_VIEWS,
+  START_MODES,
+  STATUS_FILTERS,
+  defaultStatusFilter,
+  effectiveStatusFilter,
+  hiddenNote,
+  matchesStatusFilter,
+  type DefaultView,
+  type StartMode,
+  type StatusFilter,
+} from "../shared/status-view.js";
 import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, sumProgress } from "../shared/seasons.js";
 
-type StatusFilter = "all" | "todo" | "progress" | "done" | "dropped";
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
-const STATUS_FILTERS: StatusFilter[] = ["all", "todo", "progress", "done", "dropped"];
 const SORTS: SortBy[] = ["newest", "oldest", "title", "year", "rating", "myrating"];
 const SORT_LABELS: Record<SortBy, string> = {
   newest: "Newest",
@@ -54,29 +64,32 @@ const SORT_LABELS: Record<SortBy, string> = {
 // Saved tabs, links and notes have no year, rating or progress, so they only offer what applies to them.
 const TAB_SORTS: SortBy[] = ["newest", "oldest", "title"];
 const TAB_STATUSES: StatusFilter[] = ["all", "todo", "done"];
-const FILTER_STATUS: Record<Exclude<StatusFilter, "all">, ItemStatus> = {
-  todo: "plan",
-  progress: "in_progress",
-  done: "done",
-  dropped: "dropped",
-};
-
 function storedChoice<T extends string>(key: string, allowed: T[], fallback: T): T {
   const value = localStorage.getItem(key) as T | null;
   return value && allowed.includes(value) ? value : fallback;
 }
 
+/** Whether to open on the default view or where you left off, and what the default view is. Both are kept in this browser. */
+let startMode = storedChoice<StartMode>("keepshelf.startMode", START_MODES, "fresh");
+let defaultView = storedChoice<DefaultView>("keepshelf.defaultView", DEFAULT_VIEWS, "hide");
+const remembering = startMode === "remember";
+const TYPE_CHIPS: Array<MediaType | "all"> = ["all", "movie", "series", "anime"];
+
 let allItems: SavedItem[] = [];
-let activeFilter: MediaType | "all" = "all";
-let activeTab: "media" | "books" | "tabs" = "media";
+/** False until the first load of the shelf finishes. */
+let shelfLoaded = false;
+let activeTab: "media" | "books" | "tabs" = remembering ? storedChoice("keepshelf.tab", ["media", "books", "tabs"], "media") : "media";
+let activeFilter: MediaType | "all" = remembering && activeTab === "media" ? storedChoice("keepshelf.type", TYPE_CHIPS, "all") : "all";
 let searchQuery = "";
 let tmdbConfigured = false;
 /** Sites the user added in Settings; each gets a "Watch" button on titles it can link to. */
 let watchSites: WatchSite[] = [];
 let bookInfoEnabled = false;
 let tagFilter = "";
-let listFilter = "";
-let statusFilter = storedChoice<StatusFilter>("keepshelf.status", STATUS_FILTERS, "all");
+let listFilter = remembering ? (localStorage.getItem("keepshelf.list") ?? "") : "";
+let statusFilter = remembering
+  ? storedChoice<StatusFilter>("keepshelf.status", STATUS_FILTERS, defaultStatusFilter(defaultView))
+  : defaultStatusFilter(defaultView);
 let sortBy = storedChoice<SortBy>("keepshelf.sort", SORTS, "newest");
 let keepSettings: KeepSettings = { mediaEnabled: false, booksEnabled: false, tabsEnabled: false };
 let statusTimer: ReturnType<typeof setTimeout> | undefined;
@@ -91,6 +104,9 @@ const emptyHeadingEl = document.getElementById("empty-heading")!;
 const emptyBodyEl = document.getElementById("empty-body")!;
 const emptyHintsEl = document.getElementById("empty-hints")!;
 const filterEmptyEl = document.getElementById("filter-empty")!;
+const filterEmptyTextEl = filterEmptyEl.querySelector("p")!;
+const hiddenNoteEl = document.getElementById("hidden-note")!;
+const hiddenNoteTextEl = document.getElementById("hidden-note-text")!;
 const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
@@ -237,7 +253,7 @@ function effectiveSort(): SortBy {
 }
 
 function effectiveStatus(): StatusFilter {
-  return availableStatuses().includes(statusFilter) ? statusFilter : "all";
+  return effectiveStatusFilter(statusFilter, availableStatuses());
 }
 
 function sortItems(items: SavedItem[]): SavedItem[] {
@@ -264,10 +280,7 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
     items = items.filter((i) => i.type === activeFilter);
   }
   const status = effectiveStatus();
-  if (status !== "all" && !options.ignoreStatus) {
-    const wanted = FILTER_STATUS[status];
-    items = items.filter((i) => statusOf(i) === wanted);
-  }
+  if (!options.ignoreStatus) items = items.filter((i) => matchesStatusFilter(statusOf(i), status));
   if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
   if (listFilter) items = items.filter((i) => i.list === listFilter);
   const query = searchQuery.trim().toLowerCase();
@@ -285,14 +298,14 @@ function statusLabel(status: ItemStatus): string {
   }
 }
 
-function doneLabels(): { todo: string; done: string; markDone: string; markTodo: string } {
+function doneLabels(): { todo: string; notDone: string; done: string; markDone: string; markTodo: string } {
   if (activeTab === "books") {
-    return { todo: "To read", done: "Read", markDone: "Mark as read", markTodo: "Mark as not read" };
+    return { todo: "To read", notDone: "Not read", done: "Read", markDone: "Mark as read", markTodo: "Mark as not read" };
   }
   if (activeTab === "tabs") {
-    return { todo: "To do", done: "Done", markDone: "Mark as done", markTodo: "Mark as not done" };
+    return { todo: "To do", notDone: "Not done", done: "Done", markDone: "Mark as done", markTodo: "Mark as not done" };
   }
-  return { todo: "To watch", done: "Watched", markDone: "Mark as watched", markTodo: "Mark as not watched" };
+  return { todo: "To watch", notDone: "Not watched", done: "Watched", markDone: "Mark as watched", markTodo: "Mark as not watched" };
 }
 
 function typeIcon(type: MediaType): string {
@@ -837,8 +850,11 @@ function renderOrganiseFilters(): void {
   const items = tabItems();
   const everyTag = new Set(items.flatMap((i) => allTags(i)));
   const lists = [...new Set(items.map((i) => i.list).filter((l): l is string => Boolean(l)))].sort();
-  if (!everyTag.has(tagFilter)) tagFilter = "";
-  if (!lists.includes(listFilter)) listFilter = "";
+  // Before the shelf has loaded there is nothing to check against, and a remembered list would be wiped by mistake.
+  if (shelfLoaded) {
+    if (!everyTag.has(tagFilter)) tagFilter = "";
+    if (!lists.includes(listFilter)) listFilter = "";
+  }
   // The picker lists every tag, scrolls, and can be searched, so nothing is hidden or capped.
   tagPicker.setOptions(groupTags(items), tagFilter);
   fillSelect(listFilterEl, "All lists", lists, listFilter);
@@ -870,6 +886,7 @@ function render(): void {
   const labels = doneLabels();
   const statusText: Record<StatusFilter, string> = {
     all: "All",
+    pending: labels.notDone,
     todo: labels.todo,
     progress: "In progress",
     done: labels.done,
@@ -886,6 +903,15 @@ function render(): void {
     activeTab === "books" ? "Save book" :
     activeTab === "tabs" ? "Save tab" :
     "Save media";
+
+  // The default view hides watched items; say how many, and offer the way back.
+  const hiddenCount = statusFilter === "pending" ? filteredItems({ ignoreStatus: true }).length - items.length : 0;
+  hiddenNoteEl.hidden = hiddenCount <= 0;
+  hiddenNoteTextEl.textContent = hiddenNote(hiddenCount, activeTab);
+  filterEmptyTextEl.textContent =
+    items.length === 0 && hiddenCount > 0
+      ? `Nothing left to ${activeTab === "books" ? "read" : activeTab === "tabs" ? "do" : "watch"}. Tap "Show all" to see the rest.`
+      : "No items for this filter.";
 
   const showGlobalEmpty = tabCount === 0;
   const showFilterEmpty = tabCount > 0 && items.length === 0;
@@ -989,6 +1015,7 @@ async function loadItems(): Promise<void> {
       true
     );
   }
+  shelfLoaded = true;
   render();
 }
 
@@ -1835,6 +1862,31 @@ function renderPrefs(): void {
   generalSummaryEl.textContent = on ? "Rating prompt on" : "Rating prompt off";
   generalSummaryEl.classList.toggle("is-ok", on);
 }
+
+const prefStartEl = document.getElementById("pref-start") as HTMLSelectElement;
+const prefDefaultViewEl = document.getElementById("pref-default-view") as HTMLSelectElement;
+prefStartEl.value = startMode;
+prefDefaultViewEl.value = defaultView;
+
+prefStartEl.addEventListener("change", () => {
+  startMode = prefStartEl.value as StartMode;
+  try {
+    localStorage.setItem("keepshelf.startMode", startMode);
+  } catch {
+    /* the choice just won't be remembered */
+  }
+  // Switching to "remember" starts from exactly what you are looking at now.
+  rememberView();
+});
+
+prefDefaultViewEl.addEventListener("change", () => {
+  defaultView = prefDefaultViewEl.value as DefaultView;
+  try {
+    localStorage.setItem("keepshelf.defaultView", defaultView);
+  } catch {
+    /* the choice just won't be remembered */
+  }
+});
 
 prefAskRatingEl.addEventListener("change", () => {
   try {
@@ -2781,14 +2833,34 @@ searchEl.addEventListener("input", () => {
   render();
 });
 
+/** With "Remember where I left off", keeps the tab, type chip, status and list for the next time the popup opens. */
+function rememberView(): void {
+  if (startMode !== "remember") return;
+  try {
+    localStorage.setItem("keepshelf.tab", activeTab);
+    localStorage.setItem("keepshelf.type", activeFilter);
+    localStorage.setItem("keepshelf.status", statusFilter);
+    localStorage.setItem("keepshelf.list", listFilter);
+  } catch {
+    /* the view just won't be remembered */
+  }
+}
+
 statusFilterEl.addEventListener("change", () => {
   statusFilter = statusFilterEl.value as StatusFilter;
-  localStorage.setItem("keepshelf.status", statusFilter);
+  rememberView();
+  render();
+});
+
+document.getElementById("show-all")!.addEventListener("click", () => {
+  statusFilter = "all";
+  rememberView();
   render();
 });
 
 listFilterEl.addEventListener("change", () => {
   listFilter = listFilterEl.value;
+  rememberView();
   render();
 });
 
@@ -2816,6 +2888,7 @@ shelfTabsEl.addEventListener("click", (e) => {
     f.classList.toggle("active", (f as HTMLElement).dataset.filter === "all");
   });
   tabInputEl.value = "";
+  rememberView();
   render();
 });
 
@@ -2826,8 +2899,15 @@ filtersEl.addEventListener("click", (e) => {
   filtersEl.querySelectorAll(".filter").forEach((f) => {
     f.classList.toggle("active", f === btn);
   });
+  rememberView();
   render();
 });
+
+/** Shows the restored tab and type chip as selected, for "Remember where I left off". */
+function syncShelfUi(): void {
+  shelfTabsEl.querySelectorAll<HTMLElement>(".shelf-tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === activeTab));
+  filtersEl.querySelectorAll<HTMLElement>(".filter").forEach((f) => f.classList.toggle("active", f.dataset.filter === activeFilter));
+}
 
 document.getElementById("save-page")!.addEventListener("click", () => {
   // On the Tabs shelf the button saves the page you are on as a bookmark, whatever site it is.
@@ -2937,6 +3017,7 @@ if (isTabView) {
   openSettings();
 }
 
+syncShelfUi();
 void loadItems().then(async () => {
   // Refreshes or drops TMDB data older than the retention limit; usually a no-op.
   try {

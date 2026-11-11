@@ -98,6 +98,7 @@ KeepShelf/
 │       ├── tag-filter.ts      # Groups tags for the filter dropdown
 │       ├── undo.ts            # Snapshots of items for the Undo toast
 │       ├── seasons.ts         # Season-by-season progress (pure helpers)
+│       ├── status-view.ts     # Status filters (Not watched, ...), the default view and what it hides (pure)
 │       ├── reminders.ts       # Release reminders: due dates, refresh rules, notification text (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
@@ -136,6 +137,7 @@ KeepShelf/
 │   ├── user-data.test.mjs     # Status, tags, rating, progress and per-season rules
 │   ├── fuzzy.test.mjs         # Duplicates and merging
 │   ├── seasons.test.mjs       # Season-by-season progress helpers
+│   ├── status-view.test.mjs   # Which items each status filter keeps, and the default view
 │   ├── reminders.test.mjs     # Due dates, refresh rules, notification text
 │   ├── undo.test.mjs
 │   ├── tmdb.test.mjs
