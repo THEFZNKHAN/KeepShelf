@@ -551,6 +551,19 @@
               Your shelf lives only in this browser, so export a backup now and then. Import accepts a KeepShelf backup or a
               Letterboxd or Goodreads CSV. Items already on your shelf are skipped.
             </p>
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Include my settings</strong>
+                <span>
+                  Your TMDB token, Keep links, watch sites and switches, so a new install needs no re-typing. The file then
+                  contains your TMDB token, so keep it private.
+                </span>
+              </div>
+              <label class="switch" title="Include my settings in the backup">
+                <input type="checkbox" id="backup-include-settings" aria-label="Include my settings in the backup" checked />
+                <span class="switch-track"></span>
+              </label>
+            </div>
             <div class="settings-button-row">
               <button type="button" id="export-backup" class="btn btn-outline">
                 <span class="material-symbols-outlined btn-icon">download</span>

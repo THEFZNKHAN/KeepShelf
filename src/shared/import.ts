@@ -1,4 +1,5 @@
 import { buildBookParsed } from "./book-jsonld.js";
+import { sanitizeSettings, type SettingsBackup } from "./settings-backup.js";
 import type { ImportItem, MediaType, SavedItem } from "./types.js";
 import { sanitizeBookInfo } from "./openlibrary.js";
 import { sanitizeTmdb } from "./tmdb.js";
@@ -10,12 +11,29 @@ const MEDIA_TYPES = new Set<MediaType>(["movie", "series", "anime", "book", "tab
 export const BACKUP_APP = "KeepShelf";
 export const BACKUP_VERSION = 1;
 
-export function buildBackup(items: SavedItem[]): string {
+export function buildBackup(items: SavedItem[], settings?: SettingsBackup): string {
   return JSON.stringify(
-    { app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: new Date().toISOString(), items },
+    {
+      app: BACKUP_APP,
+      version: BACKUP_VERSION,
+      exportedAt: new Date().toISOString(),
+      ...(settings ? { settings } : {}),
+      items,
+    },
     null,
     2
   );
+}
+
+/** The settings a backup file carries, checked, or undefined when it has none (older backups, CSV files). */
+export function settingsFromBackupJson(text: string): SettingsBackup | undefined {
+  try {
+    const data = JSON.parse(text) as unknown;
+    if (!data || typeof data !== "object" || Array.isArray(data)) return undefined;
+    return sanitizeSettings((data as { settings?: unknown }).settings);
+  } catch {
+    return undefined;
+  }
 }
 
 /** RFC 4180 CSV: quoted fields, doubled quotes, newlines inside quotes. */

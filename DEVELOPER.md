@@ -122,6 +122,7 @@ KeepShelf/
 │       ├── watch-sites.ts     # Watch sites: learn an address pattern from one example, build exact links
 │       ├── items.ts           # Builders for tab, link and note items
 │       ├── import.ts          # Backup JSON, Letterboxd and Goodreads CSV import
+│       ├── settings-backup.ts # Settings that travel with a backup: collect, validate, describe (pure)
 │       ├── page-data.ts       # requestPageData: ask the content script, inject if missing
 │       ├── year.ts            # normalizeYear helper
 │       ├── keep-settings.ts   # Keep note config, routing, storage
@@ -149,6 +150,7 @@ KeepShelf/
 │   ├── seriesgraph.test.mjs
 │   ├── rottentomatoes.test.mjs
 │   ├── trakt.test.mjs
+│   ├── settings-backup.test.mjs # Settings in backups: what is saved, what is checked on the way in
 │   └── import.test.mjs        # CSV parsing, Letterboxd / Goodreads / backup import
 ├── icons/
 │   ├── icon.png               # Master icon (source for all sizes)

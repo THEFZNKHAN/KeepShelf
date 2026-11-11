@@ -213,7 +213,7 @@ Optionally append every save to your own Google Keep checklists. No Google Cloud
 
 ### Backup, import and export
 
-Export your whole shelf as JSON, import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
+Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
 
 ### Clipboard export
 
@@ -636,11 +636,13 @@ Google Keep only persists list items entered through trusted browser input. Keep
 Your shelf lives only in this browser, so export a backup now and then.
 
 - **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress (per season too).
+- **Include my settings** (on by default, next to the export button) also saves your TMDB token, Keep links, watch sites, the reminders and book-info switches, and your other preferences. **The file then contains your TMDB token, so keep it private**; turn the switch off to export only your shelf.
 - **Import** accepts:
   - a **KeepShelf backup** (`.json`)
   - a **Letterboxd** export CSV (watchlist, watched, diary or ratings)
   - a **Goodreads** library export CSV
 - Items already on your shelf are skipped, and imported items are not sent to Keep.
+- If a backup has settings, KeepShelf asks **"Restore your settings?"** and lists what is in it. **Restore settings** replaces the ones you have now; **Skip** imports only the items. Older backups have no settings and import as before.
 - Letterboxd and Goodreads imports mark watched and read items as finished.
 
 Importing from a file picker opens Settings in a full tab, because Chrome closes the popup when a file dialog opens.
@@ -770,7 +772,7 @@ Planned items in the current view. If none are planned it suggests something in 
 
 **Will my shelf survive an extension update?**
 
-Yes, if you reload the extension rather than removing and reinstalling it. Removing it clears `chrome.storage.local`, so keep a backup.
+Yes, if you reload the extension rather than removing and reinstalling it. Removing it clears `chrome.storage.local`, so keep a backup. When you update by loading the new version from a different folder, Chrome treats it as a new extension. Export a backup (with **Include my settings** on) from the old one, import it into the new one, and choose **Restore settings**: nothing needs re-typing. Updating in place (put the new files in the same folder and click **Reload**) needs no backup at all.
 
 **Can I move my shelf to another computer?**
 

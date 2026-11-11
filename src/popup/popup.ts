@@ -1,5 +1,9 @@
 import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
-import { buildBackup, parseImportFile } from "../shared/import.js";
+import { buildBackup, parseImportFile, settingsFromBackupJson } from "../shared/import.js";
+import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } from "../shared/settings-backup.js";
+import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
+import { REMINDERS_KEY } from "../shared/reminders-settings.js";
+import { TMDB_TOKEN_KEY } from "../shared/tmdb-settings.js";
 import { isHttpUrl, linkItem, noteItem } from "../shared/items.js";
 import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
@@ -21,6 +25,7 @@ import {
   normalizeTypes,
   removeWatchSite,
   saveWatchSite,
+  WATCH_SITES_KEY,
   siteFromLearned,
   supportedKinds,
   titleFacts,
@@ -2826,18 +2831,71 @@ function showBackupStatus(msg: string, err = false, ms = 6000, onUndo?: () => vo
   showSectionStatus(backupSettingsStatusEl, backupSettingsStatusTextEl, backupSettingsStatusIconEl, backupStatusTimer, msg, err, ms, onUndo);
 }
 
+const backupIncludeSettingsEl = document.getElementById("backup-include-settings") as HTMLInputElement;
+
+/** Reads the settings that go into a backup. Everything is checked on the way out. */
+async function gatherSettings(): Promise<SettingsBackup | undefined> {
+  const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, BOOK_INFO_KEY]);
+  const keep = await sendToBackground({ action: "getKeepSettings" });
+  const prefs: Record<string, string | null> = {};
+  for (const key of Object.keys(PREF_CHOICES)) prefs[key] = localStorage.getItem(key);
+  return collectSettings(
+    {
+      tmdbToken: stored[TMDB_TOKEN_KEY],
+      keep: keep.ok && "settings" in keep ? keep.settings : undefined,
+      watchSites: stored[WATCH_SITES_KEY],
+      remindersEnabled: stored[REMINDERS_KEY],
+      bookInfoEnabled: stored[BOOK_INFO_KEY],
+      prefs,
+    },
+    { includeToken: true }
+  );
+}
+
+/** "a", "a and b", "a, b and c". */
+function joinWords(parts: string[]): string {
+  return parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** Puts a backup's settings in place, then refreshes everything on the page that shows them. */
+async function applySettings(settings: SettingsBackup): Promise<void> {
+  const ask = async (message: Parameters<typeof sendToBackground>[0]) => {
+    const response = await sendToBackground(message);
+    if (!response.ok) throw new Error(response.error);
+  };
+  // The token first: reminders need it.
+  if (settings.tmdbToken) await ask({ action: "setTmdbToken", token: settings.tmdbToken });
+  if (settings.keep) await ask({ action: "setKeepSettings", settings: settings.keep });
+  if (settings.watchSites) await chrome.storage.local.set({ [WATCH_SITES_KEY]: settings.watchSites });
+  if (settings.remindersEnabled !== undefined) await ask({ action: "setRemindersEnabled", enabled: settings.remindersEnabled });
+  if (settings.bookInfoEnabled !== undefined) await ask({ action: "setBookInfoEnabled", enabled: settings.bookInfoEnabled });
+  for (const [key, value] of Object.entries(settings.prefs ?? {})) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* the preference just won't be restored */
+    }
+  }
+  await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites()]);
+  renderPrefs();
+}
+
 async function exportBackup(): Promise<void> {
   try {
     const response = await sendToBackground({ action: "getAll" });
     if (!response.ok || !("items" in response)) throw new Error("Could not read your shelf.");
-    const blob = new Blob([buildBackup(response.items)], { type: "application/json" });
+    const settings = backupIncludeSettingsEl.checked ? await gatherSettings() : undefined;
+    const blob = new Blob([buildBackup(response.items, settings)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `keepshelf-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-    showBackupStatus(`Exported ${response.items.length} item${response.items.length === 1 ? "" : "s"}.`);
+    showBackupStatus(
+      `Exported ${response.items.length} item${response.items.length === 1 ? "" : "s"}` +
+        (settings ? " and your settings." : ".")
+    );
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
   }
@@ -2845,22 +2903,38 @@ async function exportBackup(): Promise<void> {
 
 async function importFile(file: File): Promise<void> {
   try {
-    const { source, items } = parseImportFile(await file.text(), file.name);
-    if (items.length === 0) {
+    const text = await file.text();
+    const { source, items } = parseImportFile(text, file.name);
+    const settings = source === "KeepShelf backup" ? settingsFromBackupJson(text) : undefined;
+    if (items.length === 0 && !settings) {
       showBackupStatus(`No items found in this ${source} file.`, true);
       return;
     }
-    const response = await sendToBackground({ action: "import", items });
-    if (!response.ok) throw new Error(response.error);
-    if ("items" in response) {
-      allItems = response.items;
-      render();
+    let added = 0;
+    let skipped = 0;
+    if (items.length > 0) {
+      const response = await sendToBackground({ action: "import", items });
+      if (!response.ok) throw new Error(response.error);
+      if ("items" in response) {
+        allItems = response.items;
+        render();
+      }
+      added = "added" in response ? response.added ?? 0 : 0;
+      skipped = "skipped" in response ? response.skipped ?? 0 : 0;
     }
-    const added = "added" in response ? response.added ?? 0 : 0;
-    const skipped = "skipped" in response ? response.skipped ?? 0 : 0;
+    let tail = "";
+    if (settings) {
+      const restore = await showConfirm({
+        title: "Restore your settings?",
+        message: `This backup also has ${joinWords(describeSettings(settings))}. Restoring replaces the ones you have now.`,
+        confirmLabel: "Restore settings",
+        cancelLabel: "Skip",
+      });
+      if (restore) await applySettings(settings);
+      tail = restore ? " Settings restored." : " Settings skipped.";
+    }
     showBackupStatus(
-      `Imported ${added} item${added === 1 ? "" : "s"} from ${source}` +
-        (skipped ? `; ${skipped} already on your shelf.` : ".")
+      `Imported ${added} item${added === 1 ? "" : "s"} from ${source}` + (skipped ? `; ${skipped} already on your shelf.` : ".") + tail
     );
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Import failed.", true);
