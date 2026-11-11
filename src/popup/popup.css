@@ -1874,9 +1874,7 @@ body.in-tab {
 
 .s-card {
   flex-shrink: 0;
-  border: 1px solid var(--outline-variant);
-  border-radius: var(--radius-xl);
-  background: var(--surface);
+  border-bottom: 1px solid var(--row-border);
 }
 
 .s-card > summary {
@@ -1895,12 +1893,6 @@ body.in-tab {
 
 .s-card > summary:hover {
   background: var(--surface-container-low);
-  border-radius: var(--radius-xl);
-}
-
-.s-card[open] > summary {
-  border-bottom: 1px solid var(--row-border);
-  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
 }
 
 .s-card-icon {
@@ -1919,16 +1911,12 @@ body.in-tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--surface-container);
   font-size: 11px;
   line-height: 16px;
-  color: var(--on-surface-variant);
+  color: var(--outline);
 }
 
 .s-card-summary.is-ok {
-  background: var(--success-bg);
   color: var(--success-text);
 }
 
@@ -1954,7 +1942,7 @@ body.in-tab {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 10px 12px 12px;
+  padding: 2px 12px 14px;
 }
 
 .s-hint {
@@ -2598,7 +2586,9 @@ body.in-tab {
 /* ── Settings: groups, a quieter card list ───────────────── */
 
 .s-group {
-  margin: 10px 2px 0;
+  margin: 0;
+  padding: 14px 12px 4px;
+  border-bottom: 1px solid var(--row-border);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -2606,12 +2596,10 @@ body.in-tab {
   color: var(--on-surface-variant);
 }
 
-.s-group:first-child {
-  margin-top: 6px;
-}
-
-.s-card[open] {
-  border-color: var(--outline);
+/* The page is a flat list of full-width rows, like Coming up and Stats. */
+#settings-view .settings-body {
+  gap: 0;
+  padding: 0 0 20px;
 }
 
 /* "How it works"-style disclosure inside a card, so long explanations don't crowd the controls. */
@@ -2934,4 +2922,13 @@ body.in-tab {
   margin-left: 5px;
   font-weight: 500;
   color: var(--outline);
+}
+
+/* An open card is tinted so its controls read as belonging to its row. */
+.s-card[open] {
+  background: var(--surface-container-low);
+}
+
+.s-card[open] > summary:hover {
+  background: none;
 }
