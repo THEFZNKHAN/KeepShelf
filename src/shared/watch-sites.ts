@@ -1,4 +1,4 @@
-import { imdbIdFromUrl, isEnrichable } from "./tmdb.js";
+import { imdbIdFromUrl, isEnrichable, totalEpisodes } from "./tmdb.js";
 import type { SavedItem, TmdbKind } from "./types.js";
 
 /**
@@ -12,12 +12,13 @@ import type { SavedItem, TmdbKind } from "./types.js";
  * Parts of an address that are filled in per title. `q_plus` and `q_pct` are the title as search text, written
  * the two common ways: `one+piece` and `one%20piece`. `qm_plus` and `qm_pct` are the same for the main name only,
  * the part before a colon ("One Piece" for "One Piece: Wan pîsu"), because that is what sites search by.
+ * `episode` is the next episode you haven't watched (episode 1 if you haven't started), for addresses of an episode.
  */
-export type WatchToken = "tmdb_id" | "imdb_id" | "slug" | "year" | "type" | "q_plus" | "q_pct" | "qm_plus" | "qm_pct";
+export type WatchToken = "tmdb_id" | "imdb_id" | "slug" | "year" | "type" | "q_plus" | "q_pct" | "qm_plus" | "qm_pct" | "episode";
 
 /** The parts that say which title an address is for. A template needs at least one. */
 const IDENTIFYING = /\{(imdb_id|tmdb_id|slug|q_plus|q_pct|qm_plus|qm_pct)\}/;
-const ALL_TOKENS = /\{(tmdb_id|imdb_id|slug|year|type|q_plus|q_pct|qm_plus|qm_pct)\}/g;
+const ALL_TOKENS = /\{(tmdb_id|imdb_id|slug|year|type|q_plus|q_pct|qm_plus|qm_pct|episode)\}/g;
 
 /** The kinds of title a site can be limited to. */
 export type WatchMediaType = "movie" | "series" | "anime";
@@ -50,6 +51,15 @@ export interface TitleFacts {
   kind: TmdbKind;
   title: string;
   year?: string;
+  /** The next episode to watch: one more than you have watched, kept within the total when it is known. */
+  episode?: number;
+}
+
+/** The episode a link should open: the one after the last you watched, or 1. */
+function nextEpisode(item: SavedItem): number {
+  const next = (item.progressCurrent ?? 0) + 1;
+  const total = totalEpisodes(item);
+  return total !== undefined && total > 0 ? Math.min(next, total) : next;
 }
 
 export function titleFacts(item: SavedItem): TitleFacts | undefined {
@@ -60,6 +70,7 @@ export function titleFacts(item: SavedItem): TitleFacts | undefined {
     kind: item.tmdb?.kind ?? (item.type === "movie" ? "movie" : "tv"),
     title: item.title,
     year: item.year,
+    episode: nextEpisode(item),
   };
 }
 
@@ -108,7 +119,8 @@ const fail = (error: string): LearnResult => ({ ok: false, error });
 function replaceStandalone(text: string, value: string, token: string, dashed = false): string {
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const before = dashed ? "(?:(?<![\\w-])|(?<=\\}-))" : "(?<!\\w)";
-  const after = dashed ? "(?![\\w-])" : "(?!\\w)";
+  // A title in a path can be followed by an episode, as in one-piece-episode-1180.
+  const after = dashed ? "(?:(?![\\w-])|(?=-(?:episode|ep)-))" : "(?!\\w)";
   return text.replace(new RegExp(`${before}${escaped}${after}`, "gi"), token);
 }
 
@@ -154,6 +166,9 @@ export function learnPattern(exampleUrl: string, facts: TitleFacts): LearnResult
   if (!url.hostname.includes(".") || /^[\d.]+$/.test(url.hostname)) return fail("Use the address of a page on the site, not a local one.");
 
   let rest = url.pathname + url.search;
+  // An episode number (…-episode-1180, ?episode=5) becomes "the next episode you haven't watched". Left alone when
+  // the address also names a season, because the next episode of a season isn't the same number.
+  if (!/season/i.test(rest)) rest = rest.replace(/(?<![a-z])(episode|ep)([-_/=])(\d+)(?!\d)/gi, "$1$2{episode}");
   if (facts.imdbId) rest = replaceStandalone(rest, facts.imdbId, "{imdb_id}");
   if (facts.tmdbId) rest = replaceStandalone(rest, String(facts.tmdbId), "{tmdb_id}");
   const slug = slugify(facts.title);
@@ -372,6 +387,9 @@ export function buildWatchUrl(site: WatchSite, facts: TitleFacts): string | unde
       case "qm_pct":
         value = searchText(mainTitle(facts.title) ?? facts.title, "percent") || undefined;
         break;
+      case "episode":
+        value = String(facts.episode ?? 1);
+        break;
     }
     if (!value) missing = true;
     return value ?? "";
@@ -402,6 +420,7 @@ const TOKEN_LABELS: Record<WatchToken, string> = {
   q_pct: "title",
   qm_plus: "title",
   qm_pct: "title",
+  episode: "next episode",
 };
 
 /** The pattern in plain words, one line per kind when movies and series differ: `example.com/details?id=‹TMDB id›`. */
