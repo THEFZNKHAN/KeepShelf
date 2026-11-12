@@ -3,10 +3,6 @@
 # The rules for contributors and agents are in AGENTS.md ("Releases and versioning").
 name: Release
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 on:
   push:
     branches: [main]
@@ -32,7 +28,7 @@ permissions:
 # One release at a time, so two merges can never fight over the same version number.
 concurrency:
   group: release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   release:
