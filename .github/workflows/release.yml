@@ -28,7 +28,7 @@ permissions:
 # One release at a time, so two merges can never fight over the same version number.
 concurrency:
   group: release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   release:
