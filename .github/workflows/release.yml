@@ -3,6 +3,10 @@
 # The rules for contributors and agents are in AGENTS.md ("Releases and versioning").
 name: Release
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
