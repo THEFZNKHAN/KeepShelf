@@ -257,6 +257,28 @@
         <div id="filter-empty" class="filter-empty" hidden>
           <p>No items for this filter.</p>
         </div>
+
+        <div id="online-search" class="online-search" hidden>
+          <button type="button" id="online-search-btn" class="online-row">
+            <span class="material-symbols-outlined online-icon">travel_explore</span>
+            <span class="online-text">
+              <span id="online-search-label" class="online-label"></span>
+              <span id="online-search-sub" class="online-sub"></span>
+            </span>
+            <span class="material-symbols-outlined online-chevron">chevron_right</span>
+          </button>
+        </div>
+
+        <section id="online-results" class="online-results" aria-labelledby="online-title" hidden>
+          <header class="online-head">
+            <button type="button" id="online-back" class="online-back">
+              <span class="material-symbols-outlined">arrow_back</span>
+              My shelf
+            </button>
+            <h2 id="online-title" class="online-title"></h2>
+          </header>
+          <div id="online-body" class="online-body" aria-live="polite"></div>
+        </section>
       </main>
     </div>
 
@@ -336,6 +358,17 @@
               <select id="pref-default-view" class="view-select">
                 <option value="hide">Hide watched and dropped</option>
                 <option value="all">Show everything</option>
+              </select>
+            </div>
+            <div class="pref-select">
+              <label for="pref-search-online">
+                <strong>Search TMDB from the search box</strong>
+                <span>For movies, series and anime. What you type is sent to TMDB only when you search; automatic search waits until nothing on your shelf matches. Needs your TMDB token.</span>
+              </label>
+              <select id="pref-search-online" class="view-select">
+                <option value="row">Show a “Search TMDB” row</option>
+                <option value="auto">Also search by itself when nothing matches</option>
+                <option value="off">Off</option>
               </select>
             </div>
           </div>

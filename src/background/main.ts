@@ -34,6 +34,7 @@ import {
   parseTmdbToken,
 } from "../shared/tmdb.js";
 import { isFresh, sanitizeRatings } from "../shared/episode-ratings.js";
+import { MAX_QUERY, MIN_QUERY, newItemFromResult, parseSearchResults, sanitizeResult } from "../shared/tmdb-search.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
 import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
@@ -134,6 +135,34 @@ async function episodeRatingsFor(id: string, force: boolean): Promise<MessageRes
     return { ok: true, episodeRatings: ratings };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not load episode ratings." };
+  }
+}
+
+/** Looks a title up on TMDB for the search box. Only ever called when the user asked for it. */
+async function searchTmdb(rawQuery: string): Promise<MessageResponse> {
+  const query = typeof rawQuery === "string" ? rawQuery.trim().replace(/\s+/g, " ").slice(0, MAX_QUERY) : "";
+  if (query.length < MIN_QUERY) return { ok: false, error: "Type a little more to search." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const found = await client.get<unknown>("/search/multi", { query, include_adult: "false", language: "en-US" });
+    return { ok: true, tmdbResults: parseSearchResults(found) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not search TMDB." };
+  }
+}
+
+/** Adds a search result to the shelf as an ordinary save, with TMDB's info for exactly that title already in place. */
+async function addFromTmdb(raw: unknown): Promise<MessageResponse> {
+  const result = sanitizeResult(raw);
+  if (!result) return { ok: false, error: "That result isn't valid." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const info = await fetchDetails(client, result.kind, result.id);
+    return await saveAndSync(newItemFromResult(result, info));
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not add it." };
   }
 }
 
@@ -476,6 +505,12 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     case "refreshDates": {
       await refreshDatesQuietly(Date.now(), Boolean(message.force));
       return { ok: true, items: await getAllItems() };
+    }
+    case "searchTmdb": {
+      return searchTmdb(message.query);
+    }
+    case "addFromTmdb": {
+      return addFromTmdb(message.result);
     }
     case "episodeRatings": {
       return episodeRatingsFor(message.id, Boolean(message.force));
