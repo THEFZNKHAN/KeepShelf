@@ -45,6 +45,11 @@ export interface SavedItem {
    * so everything that only knows the single number keeps working.
    */
   seasonProgress?: number[];
+  /**
+   * For a series marked finished: how many seasons it had then. A season beyond this is a new one, which is what
+   * "new season" reminders announce. TMDB's own season count grows over time, so it can't answer this.
+   */
+  seasonsAtFinish?: number;
   keepStatus?: ItemKeepStatus;
   keepError?: string;
 }
@@ -153,6 +158,7 @@ export type MessageAction =
   | { action: "restore"; items: SavedItem[] }
   | { action: "getReminderSettings" }
   | { action: "setRemindersEnabled"; enabled: boolean }
+  | { action: "setNewSeasonReminders"; enabled: boolean }
   | { action: "checkReminders" }
   | { action: "getBookInfoSettings" }
   | { action: "setBookInfoEnabled"; enabled: boolean }
@@ -167,6 +173,8 @@ export type MessageAction =
   | { action: "refreshDates"; force?: boolean }
   | { action: "episodeRatings"; id: string; force?: boolean }
   | { action: "searchTmdb"; query: string }
+  | { action: "similarTmdb"; id: string }
+  | { action: "trailerFor"; id: string }
   | { action: "addFromTmdb"; result: TmdbSearchResult }
   | { action: "clear" }
   | { action: "getKeepSettings" }
@@ -189,8 +197,9 @@ export type MessageResponse =
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; episodeRatings: EpisodeRatings }
   | { ok: true; tmdbResults: TmdbSearchResult[] }
+  | { ok: true; trailer: { url: string; name: string } | null }
   | { ok: true; bookInfo: { enabled: boolean } }
-  | { ok: true; reminders: { enabled: boolean } }
+  | { ok: true; reminders: { enabled: boolean; newSeasons?: boolean } }
   | { ok: true; message: string }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_VIEWS, START_MODES, STATUS_FILTERS, defaultStatusFilter, effectiveStatusFilter, matchesStatusFilter,
+  DEFAULT_VIEWS, START_MODES, STATUS_FILTERS, defaultStatusFilter, effectiveStatusFilter, matchesStatusFilter, statusFilterWhileSearching,
 } from "../dist-test/status-view.js";
 
 const STATUSES = ["plan", "in_progress", "done", "dropped"];
@@ -44,4 +44,11 @@ test("a shelf that doesn't offer a filter falls back sensibly", () => {
   assert.equal(effectiveStatusFilter("done", tabs), "done");
   assert.equal(effectiveStatusFilter("pending", STATUS_FILTERS), "pending");
   assert.equal(effectiveStatusFilter("all", tabs), "all");
+});
+
+test("while searching, the status filter steps aside so a title is found whatever its status", () => {
+  for (const choice of ["all", "pending", "todo", "progress", "done", "dropped"]) {
+    assert.equal(statusFilterWhileSearching(choice, true), "all", `${choice} while searching`);
+    assert.equal(statusFilterWhileSearching(choice, false), choice, `${choice} when not searching is kept`);
+  }
 });

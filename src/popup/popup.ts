@@ -1,8 +1,10 @@
 import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
+import { buildLetterboxdExport } from "../shared/letterboxd-export.js";
+import { buildTraktExport } from "../shared/trakt-export.js";
 import { buildBackup, parseImportFile, settingsFromBackupJson } from "../shared/import.js";
 import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } from "../shared/settings-backup.js";
 import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
-import { REMINDERS_KEY } from "../shared/reminders-settings.js";
+import { NEW_SEASONS_KEY, REMINDERS_KEY } from "../shared/reminders-settings.js";
 import { TMDB_TOKEN_KEY } from "../shared/tmdb-settings.js";
 
 import { listToItems, parseList, planListImport } from "../shared/list-import.js";
@@ -82,11 +84,12 @@ import {
   defaultStatusFilter,
   effectiveStatusFilter,
   matchesStatusFilter,
+  statusFilterWhileSearching,
   type DefaultView,
   type StartMode,
   type StatusFilter,
 } from "../shared/status-view.js";
-import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, type EpisodeStep } from "../shared/seasons.js";
+import { isWatched, distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, upToStep, watchedProgress, type EpisodeStep } from "../shared/seasons.js";
 import {
   COMING_UP_WINDOWS,
   airingWithoutDate,
@@ -358,11 +361,12 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
   if (activeTab === "media" && activeFilter !== "all") {
     items = items.filter((i) => i.type === activeFilter);
   }
-  const status = effectiveStatus();
+  const query = searchQuery.trim().toLowerCase();
+  // While searching, the status filter steps aside so a title is found whatever its status.
+  const status = statusFilterWhileSearching(effectiveStatus(), query !== "");
   if (!options.ignoreStatus) items = items.filter((i) => matchesStatusFilter(statusOf(i), status));
   if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
   if (listFilter) items = items.filter((i) => i.list === listFilter);
-  const query = searchQuery.trim().toLowerCase();
   if (query) items = items.filter((i) => searchText(i).includes(query));
   return sortItems(items);
 }
@@ -614,6 +618,8 @@ let upcomingDays = (() => {
 /** A shelf row without the details and actions: just the title, an optional note and the date on the right. */
 function upcomingRow(item: SavedItem, label: string, extra?: string, tip?: string, faint = false): HTMLLIElement {
   const { li, typeIconEl, body } = createRowShell(item, false);
+  // A finished show with a new season coming isn't "done" here: no strike-through or fading.
+  li.classList.remove("done");
   const note = document.createElement("div");
   note.className = "item-facts";
   note.textContent = [typeLabel(item.type), extra].filter(Boolean).join(" · ");
@@ -652,7 +658,7 @@ function upcomingList(): HTMLUListElement {
 /** Draws what is airing or releasing soon, by day, and the shows that have no date yet. `checking` says dates are being looked up. */
 function renderUpcoming(checking = false): void {
   const now = Date.now();
-  const groups = groupByDay(comingUp(allItems, now, upcomingDays, userRegions));
+  const groups = groupByDay(comingUp(allItems, now, upcomingDays, userRegions, { newSeasons: newSeasonReminders }));
   const missing = tmdbConfigured ? airingWithoutDate(allItems, now) : [];
   upcomingBodyEl.replaceChildren();
 
@@ -714,14 +720,15 @@ function renderUpcoming(checking = false): void {
     }
     const list = upcomingList();
     upcomingBodyEl.append(heading, list);
-    for (const { item, label, region } of group.entries) {
+    for (const { item, label, region, newSeason } of group.entries) {
       if (label === "streaming") {
         list.append(upcomingRow(item, "Streaming", undefined, `Streaming and online release${region ? ` (${region})` : ""}`));
       } else if (label === "release") {
         // A movie still to reach streaming says when, right under its title.
         list.append(upcomingRow(item, "Release", streamingNote(item, now, userRegions)));
       } else {
-        list.append(upcomingRow(item, label));
+        // A new season of a show you finished says so under its title.
+        list.append(upcomingRow(item, label, newSeason ? "New season" : undefined));
       }
     }
   }
@@ -1248,7 +1255,11 @@ function render(): void {
     done: labels.done,
     dropped: "Dropped",
   };
-  fillOptions(statusFilterEl, availableStatuses().map((v) => [v, statusText[v]]), effectiveStatus());
+  // Searching looks at every status, so the box says All and can't be changed until the search is cleared.
+  const searching = searchQuery.trim() !== "";
+  fillOptions(statusFilterEl, availableStatuses().map((v) => [v, statusText[v]]), searching ? "all" : effectiveStatus());
+  statusFilterEl.disabled = searching;
+  statusFilterEl.title = searching ? "Search looks at every status" : "";
   renderOrganiseFilters();
   fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
   // Picking something to watch or read doesn't apply to bookmarks.
@@ -1347,7 +1358,12 @@ function render(): void {
 /* ── Search TMDB from the search box ──────────────────────── */
 
 interface OnlineSearch {
+  /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. */
+  kind: "search" | "like";
+  /** The words searched for, or (for "like") the title's name. */
   query: string;
+  /** For "like": the saved item the recommendations are for. */
+  sourceId?: string;
   status: "loading" | "done" | "error";
   results: TmdbSearchResult[];
   error: string;
@@ -1368,6 +1384,14 @@ function currentOnlineState() {
 
 /** Shows the Search TMDB row, or the results when they are open. Returns true when the results are on screen. */
 function updateOnlineUi(): boolean {
+  // Recommendations for a title don't depend on the search box, so typing and tabs don't decide whether they show.
+  if (online?.kind === "like") {
+    onlineOffered = undefined;
+    onlineSearchEl.hidden = true;
+    onlineResultsEl.hidden = false;
+    renderOnlineResults();
+    return true;
+  }
   const state = currentOnlineState();
   onlineOffered = state.offer ? { query: state.query } : undefined;
   if (!state.offer) {
@@ -1398,19 +1422,50 @@ function scheduleAutoSearch(): void {
 }
 
 async function startOnlineSearch(query: string): Promise<void> {
-  online = { query, status: "loading", results: [], error: "" };
+  online = { kind: "search", query, status: "loading", results: [], error: "" };
   render();
   try {
     const response = await sendToBackground({ action: "searchTmdb", query });
-    if (online?.query !== query) return;
+    if (online?.kind !== "search" || online.query !== query) return;
     if (!response.ok) throw new Error(response.error);
     if (!("tmdbResults" in response)) throw new Error("No results came back.");
-    online = { query, status: "done", results: response.tmdbResults, error: "" };
+    online = { kind: "search", query, status: "done", results: response.tmdbResults, error: "" };
   } catch (err) {
-    if (online?.query !== query) return;
-    online = { query, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
+    if (online?.kind !== "search" || online.query !== query) return;
+    online = { kind: "search", query, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
   }
   render();
+}
+
+/** Shows what TMDB recommends for a title on the shelf, in the same list as a search, each with an Add button. */
+async function startSimilar(item: SavedItem): Promise<void> {
+  const sourceId = item.id;
+  const label = itemTitle(item);
+  const current = () => online?.kind === "like" && online.sourceId === sourceId;
+  online = { kind: "like", query: label, sourceId, status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "similarTmdb", id: sourceId });
+    if (!current()) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No recommendations came back.");
+    online = { kind: "like", query: label, sourceId, status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (!current()) return;
+    online = { kind: "like", query: label, sourceId, status: "error", results: [], error: err instanceof Error ? err.message : "Could not get recommendations." };
+  }
+  render();
+}
+
+/** "More like this" on a card: close the card and show the recommendations where the search results go. */
+function openSimilar(item: SavedItem): void {
+  closePick();
+  if (!upcomingView.hidden) closeUpcoming();
+  // A search typed earlier would only be in the way of the shelf you come back to.
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  void startSimilar(item);
 }
 
 function onlineMessage(text: string, retry?: () => void): HTMLElement {
@@ -1506,18 +1561,42 @@ function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
 
 function renderOnlineResults(): void {
   if (!online) return;
-  onlineTitleEl.textContent = `“${online.query}” on TMDB`;
+  const like = online.kind === "like";
+  onlineTitleEl.textContent = like ? `Like “${online.query}”` : `“${online.query}” on TMDB`;
   if (online.status === "loading") {
-    onlineBodyEl.replaceChildren(onlineMessage("Searching TMDB…"));
+    onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : "Searching TMDB…"));
   } else if (online.status === "error") {
     const query = online.query;
-    onlineBodyEl.replaceChildren(onlineMessage(online.error, () => void startOnlineSearch(query)));
+    const sourceId = online.sourceId;
+    const retry = () => {
+      const source = sourceId ? allItems.find((i) => i.id === sourceId) : undefined;
+      if (like && source) void startSimilar(source);
+      else if (!like) void startOnlineSearch(query);
+    };
+    onlineBodyEl.replaceChildren(onlineMessage(online.error, retry));
   } else if (online.results.length === 0) {
-    onlineBodyEl.replaceChildren(onlineMessage(`Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`));
+    onlineBodyEl.replaceChildren(
+      onlineMessage(like ? `TMDB has no recommendations for “${online.query}” yet.` : `Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`)
+    );
   } else {
     const list = document.createElement("ul");
     list.className = "list";
-    list.append(...online.results.map(onlineResultRow));
+    // "More like this" leads with the title's own franchise; label it, and the recommendations after it.
+    const hasFranchise = online.kind === "like" && online.results.some((r) => r.group === "franchise");
+    let group: string | undefined;
+    for (const result of online.results) {
+      if (hasFranchise) {
+        const next = result.group === "franchise" ? "Same franchise" : "You might also like";
+        if (next !== group) {
+          const heading = document.createElement("li");
+          heading.className = "online-group";
+          heading.textContent = next;
+          list.append(heading);
+          group = next;
+        }
+      }
+      list.append(onlineResultRow(result));
+    }
     onlineBodyEl.replaceChildren(list);
   }
 }
@@ -2675,11 +2754,15 @@ function showTmdbStatus(msg: string, err = false, ms = 6000): void {
 }
 
 let remindersEnabled = false;
+/** Also announce (and list on Coming up) new seasons of shows you have finished. On unless switched off. */
+let newSeasonReminders = true;
+const prefNewSeasonsEl = document.getElementById("pref-new-seasons") as HTMLInputElement;
 const prefRemindersEl = document.getElementById("pref-reminders") as HTMLInputElement;
 const remindersCheckEl = document.getElementById("reminders-check") as HTMLButtonElement;
 
 function renderReminders(): void {
   prefRemindersEl.checked = remindersEnabled;
+  prefNewSeasonsEl.checked = newSeasonReminders;
   // It needs the token to look up dates, but it can always be turned off.
   prefRemindersEl.disabled = !tmdbConfigured && !remindersEnabled;
   remindersCheckEl.disabled = !remindersEnabled;
@@ -2688,7 +2771,10 @@ function renderReminders(): void {
 async function loadReminderSettings(): Promise<void> {
   try {
     const response = await sendToBackground({ action: "getReminderSettings" });
-    if (response.ok && "reminders" in response) remindersEnabled = response.reminders.enabled;
+    if (response.ok && "reminders" in response) {
+      remindersEnabled = response.reminders.enabled;
+      newSeasonReminders = response.reminders.newSeasons !== false;
+    }
   } catch {
     /* leave it off */
   }
@@ -2701,6 +2787,18 @@ prefRemindersEl.addEventListener("change", async () => {
     if (!response.ok) throw new Error(response.error);
     if ("reminders" in response) remindersEnabled = response.reminders.enabled;
     showTmdbStatus(remindersEnabled ? "Release reminders are on." : "Release reminders are off.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Could not change the setting.", true);
+  }
+  renderReminders();
+});
+
+prefNewSeasonsEl.addEventListener("change", async () => {
+  try {
+    const response = await sendToBackground({ action: "setNewSeasonReminders", enabled: prefNewSeasonsEl.checked });
+    if (!response.ok) throw new Error(response.error);
+    if ("reminders" in response) newSeasonReminders = response.reminders.newSeasons !== false;
+    showTmdbStatus(newSeasonReminders ? "New seasons of finished shows are on." : "New seasons of finished shows are off.");
   } catch (err) {
     showTmdbStatus(err instanceof Error ? err.message : "Could not change the setting.", true);
   }
@@ -3255,6 +3353,19 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
     const firstTag = chips.findIndex((chip) => chip.className.includes("pick-chip-tag"));
     chipEls.splice(firstTag === -1 ? chipEls.length : firstTag, 0, add);
   }
+  // Recommendations for a title TMDB knows, shown where the search results go.
+  if (info && item.tmdb) {
+    const similar = document.createElement("button");
+    similar.type = "button";
+    similar.className = "pick-chip pick-chip-link";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "recommend";
+    similar.append(icon, document.createTextNode("More like this"));
+    similar.title = `Find titles similar to ${itemTitle(item)}`;
+    similar.addEventListener("click", () => openSimilar(item));
+    chipEls.push(similar);
+  }
   pickChipsEl.replaceChildren(...chipEls);
   pickChipsEl.hidden = chipEls.length === 0;
   pickReviewEl.textContent = info && item.review ? item.review : "";
@@ -3271,6 +3382,8 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
 
   pickWatchEl.classList.add("is-compact");
   pickWatchEl.replaceChildren(
+    // A trailer for any title TMDB knows, ahead of the sites where you watch it.
+    ...(info && item.tmdb ? [trailerButton(item)] : []),
     ...watchLinks(item, watchSites).map((link) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -3300,6 +3413,49 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   const cutOff = [pickOverviewEl, pickReviewEl].some((el) => !el.hidden && el.scrollHeight > el.clientHeight + 1);
   pickMoreEl.hidden = !cutOff;
   pickMoreEl.textContent = "More";
+}
+
+/** The Trailer button: asks TMDB when pressed, opens the link in a new tab, and says on the button if there isn't one. */
+function trailerButton(item: SavedItem): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn btn-outline btn-sm";
+  const icon = document.createElement("span");
+  icon.className = "material-symbols-outlined btn-icon";
+  icon.textContent = "smart_display";
+  const label = document.createTextNode("Trailer");
+  btn.append(icon, label);
+  btn.title = `Watch the trailer for ${itemTitle(item)}`;
+  btn.setAttribute("aria-label", `Watch the trailer for ${itemTitle(item)}`);
+
+  const say = (text: string, resetAfterMs = 0) => {
+    label.textContent = text;
+    if (resetAfterMs > 0) {
+      setTimeout(() => {
+        label.textContent = "Trailer";
+        btn.disabled = false;
+      }, resetAfterMs);
+    }
+  };
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    say("Looking…");
+    try {
+      const response = await sendToBackground({ action: "trailerFor", id: item.id });
+      if (!response.ok) throw new Error(response.error);
+      if (!("trailer" in response)) throw new Error("No answer came back.");
+      if (!response.trailer) {
+        say("No trailer on TMDB", 3000);
+        return;
+      }
+      void chrome.tabs.create({ url: response.trailer.url });
+      say("Trailer", 1);
+    } catch (err) {
+      btn.title = err instanceof Error ? err.message : "Could not look for a trailer.";
+      say("Couldn't load it", 3000);
+    }
+  });
+  return btn;
 }
 
 function showPick(item: SavedItem): void {
@@ -3445,7 +3601,11 @@ function ratingsEl<K extends keyof HTMLElementTagNameMap>(tag: K, className?: st
   return node;
 }
 
+/** The "Marked up to S2 E5 · Undo" message goes back to the colour key after a few seconds. */
+let ratingsActionTimer: ReturnType<typeof setTimeout> | undefined;
+
 function closeRatings(): void {
+  clearTimeout(ratingsActionTimer);
   hideRatingsTip();
   ratingsFor = undefined;
   pickRatingsEl.hidden = true;
@@ -3525,9 +3685,13 @@ interface RatingsGrid {
   table: HTMLElement;
   /** Scrolls to a cell, flashes it and shows its tip, as if it had been tapped. */
   reveal(cell: GridCell): void;
+  /** Dims the episodes that are watched, from the per-season counts (index = column). */
+  repaint(progress: number[] | undefined): void;
+  /** Outlines one cell as the chosen one, or none. */
+  select(cell: GridCell | undefined): void;
 }
 
-function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
+function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement, onPick?: (cell: GridCell) => void): RatingsGrid {
   const table = ratingsEl("div", "er-grid");
   table.setAttribute("role", "grid");
   table.style.gridTemplateColumns = `auto repeat(${grid.seasons.length}, var(--er-cell-w))`;
@@ -3535,6 +3699,7 @@ function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
   for (const season of grid.seasons) table.append(ratingsEl("span", "er-colhead", `S${season}`));
 
   const cells = new Map<string, HTMLElement>();
+  const entries: Array<{ el: HTMLElement; cell: GridCell; column: number }> = [];
   grid.cells.forEach((row, r) => {
     table.append(ratingsEl("span", "er-rowhead", `E${r + 1}`));
     row.forEach((cell) => {
@@ -3554,8 +3719,12 @@ function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
       });
       btn.addEventListener("focus", () => showRatingsTip(cell, btn));
       btn.addEventListener("blur", hideRatingsTip);
-      btn.addEventListener("click", () => showRatingsTip(cell, btn));
+      btn.addEventListener("click", () => {
+        showRatingsTip(cell, btn);
+        onPick?.(cell);
+      });
       cells.set(`${cell.season}.${cell.episode}`, btn);
+      entries.push({ el: btn, cell, column: grid.seasons.indexOf(cell.season) });
       table.append(btn);
     });
   });
@@ -3584,7 +3753,17 @@ function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
       el.classList.add("is-flash");
     }, smooth ? 450 : 0);
   };
-  return { table, reveal };
+  const repaint = (progress: number[] | undefined) => {
+    for (const { el, cell, column } of entries) {
+      const watched = isWatched(progress, column, cell.episode);
+      el.classList.toggle("is-watched", watched);
+      el.setAttribute("aria-label", watched ? `${describeCell(cell)} · watched` : describeCell(cell));
+    }
+  };
+  const select = (chosen: GridCell | undefined) => {
+    for (const { el, cell } of entries) el.classList.toggle("is-selected", cell === chosen);
+  };
+  return { table, reveal, repaint, select };
 }
 
 function ratingsStat(label: string, rating: number | undefined, sub: string, onClick?: () => void): HTMLElement {
@@ -3600,24 +3779,113 @@ function ratingsStat(label: string, rating: number | undefined, sub: string, onC
   return tile;
 }
 
-function renderRatings(ratings: EpisodeRatings): void {
+function renderRatings(ratings: EpisodeRatings, itemId: string): void {
   const grid = buildGrid(ratings);
   if (!hasAnyRating(grid)) {
     ratingsMessage("TMDB has no episode ratings for this show yet.");
     return;
   }
 
+  // Marking episodes watched needs the show's season counts; without them the grid is read-only.
+  const currentItem = () => allItems.find((i) => i.id === itemId);
+  const totals = currentItem() ? seasonTotals(currentItem() as SavedItem) : undefined;
+  const progress = () => {
+    const item = currentItem();
+    return item && totals ? watchedProgress(item, totals) : undefined;
+  };
+
+  const strip = ratingsEl("div", "er-strip");
+  const legend = ratingsLegend();
+  const action = ratingsEl("div", "er-action");
+  action.hidden = true;
+  strip.append(legend, action);
+
+  let selected: GridCell | undefined;
+  let gridEl: RatingsGrid;
+  const showLegend = () => {
+    clearTimeout(ratingsActionTimer);
+    selected = undefined;
+    gridEl.select(undefined);
+    action.hidden = true;
+    legend.hidden = false;
+  };
+  const showAction = (cell: GridCell) => {
+    clearTimeout(ratingsActionTimer);
+    const column = grid.seasons.indexOf(cell.season);
+    const item = currentItem();
+    const step = item ? upToStep(item, column, cell.episode) : undefined;
+    if (!step) {
+      showLegend();
+      return;
+    }
+    legend.hidden = true;
+    action.hidden = false;
+    const label = ratingsEl("span", "er-action-label", episodeCode(cell));
+    const button = ratingsEl("button", "btn btn-outline btn-sm er-action-btn", step.unwatched ? "Not watched from here" : "Watched up to here");
+    button.type = "button";
+    button.addEventListener("click", () => void applyUpTo(cell));
+    action.replaceChildren(label, button);
+  };
+  const applyUpTo = async (cell: GridCell) => {
+    const item = currentItem();
+    if (!item) return;
+    const step = upToStep(item, grid.seasons.indexOf(cell.season), cell.episode);
+    if (!step) return;
+    const before = { progressCurrent: item.progressCurrent ?? null, seasonProgress: item.seasonProgress ?? null, status: statusOf(item) };
+    const error = await updateItemFields(item.id, step.changes);
+    clearTimeout(ratingsActionTimer);
+    if (error) {
+      action.replaceChildren(ratingsEl("span", "er-action-label is-error", error));
+      return;
+    }
+    gridEl.repaint(progress());
+    gridEl.select(undefined);
+    selected = undefined;
+    const done = ratingsEl("span", "er-action-label", `${step.unwatched ? "Unmarked from" : "Marked up to"} ${episodeCode(cell)}`);
+    const undo = ratingsEl("button", "btn btn-outline btn-sm er-action-btn", "Undo");
+    undo.type = "button";
+    undo.addEventListener("click", async () => {
+      undo.disabled = true;
+      const undoError = await updateItemFields(item.id, before);
+      if (undoError) {
+        action.replaceChildren(ratingsEl("span", "er-action-label is-error", undoError));
+        return;
+      }
+      gridEl.repaint(progress());
+      showLegend();
+    });
+    action.replaceChildren(done, undo);
+    ratingsActionTimer = setTimeout(showLegend, 6000);
+    if (step.finishes) maybeAskRating(item.id);
+  };
+
   const scroll = ratingsEl("div", "er-scroll");
-  const { table, reveal } = ratingsGridEl(grid, scroll);
-  scroll.append(table);
+  gridEl = ratingsGridEl(
+    grid,
+    scroll,
+    totals
+      ? (cell) => {
+          // Tapping the chosen episode again lets go of it.
+          if (selected === cell) {
+            showLegend();
+            return;
+          }
+          selected = cell;
+          gridEl.select(cell);
+          showAction(cell);
+        }
+      : undefined
+  );
+  scroll.append(gridEl.table);
+  gridEl.repaint(progress());
 
   const stats = ratingsEl("div", "er-stats");
   stats.append(
     ratingsStat("Average", grid.average, grid.rated === grid.total ? `${grid.total} episodes` : `${grid.rated} of ${grid.total} rated`),
-    ratingsStat("Best", grid.best?.rating, grid.best ? episodeCode(grid.best) : "", grid.best ? () => reveal(grid.best as GridCell) : undefined),
-    ratingsStat("Lowest", grid.lowest?.rating, grid.lowest ? episodeCode(grid.lowest) : "", grid.lowest ? () => reveal(grid.lowest as GridCell) : undefined)
+    ratingsStat("Best", grid.best?.rating, grid.best ? episodeCode(grid.best) : "", grid.best ? () => gridEl.reveal(grid.best as GridCell) : undefined),
+    ratingsStat("Lowest", grid.lowest?.rating, grid.lowest ? episodeCode(grid.lowest) : "", grid.lowest ? () => gridEl.reveal(grid.lowest as GridCell) : undefined)
   );
-  erBodyEl.replaceChildren(stats, ratingsLegend(), scroll);
+  erBodyEl.replaceChildren(stats, strip, scroll);
 }
 
 async function openRatings(item: SavedItem, force = false): Promise<void> {
@@ -3633,7 +3901,7 @@ async function openRatings(item: SavedItem, force = false): Promise<void> {
     if (ratingsFor !== item.id) return;
     if (!response.ok) throw new Error(response.error);
     if (!("episodeRatings" in response)) throw new Error("No ratings came back.");
-    renderRatings(response.episodeRatings);
+    renderRatings(response.episodeRatings, item.id);
   } catch (err) {
     if (ratingsFor !== item.id) return;
     ratingsMessage(err instanceof Error ? err.message : "Could not load episode ratings.", () => void openRatings(item, true));
@@ -3648,10 +3916,15 @@ pickGraphEl.addEventListener("click", () => {
   const item = allItems.find((i) => i.id === pickedId);
   if (item) void openRatings(item);
 });
-erBackEl.addEventListener("click", () => {
+/** Back from the grid to the card, redrawn so its progress and next-episode pill match what was marked. */
+function leaveRatings(): void {
   closeRatings();
+  const fresh = allItems.find((i) => i.id === pickedId);
+  if (fresh && !pickDialogEl.hidden) showDetails(fresh, "info");
   pickGraphEl.focus();
-});
+}
+
+erBackEl.addEventListener("click", leaveRatings);
 pickMoreEl.addEventListener("click", () => {
   const expanded = pickPanelEl.classList.toggle("is-expanded");
   pickPanelEl.classList.toggle("is-clamped", !expanded);
@@ -3798,7 +4071,7 @@ const backupIncludeSettingsEl = document.getElementById("backup-include-settings
 
 /** Reads the settings that go into a backup. Everything is checked on the way out. */
 async function gatherSettings(): Promise<SettingsBackup | undefined> {
-  const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, BOOK_INFO_KEY]);
+  const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, NEW_SEASONS_KEY, BOOK_INFO_KEY]);
   const keep = await sendToBackground({ action: "getKeepSettings" });
   const prefs: Record<string, string | null> = {};
   for (const key of Object.keys(PREF_CHOICES)) prefs[key] = localStorage.getItem(key);
@@ -3808,6 +4081,7 @@ async function gatherSettings(): Promise<SettingsBackup | undefined> {
       keep: keep.ok && "settings" in keep ? keep.settings : undefined,
       watchSites: stored[WATCH_SITES_KEY],
       remindersEnabled: stored[REMINDERS_KEY],
+      newSeasonReminders: stored[NEW_SEASONS_KEY],
       bookInfoEnabled: stored[BOOK_INFO_KEY],
       prefs,
     },
@@ -3831,6 +4105,7 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
   if (settings.keep) await ask({ action: "setKeepSettings", settings: settings.keep });
   if (settings.watchSites) await chrome.storage.local.set({ [WATCH_SITES_KEY]: settings.watchSites });
   if (settings.remindersEnabled !== undefined) await ask({ action: "setRemindersEnabled", enabled: settings.remindersEnabled });
+  if (settings.newSeasonReminders !== undefined) await ask({ action: "setNewSeasonReminders", enabled: settings.newSeasonReminders });
   if (settings.bookInfoEnabled !== undefined) await ask({ action: "setBookInfoEnabled", enabled: settings.bookInfoEnabled });
   for (const [key, value] of Object.entries(settings.prefs ?? {})) {
     try {
@@ -3859,6 +4134,78 @@ async function exportBackup(): Promise<void> {
       `Exported ${response.items.length} item${response.items.length === 1 ? "" : "s"}` +
         (settings ? " and your settings." : ".")
     );
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
+  }
+}
+
+/** Saves text as a file through the browser's download, the way the backup does. */
+function downloadText(fileName: string, text: string, mime: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+async function readShelf(): Promise<SavedItem[]> {
+  const response = await sendToBackground({ action: "getAll" });
+  if (!response.ok || !("items" in response)) throw new Error("Could not read your shelf.");
+  return response.items;
+}
+
+/** Letterboxd takes films only, as a watched file and a watchlist file. Series and anime series can't go. */
+async function exportForLetterboxd(): Promise<void> {
+  try {
+    const out = buildLetterboxdExport(await readShelf());
+    if (out.watched.count + out.watchlist.count === 0) {
+      showBackupStatus(
+        out.skippedSeries > 0
+          ? `Nothing to export: Letterboxd has no TV, and the ${plural(out.skippedSeries, "series title")} on your shelf can't go.`
+          : "Nothing to export: no films on your shelf yet.",
+        true
+      );
+      return;
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    const files: Array<[string, string]> = [];
+    if (out.watched.count > 0) files.push([`keepshelf-letterboxd-watched-${day}.csv`, out.watched.csv]);
+    if (out.watchlist.count > 0) files.push([`keepshelf-letterboxd-watchlist-${day}.csv`, out.watchlist.csv]);
+    // One after the other, so the browser doesn't take the second for a repeated download and block it.
+    files.forEach(([name, csv], i) => setTimeout(() => downloadText(name, csv, "text/csv;charset=utf-8"), i * 400));
+    const parts = [`${plural(out.watched.count, "watched film")}`, `${out.watchlist.count} to watch`];
+    const skipped = [
+      out.skippedSeries ? `${plural(out.skippedSeries, "series title")} (Letterboxd has no TV)` : "",
+      out.skippedDropped ? `${out.skippedDropped} dropped` : "",
+    ].filter(Boolean);
+    showBackupStatus(`Letterboxd: ${parts.join(" and ")}.${skipped.length ? ` Left out: ${skipped.join(", ")}.` : ""}`, false, 12000);
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
+  }
+}
+
+/** Trakt takes films, series and anime in one file, for the titles that have an IMDb id saved. */
+async function exportForTrakt(): Promise<void> {
+  try {
+    const out = buildTraktExport(await readShelf());
+    if (out.watched + out.watchlist === 0) {
+      showBackupStatus(
+        out.skippedNoId > 0
+          ? `Nothing to export: ${plural(out.skippedNoId, "title")} have no IMDb id saved. Fetch info for your shelf in Settings > TMDB first.`
+          : "Nothing to export: no films or series on your shelf yet.",
+        true
+      );
+      return;
+    }
+    downloadText(`keepshelf-trakt-${new Date().toISOString().slice(0, 10)}.csv`, out.csv, "text/csv;charset=utf-8");
+    const skipped = [
+      out.skippedNoId ? `${plural(out.skippedNoId, "title")} with no IMDb id (fetch TMDB info first)` : "",
+      out.skippedDropped ? `${out.skippedDropped} dropped` : "",
+    ].filter(Boolean);
+    showBackupStatus(`Trakt: ${out.watched} watched and ${out.watchlist} to watch.${skipped.length ? ` Left out: ${skipped.join(", ")}.` : ""}`, false, 12000);
   } catch (err) {
     showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
   }
@@ -4029,6 +4376,8 @@ pasteStatusEl.addEventListener("change", renderPasteSummary);
 pasteAddEl.addEventListener("click", () => void addPastedList());
 
 document.getElementById("export-backup")!.addEventListener("click", () => void exportBackup());
+document.getElementById("export-letterboxd")!.addEventListener("click", () => void exportForLetterboxd());
+document.getElementById("export-trakt")!.addEventListener("click", () => void exportForTrakt());
 
 document.getElementById("import-file-btn")!.addEventListener("click", () => {
   if (isTabView) {
@@ -4050,6 +4399,8 @@ importFileEl.addEventListener("change", () => {
 
 searchEl.addEventListener("input", () => {
   searchQuery = searchEl.value;
+  // Typing means you want to search your shelf again, not keep reading recommendations.
+  if (online?.kind === "like") online = undefined;
   render();
   scheduleAutoSearch();
 });
@@ -4105,6 +4456,7 @@ shelfTabsEl.addEventListener("click", (e) => {
   activeFilter = "all";
   tagFilter = "";
   listFilter = "";
+  if (online?.kind === "like") online = undefined;
   shelfTabsEl.querySelectorAll(".shelf-tab").forEach((t) => {
     t.classList.toggle("active", t === btn);
   });
@@ -4232,8 +4584,7 @@ document.addEventListener("keydown", (event) => {
   else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden && pickPanelEl.classList.contains("is-ratings")) {
     // Escape steps back from the grid to the card first, and closes the card the next time.
-    closeRatings();
-    pickGraphEl.focus();
+    leaveRatings();
   } else if (!pickDialogEl.hidden) closePick();
   else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();

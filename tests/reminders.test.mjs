@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  daysUntil, describeReminders, dueReminders, needsDateRefresh, pruneNotified, reminderKey, selectForRefresh, upcoming,
+  daysUntil, describeReminders, dueReminders, isNewSeason, needsDateRefresh, needsSeasonRecord, pruneNotified, reminderKey, selectForRefresh, upcoming,
 } from "../dist-test/reminders.js";
 
 // A fixed "now": 10 Nov 2026, 15:30 local time.
@@ -157,4 +157,98 @@ test("a movie that is already out is looked at again until its streaming date ha
   assert.equal(needsDateRefresh(fresh, NOW, true), true, "unless the user asked to check now");
   const watched = out(-20); watched.status = "done"; watched.done = true;
   assert.equal(needsDateRefresh(watched, NOW), false, "finished titles are left alone");
+});
+
+// A finished series whose next episode is season 2 episode 5 (see show()), having been finished after season N.
+const finished = (id, offset, seasonsAtFinish, extra = {}) => show(id, offset, { status: "done", ...(seasonsAtFinish === undefined ? {} : { seasonsAtFinish }), ...extra });
+
+test("isNewSeason: a finished series with a season it didn't have when it was finished", () => {
+  assert.equal(isNewSeason(finished("a", 1, 1)), true, "finished after 1 season, season 2 is coming");
+  assert.equal(isNewSeason(finished("a", 1, 2)), false, "the tail of a season it had already finished");
+  assert.equal(isNewSeason(finished("a", 1, 3)), false);
+  assert.equal(isNewSeason(finished("a", 1)), false, "no record of how many seasons it had: nothing to compare with");
+  assert.equal(isNewSeason(show("a", 1, { seasonsAtFinish: 1 })), false, "not finished");
+  assert.equal(isNewSeason(show("a", 1, { status: "dropped", seasonsAtFinish: 1 })), false);
+  assert.equal(isNewSeason(film("f", 1, { status: "done", seasonsAtFinish: 1 })), false, "films have no seasons");
+  const noNext = finished("a", 1, 1);
+  noNext.tmdb.nextEpisode = undefined;
+  assert.equal(isNewSeason(noNext), false, "nothing announced yet");
+  assert.equal(isNewSeason({ ...finished("a", 1, 1), tmdb: undefined }), false);
+});
+
+test("dueReminders announces a new season of a finished series only when asked to", () => {
+  const items = [finished("back", 1, 1), finished("same", 1, 2), finished("unknown", 1), show("airing", 1)];
+  assert.deepEqual(dueReminders(items, NOW, {}).map((d) => d.item.id), ["airing"], "off by default: as before");
+  const on = dueReminders(items, NOW, {}, undefined, { newSeasons: true });
+  assert.deepEqual(on.map((d) => d.item.id).sort(), ["airing", "back"]);
+  assert.equal(on.find((d) => d.item.id === "back").newSeason, true);
+  assert.equal(on.find((d) => d.item.id === "airing").newSeason, undefined);
+});
+
+test("a new season is announced once, and its date works like any other", () => {
+  const back = finished("back", 0, 1);
+  const first = dueReminders([back], NOW, {}, undefined, { newSeasons: true });
+  assert.equal(first.length, 1);
+  assert.equal(first[0].days, 0);
+  assert.deepEqual(dueReminders([back], NOW, { [first[0].key]: first[0].date }, undefined, { newSeasons: true }), []);
+  assert.deepEqual(dueReminders([finished("far", 30, 1)], NOW, {}, undefined, { newSeasons: true }), [], "not yet within the window");
+  assert.deepEqual(dueReminders([finished("past", -1, 1)], NOW, {}, undefined, { newSeasons: true }), []);
+});
+
+test("dropped titles never remind, even with new seasons on", () => {
+  const dropped = show("d", 1, { status: "dropped", seasonsAtFinish: 1 });
+  assert.deepEqual(dueReminders([dropped], NOW, {}, undefined, { newSeasons: true }), []);
+});
+
+test("describeReminders says it is a new season", () => {
+  const due = dueReminders([finished("Severance", 1, 1)], NOW, {}, undefined, { newSeasons: true });
+  assert.equal(describeReminders(due).message, "Severance: new season, S2 E5 tomorrow");
+  const mixed = describeReminders(dueReminders([finished("Severance", 1, 1), film("Dune", 0)], NOW, {}, undefined, { newSeasons: true }));
+  assert.equal(mixed.message, "Dune: out today\nSeverance: new season, S2 E5 tomorrow");
+});
+
+test("finished series are looked up for dates only when new seasons are on, and only while they may return", () => {
+  const old = NOW - 8 * DAY;
+  const stale = (item) => ({ ...item, tmdb: { ...item.tmdb, fetchedAt: old } });
+  const gone = stale(finished("g", 5, 1));
+  gone.tmdb.nextEpisode = undefined;
+  assert.equal(needsDateRefresh(gone, NOW), false, "off: finished shows are left alone");
+  assert.equal(needsDateRefresh(gone, NOW, false, { newSeasons: true }), true, "between seasons, look again");
+  const ended = stale(finished("e", 5, 1));
+  ended.tmdb.nextEpisode = undefined;
+  ended.tmdb.status = "Ended";
+  assert.equal(needsDateRefresh(ended, NOW, false, { newSeasons: true }), false, "an ended show won't have a new season");
+  const cancelled = { ...ended, tmdb: { ...ended.tmdb, status: "Canceled" } };
+  assert.equal(needsDateRefresh(cancelled, NOW, false, { newSeasons: true }), false);
+  assert.equal(needsDateRefresh(stale(finished("future", 5, 1)), NOW, false, { newSeasons: true }), false, "a date still ahead needs no look");
+  assert.equal(needsDateRefresh(stale(show("d", -2, { status: "dropped" })), NOW, false, { newSeasons: true }), false, "dropped stays out");
+  const recent = finished("r", 5, 1);
+  recent.tmdb.nextEpisode = undefined;
+  assert.equal(needsDateRefresh(recent, NOW, false, { newSeasons: true }), false, "looked up this week already");
+  assert.equal(needsDateRefresh(recent, NOW, true, { newSeasons: true }), true, "unless asked to check now");
+  assert.equal(needsDateRefresh(stale(finished("m", 5, 1, { tmdb: undefined })), NOW, false, { newSeasons: true }), false);
+});
+
+test("selectForRefresh looks at what is airing before finished series when the cap is tight", () => {
+  const old = NOW - 9 * DAY;
+  const missingDate = (item) => {
+    const copy = { ...item, tmdb: { ...item.tmdb, fetchedAt: old, nextEpisode: undefined } };
+    return copy;
+  };
+  const items = [
+    ...Array.from({ length: 5 }, (_, n) => missingDate(finished(`done${n}`, 5, 1))),
+    missingDate(show("airing", 5)),
+  ];
+  assert.deepEqual(selectForRefresh(items, NOW, 3, false, { newSeasons: true }).map((i) => i.id), ["airing", "done0", "done1"]);
+  assert.deepEqual(selectForRefresh(items, NOW, 10, false).map((i) => i.id), ["airing"], "finished ones only when asked");
+});
+
+test("needsSeasonRecord: a finished series with TMDB info but no record of its seasons", () => {
+  const tv = (extra) => ({ ...show("a", 1, { status: "done", ...extra }), tmdb: { ...show("a", 1).tmdb, seasons: 3 } });
+  assert.equal(needsSeasonRecord(tv({})), true);
+  assert.equal(needsSeasonRecord(tv({ seasonsAtFinish: 2 })), false, "already recorded");
+  assert.equal(needsSeasonRecord({ ...tv({}), status: "in_progress" }), false);
+  assert.equal(needsSeasonRecord({ ...tv({}), tmdb: { ...tv({}).tmdb, seasons: undefined, nextEpisode: undefined } }), false, "nothing to record yet");
+  assert.equal(needsSeasonRecord({ ...tv({}), tmdb: { ...tv({}).tmdb, kind: "movie" } }), false);
+  assert.equal(needsSeasonRecord({ ...tv({}), tmdb: undefined }), false);
 });

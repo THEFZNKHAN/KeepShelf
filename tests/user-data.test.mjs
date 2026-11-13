@@ -127,3 +127,44 @@ test("season progress survives a backup round trip, and an old backup without it
   assert.equal(tampered[0].seasonProgress, undefined);
   assert.equal(tampered[0].progressCurrent, 50);
 });
+
+const tvItem = (extra = {}) => ({ status: "in_progress", progressCurrent: 3, tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1, seasons: 4 }, ...extra });
+
+test("finishing a series records how many seasons it had, so a later season can be told apart", () => {
+  assert.equal(buildUserPatch(tvItem(), { status: "done" }).seasonsAtFinish, 4);
+  assert.equal(buildUserPatch(tvItem(), { done: true }).seasonsAtFinish, 4, "marking it watched the old way counts too");
+});
+
+test("the season record is left alone while a show stays finished, and made again when it is finished again", () => {
+  const finishedBefore = tvItem({ status: "done", done: true, seasonsAtFinish: 2 });
+  assert.equal("seasonsAtFinish" in buildUserPatch(finishedBefore, { status: "done" }), false, "already finished: nothing to update");
+  assert.equal("seasonsAtFinish" in buildUserPatch(finishedBefore, { myRating: 8 }), false);
+  assert.equal(buildUserPatch(tvItem({ seasonsAtFinish: 2 }), { status: "done" }).seasonsAtFinish, 4, "finished again after more seasons: the record moves on");
+});
+
+test("finishing a series whose next season is already announced records the seasons before it", () => {
+  const announced = tvItem({ tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1, seasons: 5, nextEpisode: { airDate: "2027-01-01", season: 5, episode: 1 } } });
+  assert.equal(buildUserPatch(announced, { status: "done" }).seasonsAtFinish, 4, "season 5 is the new one, not one you finished");
+  const midSeason = tvItem({ tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1, seasons: 5, nextEpisode: { airDate: "2027-01-01", season: 5, episode: 4 } } });
+  assert.equal(buildUserPatch(midSeason, { status: "done" }).seasonsAtFinish, 5, "season 5 is already airing and counts as seen");
+});
+
+test("no season record for things that aren't series, aren't finished, or have no season count", () => {
+  assert.equal("seasonsAtFinish" in buildUserPatch(tvItem(), { status: "in_progress" }), false);
+  assert.equal("seasonsAtFinish" in buildUserPatch(tvItem({ tmdb: { id: 1, kind: "movie", genres: [], fetchedAt: 1 } }), { status: "done" }), false);
+  assert.equal("seasonsAtFinish" in buildUserPatch(tvItem({ tmdb: undefined }), { status: "done" }), false, "no TMDB info");
+  assert.equal("seasonsAtFinish" in buildUserPatch(tvItem({ tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1 } }), { status: "done" }), false, "no season count known");
+});
+
+test("an imported season record is kept only when it is a sensible whole number", () => {
+  assert.equal(sanitizeImportedUserData({ seasonsAtFinish: 3 }).seasonsAtFinish, 3);
+  for (const bad of [0, -1, 1.5, "3", 1000, null, NaN]) assert.equal("seasonsAtFinish" in sanitizeImportedUserData({ seasonsAtFinish: bad }), false, String(bad));
+});
+
+test("a backup keeps the season record, and a damaged one is dropped", () => {
+  const item = { id: "a", title: "Show", type: "series", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1, status: "done", seasonsAtFinish: 3 };
+  const restored = parseImportFile(buildBackup([item]), "backup.json").items[0];
+  assert.equal(restored.seasonsAtFinish, 3);
+  const bad = parseImportFile(JSON.stringify({ items: [{ ...item, seasonsAtFinish: "lots" }] }), "backup.json").items[0];
+  assert.equal("seasonsAtFinish" in bad, false);
+});

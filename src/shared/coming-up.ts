@@ -1,4 +1,4 @@
-import { RECENT_RELEASE_DAYS, daysUntil, upcoming } from "./reminders.js";
+import { RECENT_RELEASE_DAYS, daysUntil, isNewSeason, upcoming, type ReminderOptions } from "./reminders.js";
 import type { SavedItem } from "./types.js";
 import { statusOf } from "./user-data.js";
 
@@ -28,6 +28,8 @@ export interface ComingUpEntry {
   label: string;
   /** The country the streaming date is for. */
   region?: string;
+  /** A new season of a series you had already finished. */
+  newSeason?: boolean;
 }
 
 export interface ComingUpGroup {
@@ -76,12 +78,20 @@ export function streamingNote(item: SavedItem, now: number, regions: string[]): 
  * What is airing or releasing in the next `windowDays` for titles you haven't finished, soonest first. A movie
  * can appear twice: when it is released, and when it reaches streaming.
  */
-export function comingUp(items: SavedItem[], now: number, windowDays = COMING_UP_DAYS, regions: string[] = ["US"]): ComingUpEntry[] {
+export function comingUp(
+  items: SavedItem[],
+  now: number,
+  windowDays = COMING_UP_DAYS,
+  regions: string[] = ["US"],
+  options: ReminderOptions = {}
+): ComingUpEntry[] {
   const entries: ComingUpEntry[] = [];
   const inWindow = (days: number | undefined): days is number => days !== undefined && days >= 0 && days <= windowDays;
   for (const item of items) {
     const status = statusOf(item);
-    if (status === "done" || status === "dropped") continue;
+    // Finished and dropped titles are left out, except a new season of a finished series when that is switched on.
+    const newSeason = options.newSeasons === true && isNewSeason(item);
+    if ((status === "done" || status === "dropped") && !newSeason) continue;
     const next = upcoming(item);
     const digital = digitalDate(item, regions);
     const sameDay = Boolean(next && digital && next.date === digital.date);
@@ -90,7 +100,14 @@ export function comingUp(items: SavedItem[], now: number, windowDays = COMING_UP
       const days = daysUntil(next.date, now);
       // A film released straight to streaming has one date, and it is a streaming date.
       if (inWindow(days)) {
-        entries.push({ item, date: next.date, days, label: sameDay ? "streaming" : next.label, ...(sameDay && digital ? { region: digital.region } : {}) });
+        entries.push({
+          item,
+          date: next.date,
+          days,
+          label: sameDay ? "streaming" : next.label,
+          ...(sameDay && digital ? { region: digital.region } : {}),
+          ...(newSeason ? { newSeason: true } : {}),
+        });
       }
     }
     if (digital && !sameDay) {

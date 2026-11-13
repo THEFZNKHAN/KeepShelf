@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   AUTO_SEARCH_DELAY_MS, DEFAULT_SEARCH_MODE, MAX_RESULTS, SEARCH_MODES, findOnShelf, guessType, newItemFromResult, onlineSearchState,
-  parseSearchResults, sanitizeResult, tmdbPageUrl,
+  franchiseBase, matchesFranchise, mergeFranchise, parseResultList, parseSearchResults, sanitizeResult, tmdbPageUrl,
 } from "../dist-test/tmdb-search.js";
 
 const movie = (id, extra = {}) => ({ id, media_type: "movie", title: `Movie ${id}`, release_date: "2018-05-04", overview: "A film.", poster_path: "/p.jpg", vote_average: 7.46, vote_count: 120, genre_ids: [28], original_language: "en", ...extra });
@@ -134,4 +134,87 @@ test("the setting has the three choices and defaults to the row", () => {
   assert.deepEqual([...SEARCH_MODES], ["row", "auto", "off"]);
   assert.equal(DEFAULT_SEARCH_MODE, "row");
   assert.ok(AUTO_SEARCH_DELAY_MS >= 500);
+});
+
+test("parseResultList reads a list that does not say what each entry is, using the kind it was fetched for", () => {
+  const raw = { results: [{ id: 7, title: "A film", release_date: "2001-02-03", genre_ids: [28] }, { id: 8, title: "Another" }] };
+  assert.deepEqual(parseResultList(raw, "movie").map((r) => [r.id, r.kind, r.type, r.title]), [[7, "movie", "movie", "A film"], [8, "movie", "movie", "Another"]]);
+  const shows = parseResultList({ results: [{ id: 9, name: "A show", first_air_date: "2019-05-06", genre_ids: [16], original_language: "ja" }] }, "tv");
+  assert.deepEqual(shows, [{ id: 9, kind: "tv", type: "anime", title: "A show", year: "2019" }]);
+});
+
+test("parseResultList without a default kind still needs each entry to say what it is", () => {
+  assert.deepEqual(parseResultList({ results: [{ id: 7, title: "No kind" }] }), []);
+  assert.deepEqual(parseSearchResults({ results: [{ id: 7, title: "No kind" }] }), []);
+});
+
+test("parseResultList lets an entry's own media_type win over the default, and still drops people", () => {
+  const out = parseResultList({ results: [{ id: 1, media_type: "tv", name: "Show" }, { id: 2, media_type: "person", name: "Someone" }, { id: 3, title: "Plain" }] }, "movie");
+  assert.deepEqual(out.map((r) => `${r.kind}:${r.id}`), ["tv:1", "movie:3"]);
+});
+
+test("franchiseBase finds the name a whole franchise shares", () => {
+  assert.equal(franchiseBase("Drishyam"), "drishyam");
+  assert.equal(franchiseBase("Drishyam 2"), "drishyam");
+  assert.equal(franchiseBase("Drishyam (2015)"), "drishyam");
+  assert.equal(franchiseBase("Drishyam 2 (2022)"), "drishyam");
+  assert.equal(franchiseBase("Mission: Impossible - Fallout"), "mission");
+  assert.equal(franchiseBase("Blade Runner 2049"), "blade runner");
+  assert.equal(franchiseBase("Toy Story 4"), "toy story");
+  assert.equal(franchiseBase("Rocky IV"), "rocky");
+  assert.equal(franchiseBase("Harry Potter and the Chamber of Secrets"), "harry potter and the chamber of secrets");
+  assert.equal(franchiseBase("Kung Fu Panda: The Paws of Destiny"), "kung fu panda");
+  assert.equal(franchiseBase("Dune - Part Two"), "dune");
+  assert.equal(franchiseBase("2012"), "2012", "a title that is only a number stays");
+  assert.equal(franchiseBase("Amélie"), "amelie");
+  assert.equal(franchiseBase(""), "");
+});
+
+test("matchesFranchise accepts sequels and remakes and refuses titles that merely start the same way", () => {
+  const yes = (base, title) => assert.equal(matchesFranchise(base, title), true, `${base} / ${title}`);
+  const no = (base, title) => assert.equal(matchesFranchise(base, title), false, `${base} / ${title}`);
+  yes("drishyam", "Drishyam");
+  yes("drishyam", "Drishyam 2");
+  yes("drishyam", "Drishyam 3");
+  yes("drishyam", "Drishyam II");
+  yes("drishyam", "Drishyam (2013)");
+  yes("dark", "Dark: Origins");
+  yes("dark", "Dark - The Beginning");
+  yes("dune", "Dune: Part Two");
+  yes("dune", "Dune Part 2");
+  yes("toy story", "Toy Story 4");
+  yes("the matrix", "Matrix");
+  no("matrix", "Matrix Reloaded", "a bare word after the name is too loose; the TMDB collection covers those");
+  yes("matrix", "The Matrix");
+  no("dark", "Dark Matter");
+  no("dark", "Dark Phoenix");
+  no("dark", "The Dark Knight");
+  no("drishyam", "Drishyam Kaun");
+  no("it", "It Follows", "too short to compare");
+  no("", "Anything");
+  no("dark", "Darkness");
+});
+
+const R = (id, kind, title, year) => ({ id, kind, type: kind === "movie" ? "movie" : "series", title, ...(year ? { year } : {}) });
+
+test("mergeFranchise puts the franchise first, oldest first, then the recommendations, with nothing twice", () => {
+  const out = mergeFranchise({
+    self: { id: 1, kind: "movie" },
+    collection: [R(3, "movie", "Part 3", "2025"), R(1, "movie", "Part 1", "2015"), R(2, "movie", "Part 2", "2022")],
+    named: [R(2, "movie", "Part 2", "2022"), R(9, "movie", "Part 1 (remake)", "2013")],
+    recommended: [R(2, "movie", "Part 2", "2022"), R(50, "movie", "Something else", "2019"), R(1, "movie", "Part 1", "2015"), R(51, "tv", "A show", "2020")],
+  });
+  assert.deepEqual(out.map((r) => r.title), ["Part 1 (remake)", "Part 2", "Part 3", "Something else", "A show"], "the title itself is left out and nothing repeats");
+  assert.deepEqual(out.map((r) => r.group), ["franchise", "franchise", "franchise", undefined, undefined]);
+});
+
+test("mergeFranchise keeps a movie and a show with the same id apart, sorts titles without a year last, and copes with nothing", () => {
+  const out = mergeFranchise({
+    self: { id: 5, kind: "tv" },
+    collection: [],
+    named: [R(5, "movie", "Same id, a film", "2000"), R(6, "tv", "No year"), R(7, "tv", "Has year", "1999")],
+    recommended: [],
+  });
+  assert.deepEqual(out.map((r) => r.title), ["Has year", "Same id, a film", "No year"], "1999, 2000, then no year");
+  assert.deepEqual(mergeFranchise({ self: { id: 1, kind: "movie" }, collection: [], named: [], recommended: [] }), []);
 });

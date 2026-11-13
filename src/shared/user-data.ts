@@ -1,4 +1,4 @@
-import { seasonTotals, sumProgress, validateSeasonProgress } from "./seasons.js";
+import { seasonTotals, seasonsFinished, sumProgress, validateSeasonProgress } from "./seasons.js";
 import type { ItemStatus, SavedItem, UserFields } from "./types.js";
 
 export const ITEM_STATUSES: ItemStatus[] = ["plan", "in_progress", "done", "dropped"];
@@ -59,7 +59,7 @@ export function statusOf(item: Pick<SavedItem, "status" | "done">): ItemStatus {
  * Keeps `done` and `doneAt` consistent with `status` so older code paths and backups still work.
  */
 export function buildUserPatch(
-  item: Pick<SavedItem, "status" | "done" | "doneAt" | "progressTotal" | "progressCurrent" | "tmdb">,
+  item: Pick<SavedItem, "status" | "done" | "doneAt" | "progressTotal" | "progressCurrent" | "tmdb" | "seasonsAtFinish">,
   changes: UserFields & { done?: boolean },
   now = Date.now()
 ): Partial<SavedItem> {
@@ -111,6 +111,11 @@ export function buildUserPatch(
     const isDone = status === "done";
     patch.done = isDone;
     patch.doneAt = isDone ? (item.done ? (item.doneAt ?? now) : now) : undefined;
+    // Remember how many seasons a series had when it was finished, so a later season can be told apart as new.
+    // It is made again each time the show becomes finished, so finishing it again after a newer season updates it;
+    // saving something that is already finished leaves it alone.
+    const finished = isDone && !item.done ? seasonsFinished(item.tmdb) : undefined;
+    if (finished !== undefined) patch.seasonsAtFinish = finished;
   }
   return patch;
 }
@@ -139,6 +144,9 @@ export function sanitizeImportedUserData(raw: Record<string, unknown>): Partial<
     } catch {
       /* ignore */
     }
+  }
+  if (typeof raw.seasonsAtFinish === "number" && Number.isInteger(raw.seasonsAtFinish) && raw.seasonsAtFinish >= 1 && raw.seasonsAtFinish <= 999) {
+    out.seasonsAtFinish = raw.seasonsAtFinish;
   }
   if (Array.isArray(raw.seasonProgress) && raw.seasonProgress.length > 0) {
     try {

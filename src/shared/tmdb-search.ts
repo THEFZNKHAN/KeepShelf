@@ -20,6 +20,8 @@ export interface TmdbSearchResult {
   posterPath?: string;
   /** TMDB community score, 0 to 10. */
   rating?: number;
+  /** "franchise": a sequel, remake or part of the same series as the title the list was made for. */
+  group?: "franchise";
 }
 
 /** How the search box can reach TMDB: a row you tap, the same plus automatic when nothing on the shelf matches, or never. */
@@ -80,15 +82,20 @@ interface RawResult {
   origin_country?: unknown;
 }
 
-/** Turns TMDB's /search/multi answer into the few fields the list needs. People and anything odd are dropped. */
-export function parseSearchResults(raw: unknown): TmdbSearchResult[] {
+/**
+ * Turns a TMDB list (search or recommendations) into the few fields the results view needs. Each entry says whether it
+ * is a movie or a show; a list that doesn't say, such as one fetched for a known title, passes `defaultKind`.
+ * People and anything odd are dropped.
+ */
+export function parseResultList(raw: unknown, defaultKind?: TmdbKind): TmdbSearchResult[] {
   const list = (raw as { results?: unknown } | null)?.results;
   if (!Array.isArray(list)) return [];
   const out: TmdbSearchResult[] = [];
   const seen = new Set<string>();
   for (const entry of list as RawResult[]) {
     if (!entry || typeof entry !== "object") continue;
-    const kind: TmdbKind | undefined = entry.media_type === "movie" ? "movie" : entry.media_type === "tv" ? "tv" : undefined;
+    const kind: TmdbKind | undefined =
+      entry.media_type === "movie" ? "movie" : entry.media_type === "tv" ? "tv" : entry.media_type === undefined ? defaultKind : undefined;
     if (!kind || typeof entry.id !== "number" || !Number.isInteger(entry.id) || entry.id <= 0) continue;
     const key = `${kind}:${entry.id}`;
     const title = text(kind === "movie" ? entry.title : entry.name, 200);
@@ -107,6 +114,70 @@ export function parseSearchResults(raw: unknown): TmdbSearchResult[] {
     if (out.length >= MAX_RESULTS) break;
   }
   return out;
+}
+
+/** TMDB's /search/multi answer: movies and shows, in TMDB's order. */
+export const parseSearchResults = (raw: unknown): TmdbSearchResult[] => parseResultList(raw);
+
+const clean = (title: string): string =>
+  title
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const withoutArticle = (title: string): string => title.replace(/^(the|a|an) /, "");
+
+/**
+ * The name a whole franchise shares: "Drishyam 2" and "Drishyam (2015)" are "drishyam", "Mission: Impossible - Fallout"
+ * is "mission". Subtitles after a colon or dash and a trailing number, roman numeral or "part 2" are dropped.
+ */
+export function franchiseBase(title: string): string {
+  let t = clean(title).split(/\s*[:\u2013\u2014]\s*|\s+-\s+/)[0];
+  t = t.replace(/\s+(?:(?:part|chapter|season|vol|volume)\.?\s*)?(?:\d+|[ivx]{1,4})$/, "");
+  return t.trim();
+}
+
+/**
+ * Whether a title belongs with a franchise name: the same name (a remake in another language), or the name followed by
+ * a number, roman numeral, "part", or a subtitle. "Dark Matter" is not part of "Dark".
+ */
+export function matchesFranchise(base: string, title: string): boolean {
+  const b = withoutArticle(clean(base));
+  if (b.length < 3) return false;
+  const t = withoutArticle(clean(title));
+  if (t === b) return true;
+  if (!t.startsWith(b)) return false;
+  return /^(?::|\s+-\s+|\s+(?:part|chapter|season|vol|volume)\b|\s+\d+\b|\s+[ivx]{1,4}\b)/.test(t.slice(b.length));
+}
+
+/**
+ * The list for "More like this": the title's own franchise first (sequels, remakes, parts of its collection), oldest
+ * first, then what TMDB recommends. A title is never listed twice, or recommended to itself.
+ */
+export function mergeFranchise(parts: {
+  self: Pick<TmdbSearchResult, "id" | "kind">;
+  collection: TmdbSearchResult[];
+  named: TmdbSearchResult[];
+  recommended: TmdbSearchResult[];
+}): TmdbSearchResult[] {
+  const key = (r: Pick<TmdbSearchResult, "id" | "kind">) => `${r.kind}:${r.id}`;
+  const seen = new Set<string>([key(parts.self)]);
+  const franchise: TmdbSearchResult[] = [];
+  for (const r of [...parts.collection, ...parts.named]) {
+    if (seen.has(key(r))) continue;
+    seen.add(key(r));
+    franchise.push({ ...r, group: "franchise" });
+  }
+  franchise.sort((a, b) => (a.year ?? "9999").localeCompare(b.year ?? "9999") || a.title.localeCompare(b.title));
+  const rest = parts.recommended.filter((r) => {
+    if (seen.has(key(r))) return false;
+    seen.add(key(r));
+    return true;
+  });
+  return [...franchise, ...rest];
 }
 
 /** Checks a result that came back from the popup before anything is saved from it. */

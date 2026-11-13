@@ -3851,3 +3851,108 @@ button.er-stat:hover {
   cursor: default;
   text-decoration: none;
 }
+
+/* ── Ratings grid: marking episodes watched ── */
+
+/* The colour key and the "watched up to here" row share one fixed-height slot, so choosing a cell never moves the grid. */
+.er-strip {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  height: 30px;
+}
+
+.er-strip .er-legend {
+  width: 100%;
+}
+
+.er-legend[hidden],
+.er-action[hidden] {
+  display: none;
+}
+
+.er-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.er-action-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--on-surface);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.er-action-label.is-error {
+  font-weight: 500;
+  color: var(--error);
+  white-space: normal;
+  line-height: 14px;
+}
+
+.er-action-btn {
+  flex-shrink: 0;
+}
+
+/* Watched episodes fade back with a tick, so what is left to watch stands out. */
+.er-cell {
+  position: relative;
+}
+
+.er-cell.is-watched {
+  opacity: 0.5;
+}
+
+.er-cell.is-watched::after {
+  content: "✓";
+  position: absolute;
+  top: 0;
+  right: 2px;
+  font-size: 7px;
+  line-height: 9px;
+  font-weight: 800;
+}
+
+.er-cell.is-selected {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* "More like this" on a card: an outlined chip you can press, next to the facts. */
+.pick-chip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px 1px 5px;
+  background: var(--surface);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.pick-chip-link:hover {
+  border-color: var(--outline);
+  background: var(--surface-container-high);
+}
+
+.pick-chip-link .material-symbols-outlined {
+  font-size: 13px;
+}
+
+/* Headings inside a "More like this" list: the title's own franchise, then recommendations. */
+.online-group {
+  padding: 10px 12px 4px;
+  border-bottom: 1px solid var(--row-border);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  list-style: none;
+}

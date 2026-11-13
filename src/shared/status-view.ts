@@ -28,6 +28,15 @@ export function matchesStatusFilter(status: ItemStatus, filter: StatusFilter): b
   return filter === "all" || KEPT[filter].includes(status);
 }
 
+/**
+ * The status filter to apply while the search box has words in it. Someone searching for a title wants it found
+ * whether it is to watch, in progress, watched or dropped, so the status filter (including the default "Not watched"
+ * view) stands aside while they search, and comes back when the box is cleared.
+ */
+export function statusFilterWhileSearching(filter: StatusFilter, searching: boolean): StatusFilter {
+  return searching ? "all" : filter;
+}
+
 export function defaultStatusFilter(view: DefaultView): StatusFilter {
   return view === "hide" ? "pending" : "all";
 }

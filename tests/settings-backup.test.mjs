@@ -109,3 +109,11 @@ test("settings in a file are checked again when read back", () => {
   const forged = JSON.stringify({ app: "KeepShelf", version: 1, items: [], settings: { tmdbToken: "bad", prefs: { "keepshelf.askRating": "off", "x": "y" } } });
   assert.deepEqual(settingsFromBackupJson(forged), { prefs: { "keepshelf.askRating": "off" } });
 });
+
+test("the new-season switch travels with a backup, and only as a real yes or no", () => {
+  const out = sanitizeSettings({ newSeasonReminders: false, remindersEnabled: true });
+  assert.equal(out.newSeasonReminders, false);
+  assert.equal(sanitizeSettings({ newSeasonReminders: "no" }), undefined);
+  assert.equal(collectSettings({ newSeasonReminders: true }, { includeToken: false }).newSeasonReminders, true);
+  assert.ok(describeSettings({ newSeasonReminders: true }).includes("your switches and preferences"));
+});

@@ -207,3 +207,18 @@ test("streamingStatuses follows the window and the user's country, and is A to Z
   const gone = streamingStatuses([withDigital("G", -30, { IN: -2 })], now, ["IN"])[0];
   assert.deepEqual([gone.state, gone.date, gone.region], ["since", iso(-2), "IN"]);
 });
+
+test("a new season of a finished series shows up only when asked to, and only if it really is a new season", () => {
+  const back = show("Back", 3, { status: "done", seasonsAtFinish: 1 });
+  const tail = show("Tail", 3, { status: "done", seasonsAtFinish: 2 });
+  const unknown = show("Unknown", 3, { status: "done" });
+  const dropped = show("Dropped", 3, { status: "dropped", seasonsAtFinish: 1 });
+  const airing = show("Airing", 5);
+  const items = [back, tail, unknown, dropped, airing];
+  assert.deepEqual(comingUp(items, now).map((e) => e.item.title), ["Airing"], "off by default: as before");
+  const on = comingUp(items, now, 14, ["US"], { newSeasons: true });
+  assert.deepEqual(on.map((e) => e.item.title), ["Back", "Airing"]);
+  assert.equal(on[0].newSeason, true);
+  assert.equal(on[0].label, "S2 E6");
+  assert.equal(on[1].newSeason, undefined);
+});

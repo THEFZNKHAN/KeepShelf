@@ -459,6 +459,16 @@
                 <span class="switch-track"></span>
               </label>
             </div>
+            <div class="pref-row is-compact">
+              <div class="pref-text">
+                <strong>New seasons of shows I've finished</strong>
+                <span>Announce them too, and list them on Coming up.</span>
+              </div>
+              <label class="switch" title="New seasons of shows I've finished">
+                <input type="checkbox" id="pref-new-seasons" aria-label="New seasons of shows I've finished" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
             <div id="tmdb-settings-status" class="settings-toast" hidden>
               <div class="settings-toast-content">
                 <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
@@ -606,6 +616,16 @@
                 Import file…
               </button>
               <input type="file" id="import-file" accept=".json,.csv,application/json,text/csv" hidden />
+            </div>
+            <div class="settings-button-row">
+              <button type="button" id="export-letterboxd" class="btn btn-outline" title="Films only, as a watched file and a watchlist file">
+                <span class="material-symbols-outlined btn-icon">movie</span>
+                For Letterboxd
+              </button>
+              <button type="button" id="export-trakt" class="btn btn-outline" title="Films, series and anime in one file">
+                <span class="material-symbols-outlined btn-icon">tv</span>
+                For Trakt
+              </button>
             </div>
             <details class="s-more" id="paste-list">
               <summary>Add titles from a pasted list</summary>

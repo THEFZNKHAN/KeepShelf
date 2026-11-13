@@ -195,18 +195,27 @@ The search box on the **Media** tab filters your shelf as you type. When what yo
   - **Off**: the row never appears and nothing is sent.
 - The Books and Tabs tabs don't search online.
 
+### Trailer
+
+Press **Trailer** on the card of any title that has TMDB info and its trailer opens on YouTube in a new tab. KeepShelf picks a trailer over a teaser over other clips, an official one over a fan upload, and the newest. It looks for English trailers first, then in the common film languages, so a Hindi or Korean film finds its own. If TMDB has no usable video the button says **No trailer on TMDB** for a moment. Nothing is embedded or stored: it asks TMDB when you press the button, and only a YouTube address that passed a check is ever opened. It needs your TMDB token.
+
+### More like this
+
+On the card of any title that has TMDB info, **More like this** shows what TMDB recommends for it, in the same list as a search. TMDB's recommendations come from what viewers watch, not from franchises, so the title's own sequels, remakes and the other films in its TMDB collection are listed first under **Same franchise** (oldest first), and the recommendations follow under **You might also like**. Sequels are found by name ("Drishyam 2", "Dune: Part Two", a remake with the same title) and by TMDB's collection data; a sequel with a completely different name and no collection on TMDB won't be in either list. Each result has a poster, rating and description, an **Add** button, or **On shelf** if you already have it. **My shelf** takes you back, and typing in the search box or changing tab closes it too. It works even if the TMDB search row is switched off, because you asked for it, and it needs your TMDB token. Nothing is saved with the title: the recommendations are fetched when you ask.
+
 ## Episode ratings
 
 On the card of a series or anime that has TMDB info, a **grid icon** sits at the top right. Tap it and the same card becomes a grid of episode ratings: **seasons across, episodes down**, each cell coloured by its rating (a strip under the headline numbers shows the colours from Garbage to Absolute cinema), with the average of each season pinned along the bottom. The top shows the **average**, the **best** and the **lowest** episode; tap Best or Lowest to jump to it in the grid. Use the back arrow, or **Esc**, to return to the card.
 
 - The ratings are **TMDB's own**, so they can differ from IMDb's. A very new episode may show **–** because nobody has rated it yet.
 - Only the grid scrolls, the card around it stays put. Season and episode labels stay in place while the cells move, so a 15-season show such as Supernatural stays readable. Hover over a cell (or tap it on a touch screen, or tab to it) and a small tip beside it shows the episode title, rating, votes and air date.
+- **Mark episodes watched from the grid.** Tap an episode and the strip above the grid offers **Watched up to here**: every earlier episode and season is marked watched, and the ones you've watched fade back with a tick, so what is left stands out. Tap an episode you've already watched and it offers **Not watched from here** instead. Each change has an **Undo** for a few seconds, marking the last episode finishes the show (and offers the rating box), and the card you go back to shows the new progress. It needs the show's season counts from TMDB (fetch info for your shelf); without them the grid is read-only.
 - It needs your [TMDB token](#tmdb-info) and a TMDB match for the title. Movies, books and titles with no match don't show the icon.
 - A show costs one request to TMDB (a few more for very long ones). The result is kept in memory for the browser session, for up to a day, then fetched again. It is never saved with your shelf or in a backup.
 
 ## Release reminders
 
-Turn on reminders and get a notification when a series you haven't finished has a new episode, or a movie on your shelf comes out, today or tomorrow. See [Release reminders](#release-reminders).
+Turn on reminders and get a notification when a series you haven't finished has a new episode, a series you've finished is coming back with a new season, or a movie on your shelf comes out, today or tomorrow. See [Release reminders](#release-reminders).
 
 ### Undo
 
@@ -238,7 +247,7 @@ Optionally append every save to your own Google Keep checklists. No Google Cloud
 
 ### Backup, import and export
 
-Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
+Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. You can also export for Letterboxd or Trakt. See [Backup and import](#backup-and-import).
 
 ### Clipboard export
 
@@ -271,6 +280,7 @@ For series, anime and books you can also record progress, such as episodes done 
 
 KeepShelf opens on **Not watched**: what is still to watch or in progress. Watched and dropped items stay out of the way, so the list is what you actually want to pick from. (On Books it is "Not read", on Tabs it is "To do".)
 
+- **Searching looks at everything.** While there is something in the search box, the status filter steps aside (the status box shows **All** and is greyed out), so a title is found whether it is to watch, in progress, watched or dropped. Clear the box and your status choice, or the default view, is back.
 - To see everything for a while, open the filter button next to the search box and pick **All** in the status list. The next time you open KeepShelf it is back to the default view.
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
 - In **Settings > Shelf & views**, **Start on** chooses between **My default view** and **Where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
@@ -368,7 +378,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 - **Next air dates** for series and **release dates** for movies, used by [release reminders](#release-reminders).
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
 - An **[episode ratings grid](#episode-ratings)** for series and anime, opened from the grid icon on the item's card.
-- **[Search TMDB](#search-tmdb-from-the-search-box)** from the shelf's search box, to find and add a title you haven't saved yet.
+- **[Search TMDB](#search-tmdb-from-the-search-box)** from the shelf's search box, **[More like this](#more-like-this)** and a **[Trailer](#trailer)** button on a card, to find and add titles you haven't saved yet.
 
 Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered by TMDB, which only has films and TV. Books have their own option, see [Book info](#book-info).
 
@@ -400,10 +410,12 @@ Get a desktop notification when something on your shelf is about to come out. It
 - A notification when a **series** you haven't finished has an episode airing **today or tomorrow**, naming the season and episode, such as `Severance: S2 E5 tomorrow`.
 - A notification when a **movie** on your shelf is released today or tomorrow, such as `Dune: out today`.
 - Several releases at once are grouped into one notification. Clicking it opens KeepShelf.
-- Items you have marked **Watched** or **Dropped** are never announced, and each release is announced **only once**. A new episode of the same show gets its own reminder.
+- **New seasons of shows you've finished** are announced too, as `Severance: new season, S3 E1 tomorrow`, and listed on **Coming up** with "New season" under the title. This is its own switch under Release reminders (**New seasons of shows I've finished**, on by default). It only counts a season the show didn't have when you finished it, so the last episodes of a season you already watched are not announced as new.
+- Other items you have marked **Watched**, and anything **Dropped**, are never announced, and each release is announced **only once**. A new episode of the same show gets its own reminder.
 
 **How it works**
-- KeepShelf checks a few times a day (every 6 hours, so a computer that was asleep still catches up). It reads the dates it already has and refreshes dates that may have moved: airing series whose next date has passed or is unknown, and movies not yet released. Each item is looked up at most about once a week, and a check makes at most 25 requests.
+- To tell a new season from an old one, KeepShelf remembers how many seasons a series had when you finished it. A season that is only announced doesn't count as one you finished: if its premiere is already scheduled when you mark the show finished (or when an older finished show is first checked), the seasons before that premiere are the ones you finished, so that season is announced when it comes. A season that is already airing counts as seen. Finish a show again later and the number is updated.
+- KeepShelf checks a few times a day (every 6 hours, so a computer that was asleep still catches up). It reads the dates it already has and refreshes dates that may have moved: airing series whose next date has passed or is unknown, and movies not yet released. Each item is looked up at most about once a week, and a check makes at most 25 requests, with what is airing now first and finished shows after it. Finished shows that have ended or been cancelled are never looked up.
 - If TMDB can't be reached, reminders still work from the dates already saved.
 - Only titles are sent to TMDB, as with the rest of TMDB info. Nothing else leaves your browser.
 
@@ -693,6 +705,15 @@ Your shelf lives only in this browser, so export a backup now and then.
 - Items already on your shelf are skipped, and imported items are not sent to Keep.
 - If a backup has settings, KeepShelf asks **"Restore your settings?"** and lists what is in it. **Restore settings** replaces the ones you have now; **Skip** imports only the items. Older backups have no settings and import as before.
 - Letterboxd and Goodreads imports mark watched and read items as finished.
+
+### Export for Letterboxd and Trakt
+
+Under **Backup & import**, **For Letterboxd** and **For Trakt** write your shelf as CSV files those services can import. Each shows exactly what went in and what was left out.
+
+- **For Letterboxd** (films only, [letterboxd.com/import](https://letterboxd.com/import/)) downloads two files: **watched** (films you have watched, with the date you finished them, your rating as 0.5 to 5 stars, your review and your tags) and **watchlist** (films still to watch or in progress). Letterboxd has no TV, so series and anime series are left out, and films you dropped are skipped. Films are matched by their TMDB and IMDb ids when KeepShelf has them, so [fetch info for your shelf](#tmdb-info) first for the best matching.
+- **For Trakt** downloads one file with films, series and anime: watched titles carry their watched date and your rating (1 to 10), and everything else goes on the watchlist. Only titles with an IMDb id saved are included, because a bare number can match the wrong title on Trakt; the rest are counted as left out (fetch info first). A series you are partway through goes on the watchlist, because a CSV can't say which episodes you have seen. Dropped titles are skipped.
+- Trakt's importer is not officially documented and has changed before, so try it with the file first and check the result on Trakt. Imports can be undone from your Trakt settings.
+- Nothing is sent anywhere: the files are written in your browser and saved through the normal download. Text you wrote (titles, reviews, tags) that starts with `=`, `+`, `-` or `@` gets a leading apostrophe so a spreadsheet never runs it as a formula.
 
 ### Add titles from a pasted list
 

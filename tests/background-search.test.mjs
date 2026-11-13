@@ -24,16 +24,41 @@ globalThis.chrome = new Proxy({}, {
 
 const calls = [];
 let status = 200;
+let withCollection = false;
+let extraSearch = [];
+let failPath = "";
+let videos = {};
 globalThis.fetch = async (url) => {
   const u = new URL(url);
   if (u.hostname !== "api.themoviedb.org") throw new Error("unexpected host " + u.hostname);
   calls.push({ path: u.pathname, params: Object.fromEntries(u.searchParams) });
-  if (status !== 200) return { ok: false, status, json: async () => ({}) };
+  if (status !== 200 || (failPath && u.pathname.includes(failPath))) return { ok: false, status: status !== 200 ? status : 500, json: async () => ({}) };
+  if (u.pathname === "/3/collection/77") {
+    return { ok: true, status: 200, json: async () => ({ parts: [
+      { id: 11, title: "Saga 3", release_date: "2025-01-01", vote_average: 7, vote_count: 10, original_language: "en" },
+      { id: 9, title: "Saga", release_date: "2015-01-01", poster_path: "/s1.jpg", vote_average: 8, vote_count: 10, original_language: "en" },
+      { id: 10, title: "Saga 2", release_date: "2022-01-01", poster_path: "/s2.jpg", vote_average: 7.5, vote_count: 10, original_language: "en" },
+    ] }) };
+  }
+  if (u.pathname === "/3/movie/9" && withCollection) {
+    return { ok: true, status: 200, json: async () => ({ id: 9, genres: [], belongs_to_collection: { id: 77, name: "Saga Collection" } }) };
+  }
   if (u.pathname === "/3/search/multi") {
-    return { ok: true, status: 200, json: async () => ({ results: [
+    return { ok: true, status: 200, json: async () => ({ results: [...extraSearch,
       { id: 70523, media_type: "tv", name: "Dark", first_air_date: "2017-12-01", poster_path: "/dark.jpg", vote_average: 8.4, vote_count: 9000, genre_ids: [18], original_language: "de" },
       { id: 9, media_type: "person", name: "Someone" },
       { id: 603, media_type: "movie", title: "The Matrix", release_date: "1999-03-30", vote_average: 8.2, vote_count: 20000, genre_ids: [28], original_language: "en" },
+    ] }) };
+  }
+  if (u.pathname.endsWith("/videos")) {
+    const lang = u.searchParams.get("include_video_language") ?? "";
+    return { ok: true, status: 200, json: async () => (videos[lang.startsWith("en,null,hi") ? "wide" : "en"] ?? { results: [] }) };
+  }
+  if (u.pathname.endsWith("/recommendations")) {
+    return { ok: true, status: 200, json: async () => ({ results: [
+      { id: 70523, name: "Dark", first_air_date: "2017-12-01", poster_path: "/dark.jpg", vote_average: 8.4, vote_count: 9000, genre_ids: [18], original_language: "de" },
+      { id: 71446, name: "Money Heist", first_air_date: "2017-05-02", poster_path: "/mh.jpg", vote_average: 8.3, vote_count: 18000, genre_ids: [80], original_language: "es" },
+      { id: 66732, name: "Stranger Things", first_air_date: "2016-07-15", vote_average: 8.6, vote_count: 17000, genre_ids: [18], original_language: "en" },
     ] }) };
   }
   const id = Number(u.pathname.split("/").pop());
@@ -45,7 +70,7 @@ const FAKE_KEY = "0123456789abcdef0123456789abcdef";
 const dark = { id: 70523, kind: "tv", type: "series", title: "Dark", year: "2017" };
 
 before(async () => { await import("../dist-test/background-main.js"); });
-const reset = () => { calls.length = 0; status = 200; store.trackbuddy_items = []; store.keepshelf_tmdb_token = FAKE_KEY; };
+const reset = () => { calls.length = 0; status = 200; withCollection = false; extraSearch = []; failPath = ""; videos = {}; store.trackbuddy_items = []; store.keepshelf_tmdb_token = FAKE_KEY; };
 
 test("searchTmdb returns movies and series from one request, and sends only the typed words", async () => {
   reset();
@@ -125,4 +150,141 @@ test("a TMDB failure while adding saves nothing", async () => {
   const res = await send({ action: "addFromTmdb", result: dark });
   assert.equal(res.ok, false);
   assert.equal(store.trackbuddy_items.length, 0);
+});
+
+const seed = () => {
+  store.trackbuddy_items = [
+    { id: "dark", title: "Dark", type: "series", year: "2017", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1, tmdb: { id: 70523, kind: "tv", genres: [], fetchedAt: Date.now() } },
+    { id: "film", title: "A Film", type: "movie", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1, tmdb: { id: 9, kind: "movie", genres: [], fetchedAt: Date.now() } },
+    { id: "plain", title: "No info", type: "series", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1 },
+  ];
+};
+
+test("similarTmdb returns recommendations, without the title itself", async () => {
+  reset();
+  seed();
+  const res = await send({ action: "similarTmdb", id: "dark" });
+  assert.equal(res.ok, true);
+  assert.ok(calls.some((c) => c.path === "/3/tv/70523/recommendations" && c.params.language === "en-US"));
+  assert.deepEqual(res.tmdbResults.map((r) => r.title), ["Money Heist", "Stranger Things"], "Dark is not recommended to itself");
+  assert.equal(res.tmdbResults[0].kind, "tv", "the list does not say, so it takes the kind of the title");
+  assert.equal(res.tmdbResults[0].posterPath, "/mh.jpg");
+  assert.ok(res.tmdbResults.every((r) => r.group === undefined), "no franchise found, so no franchise group");
+});
+
+test("similarTmdb asks the movie endpoint for a movie", async () => {
+  reset();
+  seed();
+  await send({ action: "similarTmdb", id: "film" });
+  assert.ok(calls.some((c) => c.path === "/3/movie/9/recommendations"));
+});
+
+test("similarTmdb puts the rest of a film's collection first, oldest first, marked as franchise", async () => {
+  reset();
+  seed();
+  withCollection = true;
+  const res = await send({ action: "similarTmdb", id: "film" });
+  assert.equal(res.ok, true);
+  assert.ok(calls.some((c) => c.path === "/3/collection/77"));
+  const franchise = res.tmdbResults.filter((r) => r.group === "franchise");
+  assert.deepEqual(franchise.map((r) => r.title), ["Saga 2", "Saga 3"], "the film itself (id 9) is left out, the rest oldest first");
+  assert.deepEqual(res.tmdbResults.slice(0, 2).map((r) => r.title), ["Saga 2", "Saga 3"], "franchise before recommendations");
+  assert.equal(res.tmdbResults[0].kind, "movie");
+  assert.equal(res.tmdbResults[0].posterPath, "/s2.jpg");
+});
+
+test("similarTmdb also finds remakes and sequels by name, and not titles that only start the same way", async () => {
+  reset();
+  seed();
+  extraSearch = [
+    { id: 90001, media_type: "tv", name: "Dark: Origins", first_air_date: "2021-01-01", genre_ids: [18], original_language: "en" },
+    { id: 90002, media_type: "movie", title: "Dark Matter", release_date: "2024-01-01", genre_ids: [878], original_language: "en" },
+    { id: 90003, media_type: "tv", name: "Dark 2", first_air_date: "2030-01-01", genre_ids: [18], original_language: "de" },
+  ];
+  const res = await send({ action: "similarTmdb", id: "dark" });
+  assert.equal(res.ok, true);
+  assert.ok(calls.some((c) => c.path === "/3/search/multi" && c.params.query === "dark"));
+  assert.deepEqual(res.tmdbResults.filter((r) => r.group === "franchise").map((r) => r.title), ["Dark: Origins", "Dark 2"]);
+  assert.ok(!res.tmdbResults.some((r) => r.title === "Dark Matter"), "a different title that starts with the same word is not a sequel");
+  assert.ok(!res.tmdbResults.some((r) => r.id === 70523), "and never the title itself");
+});
+
+test("similarTmdb still answers when one of its lookups fails", async () => {
+  reset();
+  seed();
+  withCollection = true;
+  failPath = "/recommendations";
+  const res = await send({ action: "similarTmdb", id: "film" });
+  assert.equal(res.ok, true, "the collection still shows");
+  assert.deepEqual(res.tmdbResults.map((r) => r.title), ["Saga 2", "Saga 3"]);
+  reset();
+  seed();
+  failPath = "/search/multi";
+  const again = await send({ action: "similarTmdb", id: "dark" });
+  assert.equal(again.ok, true, "recommendations still show");
+  assert.deepEqual(again.tmdbResults.map((r) => r.title), ["Money Heist", "Stranger Things"]);
+});
+
+test("similarTmdb has nothing to go on without TMDB info, a known title or a token", async () => {
+  reset();
+  seed();
+  for (const id of ["plain", "missing", undefined, 5]) assert.equal((await send({ action: "similarTmdb", id })).ok, false, String(id));
+  delete store.keepshelf_tmdb_token;
+  assert.deepEqual(await send({ action: "similarTmdb", id: "dark" }), { ok: false, error: "Add your TMDB token in Settings first." });
+  assert.equal(calls.length, 0);
+});
+
+test("similarTmdb passes TMDB's errors on in plain words", async () => {
+  reset();
+  seed();
+  status = 429;
+  const res = await send({ action: "similarTmdb", id: "dark" });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /rate|many|limit|slow/i);
+});
+
+const yt = (key, extra = {}) => ({ key, site: "YouTube", type: "Trailer", official: true, published_at: "2020-01-01T00:00:00Z", name: `Trailer ${key}`, ...extra });
+
+test("trailerFor returns a validated YouTube link from one request", async () => {
+  reset();
+  seed();
+  videos = { en: { results: [yt("clip0000001", { type: "Clip" }), yt("trailer0001"), { key: "../../x", site: "YouTube", type: "Trailer" }] } };
+  const res = await send({ action: "trailerFor", id: "dark" });
+  assert.deepEqual(res, { ok: true, trailer: { url: "https://www.youtube.com/watch?v=trailer0001", name: "Trailer trailer0001" } });
+  assert.deepEqual(calls.map((c) => c.path), ["/3/tv/70523/videos"]);
+  assert.equal(calls[0].params.include_video_language, "en,null");
+  assert.equal(calls[0].params.language, "en-US");
+});
+
+test("trailerFor asks again across languages when there is no English trailer", async () => {
+  reset();
+  seed();
+  videos = { en: { results: [] }, wide: { results: [yt("hindi000001")] } };
+  const res = await send({ action: "trailerFor", id: "film" });
+  assert.equal(res.trailer.url, "https://www.youtube.com/watch?v=hindi000001");
+  assert.deepEqual(calls.map((c) => c.path), ["/3/movie/9/videos", "/3/movie/9/videos"]);
+  assert.match(calls[1].params.include_video_language, /^en,null,hi/);
+});
+
+test("trailerFor says there is none when TMDB has nothing usable", async () => {
+  reset();
+  seed();
+  videos = { en: { results: [{ key: "vimeo000001", site: "Vimeo", type: "Trailer" }] }, wide: { results: [] } };
+  assert.deepEqual(await send({ action: "trailerFor", id: "dark" }), { ok: true, trailer: null });
+});
+
+test("trailerFor has nothing to go on without TMDB info, a known title or a token, and passes errors on", async () => {
+  reset();
+  seed();
+  for (const id of ["plain", "missing", undefined, 5]) assert.equal((await send({ action: "trailerFor", id })).ok, false, String(id));
+  assert.equal(calls.length, 0);
+  status = 401;
+  const bad = await send({ action: "trailerFor", id: "dark" });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /token/i);
+  reset();
+  seed();
+  delete store.keepshelf_tmdb_token;
+  assert.deepEqual(await send({ action: "trailerFor", id: "dark" }), { ok: false, error: "Add your TMDB token in Settings first." });
+  assert.equal(calls.length, 0);
 });

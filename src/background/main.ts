@@ -34,11 +34,30 @@ import {
   parseTmdbToken,
 } from "../shared/tmdb.js";
 import { isFresh, sanitizeRatings } from "../shared/episode-ratings.js";
-import { MAX_QUERY, MIN_QUERY, newItemFromResult, parseSearchResults, sanitizeResult } from "../shared/tmdb-search.js";
+import {
+  MAX_QUERY,
+  MIN_QUERY,
+  franchiseBase,
+  matchesFranchise,
+  mergeFranchise,
+  newItemFromResult,
+  parseResultList,
+  parseSearchResults,
+  sanitizeResult,
+} from "../shared/tmdb-search.js";
+import { TRAILER_LANGUAGES, pickTrailer } from "../shared/trailer.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
-import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
-import { describeReminders, dueReminders, pruneNotified, selectForRefresh } from "../shared/reminders.js";
+import {
+  getNotified,
+  isNewSeasonRemindersEnabled,
+  isRemindersEnabled,
+  setNewSeasonRemindersEnabled,
+  setNotified,
+  setRemindersEnabled,
+} from "../shared/reminders-settings.js";
+import { seasonsFinished } from "../shared/seasons.js";
+import { describeReminders, dueReminders, needsSeasonRecord, pruneNotified, selectForRefresh } from "../shared/reminders.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
 
 // Storage writes are read-modify-write and Keep sync drives a single tab, so these must not overlap.
@@ -52,6 +71,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "merge",
   "restore",
   "setRemindersEnabled",
+  "setNewSeasonReminders",
   "checkReminders",
   "setTmdbToken",
   "setBookInfoEnabled",
@@ -149,6 +169,74 @@ async function searchTmdb(rawQuery: string): Promise<MessageResponse> {
     return { ok: true, tmdbResults: parseSearchResults(found) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not search TMDB." };
+  }
+}
+
+/**
+ * "More like this" for a saved title. TMDB's recommendations come from what viewers watch, not from franchises, so
+ * the title's own sequels and remakes are added in front: the other films in its TMDB collection, and anything
+ * named like it. Each part is fetched on its own, so one failing still leaves the others.
+ */
+async function similarTmdb(id: unknown): Promise<MessageResponse> {
+  const item = typeof id === "string" ? (await getAllItems()).find((i) => i.id === id) : undefined;
+  const tmdb = item?.tmdb;
+  if (!item || !tmdb) return { ok: false, error: "This title has no TMDB info, so there is nothing to compare it with." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+
+  const base = franchiseBase(item.title);
+  const collectionParts = async () => {
+    const details = await client.get<{ belongs_to_collection?: { id?: unknown } | null }>(`/movie/${tmdb.id}`, { language: "en-US" });
+    const collectionId = details.belongs_to_collection?.id;
+    if (typeof collectionId !== "number") return [];
+    const collection = await client.get<{ parts?: unknown }>(`/collection/${collectionId}`, { language: "en-US" });
+    return parseResultList({ results: collection.parts }, "movie");
+  };
+  const sameName = async () => {
+    const found = await client.get<unknown>("/search/multi", { query: base, include_adult: "false", language: "en-US" });
+    return parseSearchResults(found).filter((r) => matchesFranchise(base, r.title));
+  };
+
+  // Only the lookups that make sense for this title are made: collections exist for films, and a name of one or two
+  // letters would match everything.
+  const recommended = client.get<unknown>(`/${tmdb.kind}/${tmdb.id}/recommendations`, { language: "en-US", page: 1 });
+  const collection = tmdb.kind === "movie" ? collectionParts() : undefined;
+  const named = base.length >= 3 ? sameName() : undefined;
+  const settled = await Promise.allSettled([recommended, collection ?? Promise.resolve([]), named ?? Promise.resolve([])]);
+  const [rec, col, nam] = settled;
+  const asked = [recommended, collection, named].filter(Boolean).length;
+  const failed = [rec, collection ? col : undefined, named ? nam : undefined].filter((r) => r?.status === "rejected").length;
+  if (failed === asked) {
+    const err = rec.status === "rejected" ? rec.reason : undefined;
+    return { ok: false, error: err instanceof Error ? err.message : "Could not get recommendations." };
+  }
+  return {
+    ok: true,
+    tmdbResults: mergeFranchise({
+      self: tmdb,
+      collection: col.status === "fulfilled" ? (col.value as ReturnType<typeof parseResultList>) : [],
+      named: nam.status === "fulfilled" ? (nam.value as ReturnType<typeof parseResultList>) : [],
+      recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
+    }),
+  };
+}
+
+/**
+ * A title's trailer link, picked from TMDB's videos. English and untagged videos first; a film with none (many are
+ * only in their own language) is asked again across the common languages. Fetched when the button is pressed, never stored.
+ */
+async function trailerFor(id: unknown): Promise<MessageResponse> {
+  const tmdb = typeof id === "string" ? (await getAllItems()).find((i) => i.id === id)?.tmdb : undefined;
+  if (!tmdb) return { ok: false, error: "This title has no TMDB info, so there is no trailer to look for." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const path = `/${tmdb.kind}/${tmdb.id}/videos`;
+    let trailer = pickTrailer(await client.get<unknown>(path, { language: "en-US", include_video_language: "en,null" }));
+    if (!trailer) trailer = pickTrailer(await client.get<unknown>(path, { language: "en-US", include_video_language: TRAILER_LANGUAGES }));
+    return { ok: true, trailer: trailer ?? null };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not look for a trailer." };
   }
 }
 
@@ -304,10 +392,24 @@ async function syncReminderAlarm(): Promise<void> {
  * Re-fetches the air and release dates of titles whose saved dates may have gone stale, a few at a time.
  * Quiet: it never notifies, and a request that fails just keeps the dates already saved.
  */
+/**
+ * Finished series with no record of how many seasons they had get one now, from what is saved. One write for all of
+ * them. It is the baseline a later season is compared with, so it must happen before the dates are refreshed.
+ */
+async function recordSeasonCounts(): Promise<void> {
+  const items = await getAllItems();
+  if (!items.some(needsSeasonRecord)) return;
+  await chrome.storage.local.set({
+    [STORAGE_KEY]: items.map((i) => (needsSeasonRecord(i) ? { ...i, seasonsAtFinish: seasonsFinished(i.tmdb) } : i)),
+  });
+}
+
 async function refreshDatesQuietly(now: number, force = false): Promise<void> {
+  const newSeasons = await isNewSeasonRemindersEnabled();
+  if (newSeasons) await recordSeasonCounts();
   const client = await tmdbClient();
   if (!client) return;
-  for (const item of selectForRefresh(await getAllItems(), now, undefined, force)) {
+  for (const item of selectForRefresh(await getAllItems(), now, undefined, force, { newSeasons })) {
     const info = item.tmdb;
     if (!info) continue;
     try {
@@ -324,7 +426,7 @@ async function runReminderCheck(now = Date.now()): Promise<number> {
   await refreshDatesQuietly(now);
 
   const notified = await getNotified();
-  const due = dueReminders(await getAllItems(), now, notified);
+  const due = dueReminders(await getAllItems(), now, notified, undefined, { newSeasons: await isNewSeasonRemindersEnabled() });
   if (due.length === 0) {
     const pruned = pruneNotified(notified, now);
     if (Object.keys(pruned).length !== Object.keys(notified).length) await setNotified(pruned);
@@ -448,7 +550,11 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       return { ok: true, items };
     }
     case "getReminderSettings": {
-      return { ok: true, reminders: { enabled: await isRemindersEnabled() } };
+      return { ok: true, reminders: { enabled: await isRemindersEnabled(), newSeasons: await isNewSeasonRemindersEnabled() } };
+    }
+    case "setNewSeasonReminders": {
+      const newSeasons = await setNewSeasonRemindersEnabled(message.enabled);
+      return { ok: true, reminders: { enabled: await isRemindersEnabled(), newSeasons } };
     }
     case "setRemindersEnabled": {
       const enabled = await setRemindersEnabled(message.enabled);
@@ -508,6 +614,12 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "searchTmdb": {
       return searchTmdb(message.query);
+    }
+    case "trailerFor": {
+      return trailerFor(message.id);
+    }
+    case "similarTmdb": {
+      return similarTmdb(message.id);
     }
     case "addFromTmdb": {
       return addFromTmdb(message.result);
