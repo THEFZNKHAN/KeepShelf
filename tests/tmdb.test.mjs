@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   createTmdbClient, genreText, imdbIdFromUrl, isStale, lookupInfo, mustPurge, parseTmdbToken,
-  needsTmdbInfo, pickBestMatch, sanitizeTmdb, toTmdbInfo, tmdbPosterUrl,
+  needsTmdbInfo, pickBestMatch, sanitizeTmdb, toTmdbInfo, tmdbPosterUrl, fetchEpisodeRatings,
 } from "../dist-test/tmdb.js";
 import { buildBackup, parseImportFile } from "../dist-test/import.js";
 
@@ -331,4 +331,83 @@ test("digital dates survive saving and are checked when read back", () => {
   assert.equal(sanitizeTmdb({ ...info, digitalDates: [1, 2] }, 1000).digitalDates, undefined);
   const { digitalDates: _gone, ...older } = info;
   assert.equal("digitalDates" in sanitizeTmdb(older, 1000), false, "older saved data stays 'never checked'");
+});
+
+/** A TMDB that answers /tv/{id} with the seasons asked for in append_to_response, as the real one does. */
+function seasonsFetch(existing, { maxAppend = 20 } = {}) {
+  const calls = [];
+  const fn = async (url) => {
+    const u = new URL(url);
+    const asked = (u.searchParams.get("append_to_response") ?? "").split(",").filter(Boolean);
+    calls.push(asked);
+    if (asked.length > maxAppend) return { ok: false, status: 400, json: async () => ({}) };
+    const body = { id: 1, seasons: [{ season_number: 0, episode_count: 2 }, ...existing.map((n) => ({ season_number: n, episode_count: 3 }))] };
+    for (const part of asked) {
+      const n = Number(part.split("/")[1]);
+      if (existing.includes(n) || n === 0) {
+        body[part] = { season_number: n, episodes: [1, 2, 3].map((e) => ({ episode_number: e, name: `S${n}E${e}`, vote_average: 7 + e / 10, vote_count: 10 })) };
+      }
+    }
+    return { ok: true, status: 200, json: async () => body };
+  };
+  fn.calls = calls;
+  return fn;
+}
+const clientFor = (f) => createTmdbClient({ kind: "bearer", value: JWT }, f);
+
+test("fetchEpisodeRatings gets a normal show in one request", async () => {
+  const f = seasonsFetch([1, 2, 3]);
+  const r = await fetchEpisodeRatings(clientFor(f), 1396, 3, 5000);
+  assert.equal(f.calls.length, 1);
+  assert.deepEqual(f.calls[0], ["season/1", "season/2", "season/3"]);
+  assert.equal(r.fetchedAt, 5000);
+  assert.deepEqual(r.seasons.map((s) => s.season), [1, 2, 3]);
+  assert.equal(r.seasons[1].episodes[2].name, "S2E3");
+  assert.equal(r.seasons[1].episodes[2].rating, 7.3);
+});
+
+test("fetchEpisodeRatings asks for the show's own language and path", async () => {
+  const seen = [];
+  const f = async (url) => { seen.push(new URL(url)); return { ok: true, status: 200, json: async () => ({ id: 1 }) }; };
+  await fetchEpisodeRatings(clientFor(f), 70523, 3);
+  assert.equal(seen[0].pathname, "/3/tv/70523");
+  assert.equal(seen[0].searchParams.get("language"), "en-US");
+});
+
+test("fetchEpisodeRatings fills in seasons when the numbering has gaps", async () => {
+  const f = seasonsFetch([1, 2, 4, 7]);
+  const r = await fetchEpisodeRatings(clientFor(f), 1, 4);
+  assert.deepEqual(r.seasons.map((s) => s.season), [1, 2, 4, 7], "season 3 does not exist and is not shown");
+  assert.equal(f.calls.length, 2, "one follow-up for the season the first call did not cover");
+  assert.deepEqual(f.calls[1], ["season/7"]);
+});
+
+test("fetchEpisodeRatings splits a long show over several requests of at most 20 parts", async () => {
+  const all = Array.from({ length: 45 }, (_, i) => i + 1);
+  const f = seasonsFetch(all);
+  const r = await fetchEpisodeRatings(clientFor(f), 1, 45);
+  assert.deepEqual(r.seasons.map((s) => s.season), all);
+  assert.ok(f.calls.every((c) => c.length <= 20), JSON.stringify(f.calls.map((c) => c.length)));
+  assert.equal(f.calls.length, 3, "19 + 20 + 6");
+});
+
+test("fetchEpisodeRatings still works when the saved season count is missing or wrong", async () => {
+  const none = await fetchEpisodeRatings(clientFor(seasonsFetch([1, 2])), 1, undefined);
+  assert.deepEqual(none.seasons.map((s) => s.season), [1, 2]);
+  const tooMany = await fetchEpisodeRatings(clientFor(seasonsFetch([1, 2])), 1, 9);
+  assert.deepEqual(tooMany.seasons.map((s) => s.season), [1, 2], "asked for 9, only 2 exist");
+  const zero = await fetchEpisodeRatings(clientFor(seasonsFetch([1, 2])), 1, 0);
+  assert.deepEqual(zero.seasons.map((s) => s.season), [1, 2]);
+});
+
+test("fetchEpisodeRatings leaves specials out", async () => {
+  const f = seasonsFetch([1]);
+  const r = await fetchEpisodeRatings(clientFor(f), 1, 1);
+  assert.deepEqual(r.seasons.map((s) => s.season), [1]);
+});
+
+test("fetchEpisodeRatings passes TMDB's errors on in plain words", async () => {
+  await assert.rejects(fetchEpisodeRatings(clientFor(mockFetch({ "/tv/1": 404 })), 1, 1), /not found/i);
+  await assert.rejects(fetchEpisodeRatings(clientFor(mockFetch({ "/tv/1": 401 })), 1, 1), /token/i);
+  await assert.rejects(fetchEpisodeRatings(clientFor(mockFetch({ "/tv/1": 429 })), 1, 1), /rate|many|limit/i);
 });

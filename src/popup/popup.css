@@ -3156,3 +3156,475 @@ body.in-tab {
 .s-card[open] > summary:hover {
   background: none;
 }
+
+/* ── Episode ratings: the info card's second view, seasons across and episodes down ── */
+
+:root {
+  --er-cell-w: 34px;
+}
+
+.pick-graph {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.pick-graph[hidden] {
+  display: none;
+}
+
+.pick-graph:hover {
+  background: var(--surface-container-high);
+  color: var(--primary);
+}
+
+.pick-graph:focus-visible,
+.er-head .icon-btn:focus-visible {
+  outline: 2px solid var(--outline-variant);
+}
+
+/* Keep the title clear of the graph icon. */
+.pick-panel.is-card.has-graph .confirm-title {
+  padding-right: 28px;
+}
+
+/* In the ratings view the card is only the ratings; everything else steps aside. */
+.pick-panel.is-ratings > :not(.pick-ratings) {
+  display: none !important;
+}
+
+/*
+ * The card itself stays put. Only the grid scrolls: the panel is a column that is at most as tall as the popup, the
+ * header, tiles, legend and footer keep their size, and the grid takes whatever height is left.
+ */
+.pick-panel.is-card.is-ratings {
+  display: flex;
+  flex-direction: column;
+  max-width: 376px;
+  padding: 12px;
+  overflow: hidden;
+}
+
+.pick-ratings {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  text-align: left;
+}
+
+.pick-ratings[hidden] {
+  display: none;
+}
+
+.er-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.er-poster {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.er-poster .item-thumb {
+  width: 28px;
+  height: 42px;
+  border-radius: 4px;
+}
+
+.er-poster .type-icon {
+  width: 28px;
+}
+
+.er-titles {
+  min-width: 0;
+}
+
+.er-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--on-surface);
+}
+
+.er-sub {
+  margin: 0;
+  overflow: hidden;
+  font-size: 11.5px;
+  line-height: 15px;
+  color: var(--on-surface-variant);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.er-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+/* Three headline numbers. Best and Lowest jump to that episode in the grid. */
+.er-stats {
+  display: grid;
+  flex-shrink: 0;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.er-stat {
+  /* A grid with its rows packed at the top, so a button (which centres its content) lines up with a plain box. */
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 1px;
+  min-width: 0;
+  min-height: 72px;
+  padding: 7px 10px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  font-family: inherit;
+  text-align: left;
+}
+
+button.er-stat {
+  cursor: pointer;
+}
+
+button.er-stat:hover {
+  background: var(--surface-container-low);
+  border-color: var(--outline);
+}
+
+.er-stat-label {
+  line-height: 14px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+.er-stat-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+.er-stat-sub {
+  overflow: hidden;
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--outline);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.er-dot {
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.er-dot[hidden] {
+  display: none;
+}
+
+/* The colour key: worst to best in one strip. */
+.er-legend {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--outline);
+}
+
+/* "Low" sits at the left edge and "High" at the right, with the swatches sharing everything in between. */
+.er-legend {
+  gap: 5px;
+}
+
+.er-legend-end {
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.er-swatch {
+  flex: 1;
+  min-width: 0;
+  height: 7px;
+  border-radius: 4px;
+}
+
+/* The one place a visible (thin) scrollbar stays: a mouse cannot scroll sideways without it. */
+.er-scroll {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  scrollbar-width: thin;
+}
+
+.er-grid {
+  position: relative;
+  display: grid;
+  justify-content: start;
+  gap: 3px;
+  align-items: center;
+  width: max-content;
+  min-width: 100%;
+  padding: 0 8px 0 0;
+}
+
+/* The sticky labels must fill their whole row and column, or scrolled cells show around them. */
+.er-corner,
+.er-colhead,
+.er-rowhead,
+.er-avg-head,
+.er-avg {
+  align-self: stretch;
+  background: #fff;
+}
+
+.er-corner {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 4;
+}
+
+.er-colhead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 0 4px;
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--on-surface-variant);
+}
+
+.er-rowhead {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--on-surface-variant);
+}
+
+.er-cell {
+  width: var(--er-cell-w);
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.er-cell:not(.is-empty):hover {
+  transform: scale(1.08);
+}
+
+.er-cell.is-empty {
+  background: none;
+  cursor: default;
+}
+
+.er-cell:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+/* Where Best or Lowest took you, so the eye finds it. */
+.er-cell.is-flash {
+  animation: er-flash 1.6s ease;
+}
+
+@keyframes er-flash {
+  0%,
+  65% {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+  100% {
+    outline: 3px solid transparent;
+    outline-offset: 2px;
+  }
+}
+
+/* The season averages stay at the bottom while the episodes scroll under them. */
+.er-avg-head,
+.er-avg {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--on-surface);
+}
+
+/* One unbroken line above the averages, running across the gaps between columns. */
+.er-avg::before,
+.er-avg-head::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -2px;
+  right: -2px;
+  height: 1px;
+  background: var(--outline-variant);
+}
+
+.er-avg-head::before {
+  left: 0;
+}
+
+.er-avg-head {
+  left: 0;
+  z-index: 2;
+  padding: 6px 8px;
+  justify-content: flex-end;
+  font-size: 10.5px;
+}
+
+/* The tip beside a cell: it floats over everything and ignores the pointer, so it can neither block nor flicker. */
+.er-tip {
+  position: fixed;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 250px;
+  padding: 8px 10px;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
+  pointer-events: none;
+}
+
+.er-tip[hidden] {
+  display: none;
+}
+
+.er-tip-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.er-tip-code {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--on-surface-variant);
+}
+
+.er-tip-rating {
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  font-weight: 700;
+}
+
+.er-tip-name {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--on-surface);
+  overflow-wrap: anywhere;
+}
+
+.er-tip-meta {
+  font-size: 10.5px;
+  line-height: 14px;
+  color: var(--outline);
+}
+
+.er-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 8px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--on-surface-variant);
+}
+
+.er-msg p {
+  margin: 0;
+}
+
+/* Rating bands, the same tiers as seriesgraph. */
+.band-absolute {
+  background: #2f9bff;
+  color: #fff;
+}
+
+.band-awesome {
+  background: #1b7a45;
+  color: #fff;
+}
+
+.band-great {
+  background: #35c26f;
+  color: #08281a;
+}
+
+.band-good {
+  background: #f3cd3c;
+  color: #3a2f00;
+}
+
+.band-average {
+  background: #f5a524;
+  color: #3a2400;
+}
+
+.band-bad {
+  background: #e5484d;
+  color: #fff;
+}
+
+.band-garbage {
+  background: #7c4dbd;
+  color: #fff;
+}
+
+.band-none {
+  background: var(--surface-container);
+  color: var(--outline);
+}

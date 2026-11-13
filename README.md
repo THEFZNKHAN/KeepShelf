@@ -77,6 +77,7 @@
 - [Features](#features)
 - [Organise and track your shelf](#organise-and-track-your-shelf)
 - [TMDB info](#tmdb-info)
+- [Episode ratings](#episode-ratings)
 - [Release reminders](#release-reminders)
 - [Book info](#book-info)
 - [Supported sources](#supported-sources)
@@ -179,7 +180,16 @@ Click **Save page** in the popup, press `Alt+Shift+S`, or right-click a page, li
 
 Your own ratings and reviews, tags, custom lists, watch and read progress (episode by episode, season by season), a random picker and stats. Details in [Organise and track your shelf](#organise-and-track-your-shelf).
 
-### Release reminders
+### Episode ratings
+
+On the card of a series or anime that has TMDB info, a **grid icon** sits at the top right. Tap it and the same card becomes a grid of episode ratings: **seasons across, episodes down**, each cell coloured by its rating (a strip under the headline numbers shows the colours from Garbage to Absolute cinema), with the average of each season pinned along the bottom. The top shows the **average**, the **best** and the **lowest** episode; tap Best or Lowest to jump to it in the grid. Use the back arrow, or **Esc**, to return to the card.
+
+- The ratings are **TMDB's own**, so they can differ from IMDb's. A very new episode may show **–** because nobody has rated it yet.
+- Only the grid scrolls, the card around it stays put. Season and episode labels stay in place while the cells move, so a 15-season show such as Supernatural stays readable. Hover over a cell (or tap it on a touch screen, or tab to it) and a small tip beside it shows the episode title, rating, votes and air date.
+- It needs your [TMDB token](#tmdb-info) and a TMDB match for the title. Movies, books and titles with no match don't show the icon.
+- A show costs one request to TMDB (a few more for very long ones). The result is kept in memory for the browser session, for up to a day, then fetched again. It is never saved with your shelf or in a backup.
+
+## Release reminders
 
 Turn on reminders and get a notification when a series you haven't finished has a new episode, or a movie on your shelf comes out, today or tomorrow. See [Release reminders](#release-reminders).
 
@@ -342,6 +352,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 - **Total episodes** for series and anime, so progress shows as `ep. 3/62` without you entering the total, plus **episodes per season** for [season-by-season progress](#season-by-season-progress).
 - **Next air dates** for series and **release dates** for movies, used by [release reminders](#release-reminders).
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
+- An **[episode ratings grid](#episode-ratings)** for series and anime, opened from the grid icon on the item's card.
 
 Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered by TMDB, which only has films and TV. Books have their own option, see [Book info](#book-info).
 
@@ -354,6 +365,7 @@ Anything the page itself provided wins over TMDB, and anything you type wins ove
 - Titles are sent to TMDB to look them up. Nothing else is, and your token never leaves your browser except in requests to TMDB.
 - TMDB's terms limit how long its data may be kept, so KeepShelf refreshes it after about 5 months and drops it after 6. Backups follow the same rule.
 - The IMDb, Letterboxd and other ratings still come from the page you saved. TMDB's rating is shown separately as `TMDB 8.4`.
+- [Episode ratings](#episode-ratings) are fetched only when you open the grid, kept in memory for that browser session and never saved with your shelf or in backups.
 
 *This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.*
 
