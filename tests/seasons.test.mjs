@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   distributeProgress, isWatched, lastWatched, markSeasonDone, markUpTo, mergeSeasonProgress, nextToWatch,
-  seasonTotals, statusFromSeasons, stepEpisode, sumProgress, upToStep, validateSeasonProgress, watchedProgress,
+  seasonTotals, seasonsFinished, statusFromSeasons, stepEpisode, sumProgress, upToStep, validateSeasonProgress, watchedProgress,
 } from "../dist-test/seasons.js";
 
 const totals = [10, 8, 6];
@@ -219,4 +219,36 @@ test("upToStep keeps the episode inside the season and refuses what it cannot pl
   assert.equal(upToStep(withSeasons({}), -1, 1), undefined);
   assert.equal(upToStep(withSeasons({}), 0, 0), undefined);
   assert.equal(upToStep(withSeasons({}), 0, 1.5), undefined);
+});
+
+const tv = (extra) => ({ kind: "tv", seasons: 4, ...extra });
+
+test("seasonsFinished is the seasons behind a series, not counting one that is only announced", () => {
+  assert.equal(seasonsFinished(tv({})), 4, "nothing announced: all of them");
+  assert.equal(seasonsFinished(tv({ seasons: 5, nextEpisode: { airDate: "2027-01-01", season: 5, episode: 1 } })), 4, "season 5 is a premiere still to come");
+  assert.equal(seasonsFinished(tv({ seasons: 4, nextEpisode: { airDate: "2027-01-01", season: 4, episode: 3 } })), 4, "a season already airing counts as seen");
+  assert.equal(seasonsFinished(tv({ seasons: 2, nextEpisode: { airDate: "2027-01-01", season: 2, episode: 1 } })), 1);
+});
+
+test("seasonsFinished says nothing when there is nothing to say", () => {
+  assert.equal(seasonsFinished(undefined), undefined);
+  assert.equal(seasonsFinished({ kind: "movie", seasons: 3 }), undefined, "films have no seasons");
+  assert.equal(seasonsFinished(tv({ seasons: undefined })), undefined);
+  assert.equal(seasonsFinished(tv({ seasons: 0 })), undefined);
+  assert.equal(seasonsFinished(tv({ seasons: 1, nextEpisode: { airDate: "2027-01-01", season: 1, episode: 1 } })), undefined, "a show whose first season hasn't aired has none behind it");
+});
+
+test("watchedProgress: a show marked finished without episode counts has watched the seasons it had, not a later one", () => {
+  assert.deepEqual(watchedProgress(withSeasons({ status: "done", seasonsAtFinish: 2 }), totals), [10, 8, 0], "season 3 came after");
+  assert.deepEqual(watchedProgress(withSeasons({ status: "done", seasonsAtFinish: 1 }), totals), [10, 0, 0]);
+  assert.deepEqual(watchedProgress(withSeasons({ status: "done" }), totals), [10, 8, 6], "no record: everything");
+  assert.deepEqual(watchedProgress(withSeasons({ status: "done", seasonsAtFinish: 9 }), totals), [10, 8, 6]);
+  assert.deepEqual(watchedProgress(withSeasons({ status: "done", seasonsAtFinish: 1, seasonProgress: [10, 8, 6] }), totals), [10, 8, 6], "saved episode counts win");
+});
+
+test("upToStep on a show finished before its newest season starts that season", () => {
+  const item = withSeasons({ status: "done", seasonsAtFinish: 2 });
+  const step = upToStep(item, 2, 3);
+  assert.deepEqual(step.changes, { seasonProgress: [10, 8, 3], status: "in_progress" });
+  assert.equal(step.unwatched, false);
 });

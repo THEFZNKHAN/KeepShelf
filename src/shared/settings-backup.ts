@@ -12,6 +12,8 @@ export interface SettingsBackup {
   keep?: KeepSettings;
   watchSites?: WatchSite[];
   remindersEnabled?: boolean;
+  /** Also announce new seasons of shows you have finished. */
+  newSeasonReminders?: boolean;
   bookInfoEnabled?: boolean;
   /** Preferences the popup keeps in its own storage, by name. */
   prefs?: Record<string, string>;
@@ -33,6 +35,7 @@ export interface SettingsSource {
   keep?: unknown;
   watchSites?: unknown;
   remindersEnabled?: unknown;
+  newSeasonReminders?: unknown;
   bookInfoEnabled?: unknown;
   prefs?: Record<string, string | null | undefined>;
 }
@@ -60,6 +63,7 @@ export function sanitizeSettings(raw: unknown): SettingsBackup | undefined {
   if (sites.length > 0) out.watchSites = sites;
 
   if (typeof input.remindersEnabled === "boolean") out.remindersEnabled = input.remindersEnabled;
+  if (typeof input.newSeasonReminders === "boolean") out.newSeasonReminders = input.newSeasonReminders;
   if (typeof input.bookInfoEnabled === "boolean") out.bookInfoEnabled = input.bookInfoEnabled;
 
   if (input.prefs && typeof input.prefs === "object" && !Array.isArray(input.prefs)) {
@@ -85,7 +89,7 @@ export function describeSettings(settings: SettingsBackup): string[] {
   if (settings.tmdbToken) parts.push("your TMDB token");
   if (settings.keep) parts.push("your Keep links");
   if (settings.watchSites) parts.push(`${settings.watchSites.length} watch site${settings.watchSites.length === 1 ? "" : "s"}`);
-  if (settings.remindersEnabled !== undefined || settings.bookInfoEnabled !== undefined || settings.prefs) {
+  if (settings.remindersEnabled !== undefined || settings.newSeasonReminders !== undefined || settings.bookInfoEnabled !== undefined || settings.prefs) {
     parts.push("your switches and preferences");
   }
   return parts;

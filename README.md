@@ -215,7 +215,7 @@ On the card of a series or anime that has TMDB info, a **grid icon** sits at the
 
 ## Release reminders
 
-Turn on reminders and get a notification when a series you haven't finished has a new episode, or a movie on your shelf comes out, today or tomorrow. See [Release reminders](#release-reminders).
+Turn on reminders and get a notification when a series you haven't finished has a new episode, a series you've finished is coming back with a new season, or a movie on your shelf comes out, today or tomorrow. See [Release reminders](#release-reminders).
 
 ### Undo
 
@@ -280,6 +280,7 @@ For series, anime and books you can also record progress, such as episodes done 
 
 KeepShelf opens on **Not watched**: what is still to watch or in progress. Watched and dropped items stay out of the way, so the list is what you actually want to pick from. (On Books it is "Not read", on Tabs it is "To do".)
 
+- **Searching ignores the hiding.** While there is something in the search box, titles you have watched are searched too, so you can always find one. Clear the box and the default view is back.
 - To see everything for a while, open the filter button next to the search box and pick **All** in the status list. The next time you open KeepShelf it is back to the default view.
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
 - In **Settings > Shelf & views**, **Start on** chooses between **My default view** and **Where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
@@ -409,10 +410,12 @@ Get a desktop notification when something on your shelf is about to come out. It
 - A notification when a **series** you haven't finished has an episode airing **today or tomorrow**, naming the season and episode, such as `Severance: S2 E5 tomorrow`.
 - A notification when a **movie** on your shelf is released today or tomorrow, such as `Dune: out today`.
 - Several releases at once are grouped into one notification. Clicking it opens KeepShelf.
-- Items you have marked **Watched** or **Dropped** are never announced, and each release is announced **only once**. A new episode of the same show gets its own reminder.
+- **New seasons of shows you've finished** are announced too, as `Severance: new season, S3 E1 tomorrow`, and listed on **Coming up** with "New season" under the title. This is its own switch under Release reminders (**New seasons of shows I've finished**, on by default). It only counts a season the show didn't have when you finished it, so the last episodes of a season you already watched are not announced as new.
+- Other items you have marked **Watched**, and anything **Dropped**, are never announced, and each release is announced **only once**. A new episode of the same show gets its own reminder.
 
 **How it works**
-- KeepShelf checks a few times a day (every 6 hours, so a computer that was asleep still catches up). It reads the dates it already has and refreshes dates that may have moved: airing series whose next date has passed or is unknown, and movies not yet released. Each item is looked up at most about once a week, and a check makes at most 25 requests.
+- To tell a new season from an old one, KeepShelf remembers how many seasons a series had when you finished it. A season that is only announced doesn't count as one you finished: if its premiere is already scheduled when you mark the show finished (or when an older finished show is first checked), the seasons before that premiere are the ones you finished, so that season is announced when it comes. A season that is already airing counts as seen. Finish a show again later and the number is updated.
+- KeepShelf checks a few times a day (every 6 hours, so a computer that was asleep still catches up). It reads the dates it already has and refreshes dates that may have moved: airing series whose next date has passed or is unknown, and movies not yet released. Each item is looked up at most about once a week, and a check makes at most 25 requests, with what is airing now first and finished shows after it. Finished shows that have ended or been cancelled are never looked up.
 - If TMDB can't be reached, reminders still work from the dates already saved.
 - Only titles are sent to TMDB, as with the rest of TMDB info. Nothing else leaves your browser.
 

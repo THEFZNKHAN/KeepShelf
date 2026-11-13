@@ -1,4 +1,5 @@
 import type { SavedItem } from "./types.js";
+import { seasonsFinished } from "./seasons.js";
 import { statusOf } from "./user-data.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -22,6 +23,13 @@ export interface DueReminder {
   days: number;
   /** "S2 E5" for an episode, "release" for a movie. */
   label: string;
+  /** A new season of a series you had already finished. */
+  newSeason?: boolean;
+}
+
+export interface ReminderOptions {
+  /** Also follow series you have finished, and announce a season they didn't have when you finished. */
+  newSeasons?: boolean;
 }
 
 const ISO_DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -40,6 +48,26 @@ export function daysUntil(isoDate: string, now: number): number | undefined {
 function isOpen(item: Pick<SavedItem, "status" | "done">): boolean {
   const status = statusOf(item);
   return status !== "done" && status !== "dropped";
+}
+
+/** A finished series: the kind of title a new season can bring back. */
+function isFinishedSeries(item: SavedItem): boolean {
+  return statusOf(item) === "done" && item.tmdb?.kind === "tv";
+}
+
+/**
+ * Whether a finished series has a season coming that it didn't have when it was finished. Without a record of how
+ * many seasons it had then (`seasonsAtFinish`) there is nothing to compare with, so it is never a new season: the
+ * background check records it first, which keeps a long-finished show from announcing an old season as new.
+ */
+export function isNewSeason(item: SavedItem): boolean {
+  const next = item.tmdb?.nextEpisode;
+  return isFinishedSeries(item) && !!next && item.seasonsAtFinish !== undefined && next.season > item.seasonsAtFinish;
+}
+
+/** Whether an item is one to follow: anything unfinished, and, when asked, finished series that may return. */
+function followed(item: SavedItem, options: ReminderOptions): boolean {
+  return isOpen(item) || (!!options.newSeasons && isFinishedSeries(item));
 }
 
 /** The next thing to be reminded about for an item: an episode for a series, the release for a movie. */
@@ -62,18 +90,21 @@ export function dueReminders(
   items: SavedItem[],
   now: number,
   notified: Record<string, string>,
-  windowDays = REMINDER_WINDOW_DAYS
+  windowDays = REMINDER_WINDOW_DAYS,
+  options: ReminderOptions = {}
 ): DueReminder[] {
   const due: DueReminder[] = [];
   for (const item of items) {
-    if (!isOpen(item)) continue;
+    const open = isOpen(item);
+    // A finished series only counts when this is really a new season, not the tail of one it already watched.
+    if (!open && !(options.newSeasons && isNewSeason(item))) continue;
     const next = upcoming(item);
     if (!next) continue;
     const days = daysUntil(next.date, now);
     if (days === undefined || days < 0 || days > windowDays) continue;
     const key = reminderKey(item, next.date);
     if (notified[key]) continue;
-    due.push({ key, item, date: next.date, days, label: next.label });
+    due.push({ key, item, date: next.date, days, label: next.label, ...(open ? {} : { newSeason: true }) });
   }
   return due.sort((a, b) => a.days - b.days || a.item.title.localeCompare(b.item.title));
 }
@@ -92,9 +123,9 @@ export function pruneNotified(notified: Record<string, string>, now: number): Re
  * Whether the saved TMDB dates for an item may be out of date and worth one request. `force` skips the
  * "looked up this week already" rule, for when the user asks to check now.
  */
-export function needsDateRefresh(item: SavedItem, now: number, force = false): boolean {
+export function needsDateRefresh(item: SavedItem, now: number, force = false, options: ReminderOptions = {}): boolean {
   const tmdb = item.tmdb;
-  if (!tmdb || !isOpen(item)) return false;
+  if (!tmdb || !followed(item, options)) return false;
   if (!force && now - tmdb.fetchedAt < DATE_REFRESH_AFTER_MS) return false;
   if (tmdb.kind === "tv") {
     if (/^(ended|canceled|cancelled)$/i.test(tmdb.status ?? "")) return false;
@@ -112,8 +143,21 @@ export function needsDateRefresh(item: SavedItem, now: number, force = false): b
   return false;
 }
 
-export function selectForRefresh(items: SavedItem[], now: number, max = MAX_DATE_REFRESHES, force = false): SavedItem[] {
-  return items.filter((item) => needsDateRefresh(item, now, force)).slice(0, max);
+export function selectForRefresh(
+  items: SavedItem[],
+  now: number,
+  max = MAX_DATE_REFRESHES,
+  force = false,
+  options: ReminderOptions = {}
+): SavedItem[] {
+  const wanted = items.filter((item) => needsDateRefresh(item, now, force, options));
+  // Unfinished titles first: with a long shelf of finished series the cap must not crowd out what is airing now.
+  return [...wanted.filter(isOpen), ...wanted.filter((item) => !isOpen(item))].slice(0, max);
+}
+
+/** Finished series that have no record yet of how many seasons they had, so a later season can't be told from an old one. */
+export function needsSeasonRecord(item: SavedItem): boolean {
+  return isFinishedSeries(item) && item.seasonsAtFinish === undefined && seasonsFinished(item.tmdb) !== undefined;
 }
 
 function when(days: number): string {
@@ -123,7 +167,11 @@ function when(days: number): string {
 /** The notification text: the title alone for one release, a short list for several. */
 export function describeReminders(due: DueReminder[]): { title: string; message: string } {
   const line = (d: DueReminder) =>
-    d.label === "release" ? `${d.item.title}: out ${when(d.days)}` : `${d.item.title}: ${d.label} ${when(d.days)}`;
+    d.label === "release"
+      ? `${d.item.title}: out ${when(d.days)}`
+      : d.newSeason
+        ? `${d.item.title}: new season, ${d.label} ${when(d.days)}`
+        : `${d.item.title}: ${d.label} ${when(d.days)}`;
   if (due.length === 1) {
     return { title: "Coming up on your shelf", message: line(due[0]) };
   }

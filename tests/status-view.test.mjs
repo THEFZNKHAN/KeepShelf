@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_VIEWS, START_MODES, STATUS_FILTERS, defaultStatusFilter, effectiveStatusFilter, matchesStatusFilter,
+  DEFAULT_VIEWS, START_MODES, STATUS_FILTERS, defaultStatusFilter, effectiveStatusFilter, matchesStatusFilter, statusFilterWhileSearching,
 } from "../dist-test/status-view.js";
 
 const STATUSES = ["plan", "in_progress", "done", "dropped"];
@@ -44,4 +44,13 @@ test("a shelf that doesn't offer a filter falls back sensibly", () => {
   assert.equal(effectiveStatusFilter("done", tabs), "done");
   assert.equal(effectiveStatusFilter("pending", STATUS_FILTERS), "pending");
   assert.equal(effectiveStatusFilter("all", tabs), "all");
+});
+
+test("while searching, the default Not watched view steps aside so a watched title can be found", () => {
+  assert.equal(statusFilterWhileSearching("pending", true), "all");
+  assert.equal(statusFilterWhileSearching("pending", false), "pending", "not searching: the default view is kept");
+  for (const choice of ["all", "todo", "progress", "done", "dropped"]) {
+    assert.equal(statusFilterWhileSearching(choice, true), choice, `${choice} was picked on purpose`);
+    assert.equal(statusFilterWhileSearching(choice, false), choice);
+  }
 });

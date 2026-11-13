@@ -2,7 +2,7 @@ import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, fo
 import { buildBackup, parseImportFile, settingsFromBackupJson } from "../shared/import.js";
 import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } from "../shared/settings-backup.js";
 import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
-import { REMINDERS_KEY } from "../shared/reminders-settings.js";
+import { NEW_SEASONS_KEY, REMINDERS_KEY } from "../shared/reminders-settings.js";
 import { TMDB_TOKEN_KEY } from "../shared/tmdb-settings.js";
 
 import { listToItems, parseList, planListImport } from "../shared/list-import.js";
@@ -82,6 +82,7 @@ import {
   defaultStatusFilter,
   effectiveStatusFilter,
   matchesStatusFilter,
+  statusFilterWhileSearching,
   type DefaultView,
   type StartMode,
   type StatusFilter,
@@ -358,11 +359,12 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
   if (activeTab === "media" && activeFilter !== "all") {
     items = items.filter((i) => i.type === activeFilter);
   }
-  const status = effectiveStatus();
+  const query = searchQuery.trim().toLowerCase();
+  // While searching, the default "Not watched" view steps aside so a title you have watched can still be found.
+  const status = statusFilterWhileSearching(effectiveStatus(), query !== "");
   if (!options.ignoreStatus) items = items.filter((i) => matchesStatusFilter(statusOf(i), status));
   if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
   if (listFilter) items = items.filter((i) => i.list === listFilter);
-  const query = searchQuery.trim().toLowerCase();
   if (query) items = items.filter((i) => searchText(i).includes(query));
   return sortItems(items);
 }
@@ -614,6 +616,8 @@ let upcomingDays = (() => {
 /** A shelf row without the details and actions: just the title, an optional note and the date on the right. */
 function upcomingRow(item: SavedItem, label: string, extra?: string, tip?: string, faint = false): HTMLLIElement {
   const { li, typeIconEl, body } = createRowShell(item, false);
+  // A finished show with a new season coming isn't "done" here: no strike-through or fading.
+  li.classList.remove("done");
   const note = document.createElement("div");
   note.className = "item-facts";
   note.textContent = [typeLabel(item.type), extra].filter(Boolean).join(" · ");
@@ -652,7 +656,7 @@ function upcomingList(): HTMLUListElement {
 /** Draws what is airing or releasing soon, by day, and the shows that have no date yet. `checking` says dates are being looked up. */
 function renderUpcoming(checking = false): void {
   const now = Date.now();
-  const groups = groupByDay(comingUp(allItems, now, upcomingDays, userRegions));
+  const groups = groupByDay(comingUp(allItems, now, upcomingDays, userRegions, { newSeasons: newSeasonReminders }));
   const missing = tmdbConfigured ? airingWithoutDate(allItems, now) : [];
   upcomingBodyEl.replaceChildren();
 
@@ -714,14 +718,15 @@ function renderUpcoming(checking = false): void {
     }
     const list = upcomingList();
     upcomingBodyEl.append(heading, list);
-    for (const { item, label, region } of group.entries) {
+    for (const { item, label, region, newSeason } of group.entries) {
       if (label === "streaming") {
         list.append(upcomingRow(item, "Streaming", undefined, `Streaming and online release${region ? ` (${region})` : ""}`));
       } else if (label === "release") {
         // A movie still to reach streaming says when, right under its title.
         list.append(upcomingRow(item, "Release", streamingNote(item, now, userRegions)));
       } else {
-        list.append(upcomingRow(item, label));
+        // A new season of a show you finished says so under its title.
+        list.append(upcomingRow(item, label, newSeason ? "New season" : undefined));
       }
     }
   }
@@ -2743,11 +2748,15 @@ function showTmdbStatus(msg: string, err = false, ms = 6000): void {
 }
 
 let remindersEnabled = false;
+/** Also announce (and list on Coming up) new seasons of shows you have finished. On unless switched off. */
+let newSeasonReminders = true;
+const prefNewSeasonsEl = document.getElementById("pref-new-seasons") as HTMLInputElement;
 const prefRemindersEl = document.getElementById("pref-reminders") as HTMLInputElement;
 const remindersCheckEl = document.getElementById("reminders-check") as HTMLButtonElement;
 
 function renderReminders(): void {
   prefRemindersEl.checked = remindersEnabled;
+  prefNewSeasonsEl.checked = newSeasonReminders;
   // It needs the token to look up dates, but it can always be turned off.
   prefRemindersEl.disabled = !tmdbConfigured && !remindersEnabled;
   remindersCheckEl.disabled = !remindersEnabled;
@@ -2756,7 +2765,10 @@ function renderReminders(): void {
 async function loadReminderSettings(): Promise<void> {
   try {
     const response = await sendToBackground({ action: "getReminderSettings" });
-    if (response.ok && "reminders" in response) remindersEnabled = response.reminders.enabled;
+    if (response.ok && "reminders" in response) {
+      remindersEnabled = response.reminders.enabled;
+      newSeasonReminders = response.reminders.newSeasons !== false;
+    }
   } catch {
     /* leave it off */
   }
@@ -2769,6 +2781,18 @@ prefRemindersEl.addEventListener("change", async () => {
     if (!response.ok) throw new Error(response.error);
     if ("reminders" in response) remindersEnabled = response.reminders.enabled;
     showTmdbStatus(remindersEnabled ? "Release reminders are on." : "Release reminders are off.");
+  } catch (err) {
+    showTmdbStatus(err instanceof Error ? err.message : "Could not change the setting.", true);
+  }
+  renderReminders();
+});
+
+prefNewSeasonsEl.addEventListener("change", async () => {
+  try {
+    const response = await sendToBackground({ action: "setNewSeasonReminders", enabled: prefNewSeasonsEl.checked });
+    if (!response.ok) throw new Error(response.error);
+    if ("reminders" in response) newSeasonReminders = response.reminders.newSeasons !== false;
+    showTmdbStatus(newSeasonReminders ? "New seasons of finished shows are on." : "New seasons of finished shows are off.");
   } catch (err) {
     showTmdbStatus(err instanceof Error ? err.message : "Could not change the setting.", true);
   }
@@ -4041,7 +4065,7 @@ const backupIncludeSettingsEl = document.getElementById("backup-include-settings
 
 /** Reads the settings that go into a backup. Everything is checked on the way out. */
 async function gatherSettings(): Promise<SettingsBackup | undefined> {
-  const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, BOOK_INFO_KEY]);
+  const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, NEW_SEASONS_KEY, BOOK_INFO_KEY]);
   const keep = await sendToBackground({ action: "getKeepSettings" });
   const prefs: Record<string, string | null> = {};
   for (const key of Object.keys(PREF_CHOICES)) prefs[key] = localStorage.getItem(key);
@@ -4051,6 +4075,7 @@ async function gatherSettings(): Promise<SettingsBackup | undefined> {
       keep: keep.ok && "settings" in keep ? keep.settings : undefined,
       watchSites: stored[WATCH_SITES_KEY],
       remindersEnabled: stored[REMINDERS_KEY],
+      newSeasonReminders: stored[NEW_SEASONS_KEY],
       bookInfoEnabled: stored[BOOK_INFO_KEY],
       prefs,
     },
@@ -4074,6 +4099,7 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
   if (settings.keep) await ask({ action: "setKeepSettings", settings: settings.keep });
   if (settings.watchSites) await chrome.storage.local.set({ [WATCH_SITES_KEY]: settings.watchSites });
   if (settings.remindersEnabled !== undefined) await ask({ action: "setRemindersEnabled", enabled: settings.remindersEnabled });
+  if (settings.newSeasonReminders !== undefined) await ask({ action: "setNewSeasonReminders", enabled: settings.newSeasonReminders });
   if (settings.bookInfoEnabled !== undefined) await ask({ action: "setBookInfoEnabled", enabled: settings.bookInfoEnabled });
   for (const [key, value] of Object.entries(settings.prefs ?? {})) {
     try {

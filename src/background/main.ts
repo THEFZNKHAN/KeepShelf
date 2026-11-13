@@ -48,8 +48,16 @@ import {
 import { TRAILER_LANGUAGES, pickTrailer } from "../shared/trailer.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
-import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
-import { describeReminders, dueReminders, pruneNotified, selectForRefresh } from "../shared/reminders.js";
+import {
+  getNotified,
+  isNewSeasonRemindersEnabled,
+  isRemindersEnabled,
+  setNewSeasonRemindersEnabled,
+  setNotified,
+  setRemindersEnabled,
+} from "../shared/reminders-settings.js";
+import { seasonsFinished } from "../shared/seasons.js";
+import { describeReminders, dueReminders, needsSeasonRecord, pruneNotified, selectForRefresh } from "../shared/reminders.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
 
 // Storage writes are read-modify-write and Keep sync drives a single tab, so these must not overlap.
@@ -63,6 +71,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "merge",
   "restore",
   "setRemindersEnabled",
+  "setNewSeasonReminders",
   "checkReminders",
   "setTmdbToken",
   "setBookInfoEnabled",
@@ -383,10 +392,24 @@ async function syncReminderAlarm(): Promise<void> {
  * Re-fetches the air and release dates of titles whose saved dates may have gone stale, a few at a time.
  * Quiet: it never notifies, and a request that fails just keeps the dates already saved.
  */
+/**
+ * Finished series with no record of how many seasons they had get one now, from what is saved. One write for all of
+ * them. It is the baseline a later season is compared with, so it must happen before the dates are refreshed.
+ */
+async function recordSeasonCounts(): Promise<void> {
+  const items = await getAllItems();
+  if (!items.some(needsSeasonRecord)) return;
+  await chrome.storage.local.set({
+    [STORAGE_KEY]: items.map((i) => (needsSeasonRecord(i) ? { ...i, seasonsAtFinish: seasonsFinished(i.tmdb) } : i)),
+  });
+}
+
 async function refreshDatesQuietly(now: number, force = false): Promise<void> {
+  const newSeasons = await isNewSeasonRemindersEnabled();
+  if (newSeasons) await recordSeasonCounts();
   const client = await tmdbClient();
   if (!client) return;
-  for (const item of selectForRefresh(await getAllItems(), now, undefined, force)) {
+  for (const item of selectForRefresh(await getAllItems(), now, undefined, force, { newSeasons })) {
     const info = item.tmdb;
     if (!info) continue;
     try {
@@ -403,7 +426,7 @@ async function runReminderCheck(now = Date.now()): Promise<number> {
   await refreshDatesQuietly(now);
 
   const notified = await getNotified();
-  const due = dueReminders(await getAllItems(), now, notified);
+  const due = dueReminders(await getAllItems(), now, notified, undefined, { newSeasons: await isNewSeasonRemindersEnabled() });
   if (due.length === 0) {
     const pruned = pruneNotified(notified, now);
     if (Object.keys(pruned).length !== Object.keys(notified).length) await setNotified(pruned);
@@ -527,7 +550,11 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       return { ok: true, items };
     }
     case "getReminderSettings": {
-      return { ok: true, reminders: { enabled: await isRemindersEnabled() } };
+      return { ok: true, reminders: { enabled: await isRemindersEnabled(), newSeasons: await isNewSeasonRemindersEnabled() } };
+    }
+    case "setNewSeasonReminders": {
+      const newSeasons = await setNewSeasonRemindersEnabled(message.enabled);
+      return { ok: true, reminders: { enabled: await isRemindersEnabled(), newSeasons } };
     }
     case "setRemindersEnabled": {
       const enabled = await setRemindersEnabled(message.enabled);

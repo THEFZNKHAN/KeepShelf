@@ -1,4 +1,4 @@
-import type { ItemStatus, SavedItem } from "./types.js";
+import type { ItemStatus, SavedItem, TmdbInfo } from "./types.js";
 
 /** Episodes per season from TMDB (specials excluded). Index 0 is season 1. Undefined when unknown. */
 export function seasonTotals(item: Pick<SavedItem, "tmdb">): number[] | undefined {
@@ -85,7 +85,7 @@ export interface EpisodeStep {
   finishes: boolean;
 }
 
-type StepItem = Pick<SavedItem, "status" | "done" | "progressCurrent" | "seasonProgress" | "tmdb">;
+type StepItem = Pick<SavedItem, "status" | "done" | "progressCurrent" | "seasonProgress" | "tmdb" | "seasonsAtFinish">;
 
 /**
  * Marks the next episode as watched: the one after the last you watched. Undefined when there is nothing to
@@ -121,9 +121,15 @@ export function stepEpisode(item: StepItem, total?: number): EpisodeStep | undef
 /** How many episodes of each season count as watched right now, one entry per season in `totals`. */
 export function watchedProgress(item: StepItem, totals: number[]): number[] {
   const now: ItemStatus = item.status ?? (item.done ? "done" : "plan");
+  // A show marked finished with no episode counts has watched the seasons it had then, not one that came later.
+  const finishedSeasons = item.seasonsAtFinish ?? totals.length;
   const seen =
     item.seasonProgress ??
-    ((item.progressCurrent ?? 0) > 0 ? distributeProgress(item.progressCurrent ?? 0, totals) : now === "done" ? totals : []);
+    ((item.progressCurrent ?? 0) > 0
+      ? distributeProgress(item.progressCurrent ?? 0, totals)
+      : now === "done"
+        ? totals.map((total, i) => (i < finishedSeasons ? total : 0))
+        : []);
   return totals.map((total, i) => Math.min(Math.max(0, seen[i] ?? 0), total));
 }
 
@@ -173,4 +179,17 @@ export function upToStep(item: StepItem, column: number, episode: number): UpToS
   else if (sumProgress(progress) === 0) status = now === "dropped" ? "dropped" : "plan";
   else status = "in_progress";
   return { changes: { seasonProgress: progress, status }, unwatched, finishes };
+}
+
+/**
+ * How many seasons a series has behind it right now: the ones you could have finished. TMDB's season count already
+ * includes a season that has only been announced, so it can't be used as it stands. When the next episode is a season
+ * premiere (episode 1), that season is still to come and the ones before it are the finished ones; when it is a later
+ * episode of a season already airing, that season counts as seen. Undefined when nothing can be said.
+ */
+export function seasonsFinished(tmdb: Pick<TmdbInfo, "kind" | "seasons" | "nextEpisode"> | undefined): number | undefined {
+  if (!tmdb || tmdb.kind !== "tv") return undefined;
+  const next = tmdb.nextEpisode;
+  const count = next ? (next.episode === 1 ? next.season - 1 : next.season) : tmdb.seasons;
+  return typeof count === "number" && Number.isInteger(count) && count >= 1 ? count : undefined;
 }

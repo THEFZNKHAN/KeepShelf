@@ -253,3 +253,106 @@ test("refreshDates with force looks again even at a title checked today, so a ne
   assert.deepEqual(forced.items[0].tmdb.nextEpisode, { airDate: iso(3), season: 2, episode: 1 });
   assert.equal(calls.notifications.length, 0);
 });
+
+// A finished series, looked up long ago, with the season it had when it was finished.
+const finishedShow = (id, extra = {}) => ({
+  ...show(id, 0, { status: "done", done: true, ...extra }),
+  tmdb: { id: 321, kind: "tv", genres: [], fetchedAt: Date.now() - 9 * DAY, status: "Returning Series", seasons: 2, ...(extra.tmdb ?? {}) },
+});
+const tomorrowSeason = (season) => ({ air_date: iso(1), season_number: season, episode_number: 1 });
+
+test("a new season of a finished series is announced as one", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  store.trackbuddy_items = [finishedShow("Severance", { seasonsAtFinish: 2 })];
+  nextOnRefresh = tomorrowSeason(3);
+  await send({ action: "setRemindersEnabled", enabled: true });
+  await fireAlarm();
+  assert.equal(calls.notifications.length, 1);
+  assert.match(calls.notifications[0].options.message, /Severance: new season, S3 E1 tomorrow/);
+  await fireAlarm();
+  assert.equal(calls.notifications.length, 1, "once");
+});
+
+test("the rest of a season it had already finished is not a new season", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  store.trackbuddy_items = [finishedShow("Severance", { seasonsAtFinish: 2 })];
+  nextOnRefresh = tomorrowSeason(2);
+  await send({ action: "setRemindersEnabled", enabled: true });
+  await fireAlarm();
+  assert.equal(calls.notifications.length, 0);
+});
+
+test("with new seasons switched off, finished series are not looked up or announced", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  store.trackbuddy_items = [finishedShow("Severance", { seasonsAtFinish: 2 })];
+  nextOnRefresh = tomorrowSeason(3);
+  await send({ action: "setRemindersEnabled", enabled: true });
+  const off = await send({ action: "setNewSeasonReminders", enabled: false });
+  assert.deepEqual(off.reminders, { enabled: true, newSeasons: false });
+  assert.equal(store.keepshelf_reminders_new_seasons, false);
+  await fireAlarm();
+  assert.equal(fetched.length, 0, "no request for a finished show");
+  assert.equal(calls.notifications.length, 0);
+  assert.equal("seasonsAtFinish" in store.trackbuddy_items[0] && store.trackbuddy_items[0].seasonsAtFinish !== 2, false);
+});
+
+test("new seasons are on by default, and the setting is reported with the reminders", async () => {
+  const before = await send({ action: "getReminderSettings" });
+  assert.deepEqual(before.reminders, { enabled: false, newSeasons: true });
+  await send({ action: "setNewSeasonReminders", enabled: false });
+  assert.equal((await send({ action: "getReminderSettings" })).reminders.newSeasons, false);
+  await send({ action: "setNewSeasonReminders", enabled: true });
+  assert.equal((await send({ action: "getReminderSettings" })).reminders.newSeasons, true);
+});
+
+test("a finished series with no record of its seasons gets one from what is saved, and nothing is announced when no season is coming", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  const long = finishedShow("Old show", { tmdb: { seasons: 4 } });
+  store.trackbuddy_items = [long, show("Airing", 5)];
+  nextOnRefresh = tomorrowSeason(4);
+  await send({ action: "setRemindersEnabled", enabled: true });
+  await fireAlarm();
+  assert.equal(store.trackbuddy_items.find((i) => i.id === "Old show").seasonsAtFinish, 4, "recorded before anything is compared");
+  assert.equal(calls.notifications.length, 0, "no new season is announced for it");
+  assert.equal("seasonsAtFinish" in store.trackbuddy_items.find((i) => i.id === "Airing"), false, "unfinished shows get no record");
+});
+
+test("the Coming up refresh also records seasons, without reminders being on", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  store.trackbuddy_items = [finishedShow("Old show", { tmdb: { seasons: 5 } })];
+  nextOnRefresh = undefined;
+  const res = await send({ action: "refreshDates" });
+  assert.equal(res.ok, true);
+  assert.equal(res.items.find((i) => i.id === "Old show").seasonsAtFinish, 5);
+});
+
+test("an Ended show is recorded but never looked up again", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  store.trackbuddy_items = [finishedShow("Over", { seasonsAtFinish: 2, tmdb: { status: "Ended" } })];
+  await send({ action: "setRemindersEnabled", enabled: true });
+  await fireAlarm();
+  assert.equal(fetched.length, 0);
+});
+
+test("a season premiere already announced when a finished show is first seen is announced as new", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  const back = finishedShow("Returning", { tmdb: { seasons: 3, fetchedAt: Date.now() } });
+  back.tmdb.nextEpisode = { airDate: iso(1), season: 3, episode: 1 };
+  store.trackbuddy_items = [back];
+  await send({ action: "setRemindersEnabled", enabled: true });
+  await fireAlarm();
+  assert.equal(store.trackbuddy_items[0].seasonsAtFinish, 2, "season 3 is the announced one, so two were finished");
+  assert.equal(calls.notifications.length, 1);
+  assert.match(calls.notifications[0].options.message, /Returning: new season, S3 E1 tomorrow/);
+});
+
+test("the rest of the season a finished show was in is not announced, even when first seen", async () => {
+  store.keepshelf_tmdb_token = FAKE_KEY;
+  const mid = finishedShow("Midseason", { tmdb: { seasons: 3, fetchedAt: Date.now() } });
+  mid.tmdb.nextEpisode = { airDate: iso(1), season: 3, episode: 4 };
+  store.trackbuddy_items = [mid];
+  await send({ action: "setRemindersEnabled", enabled: true });
+  await fireAlarm();
+  assert.equal(store.trackbuddy_items[0].seasonsAtFinish, 3);
+  assert.equal(calls.notifications.length, 0);
+});
