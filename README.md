@@ -427,6 +427,8 @@ Get a desktop notification when something on your shelf is about to come out. It
 
 The **calendar** button in the header opens **Coming up**: what is airing or releasing in the **next 2 weeks** (or **1 month** or **3 months**, picked with the buttons at the top and remembered) for titles you haven't finished, grouped by day (**Today**, **Tomorrow**, then the date). Each row shows the poster, the title, and **S2 E6** for an episode or **Release** for a movie. Tap a row to open that title's card.
 
+Above the days, **New seasons of shows you finished** lists every series marked Done that has a season you haven't watched: **S3 out now** (or **S3–S4 out now**) for seasons already out, **S3 airing now**, **S3 on 12 Dec** for a premiere date, or **S3 announced** when TMDB has the season but no date. Out-now seasons come first, then the nearest premiere. It works from what KeepShelf last fetched from TMDB, so use **Check for new dates** to refresh. A show finished before KeepShelf recorded its season count is compared from the first check on, so a season that was already out then isn't listed.
+
 - It works without turning on reminders, but it needs your [TMDB token](#tmdb-info) and fetched info, because the dates come from TMDB.
 - Opening it quietly looks up new dates for titles whose saved dates may be out of date (the same rule reminders use, so each title is looked up about once a week at most), then redraws. If TMDB can't be reached it shows the dates already saved. It never sends a notification.
 - **Watched** and **Dropped** titles are left out, and so is anything TMDB has no date for. Between seasons a series has no next date.
