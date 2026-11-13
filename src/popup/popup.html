@@ -109,6 +109,18 @@
           >
             <span class="material-symbols-outlined">tune</span>
           </button>
+          <button type="button" id="pick-random" class="icon-btn" aria-label="Pick something for me" title="Pick something for me">
+            <span class="material-symbols-outlined">casino</span>
+          </button>
+          <button type="button" id="copy-items" class="icon-btn" aria-label="Copy" title="Copy">
+            <span class="material-symbols-outlined">content_copy</span>
+          </button>
+          <button type="button" id="sync-selected" class="icon-btn" aria-label="Sync selected to Keep" title="Sync selected to Keep">
+            <span class="material-symbols-outlined">cloud_upload</span>
+          </button>
+          <button type="button" id="delete-selected" class="icon-btn icon-btn-danger" aria-label="Delete selected" title="Delete selected">
+            <span class="material-symbols-outlined">delete</span>
+          </button>
         </div>
 
         <div id="more-filters" class="more-filters" hidden>
@@ -138,61 +150,6 @@
           </button>
           <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
         </div>
-        </div>
-
-        <p id="hidden-note" class="hidden-note" hidden>
-          <span id="hidden-note-text"></span>
-          <button type="button" id="show-all" class="link-btn">Show all</button>
-        </p>
-
-        <div class="action-row">
-          <div class="action-group">
-            <button type="button" id="copy-all" class="btn btn-primary">
-              <span class="material-symbols-outlined btn-icon">content_copy</span>
-              Copy all
-            </button>
-            <button type="button" id="copy-selected" class="btn btn-outline">
-              Copy selected
-            </button>
-          </div>
-          <div class="action-group icon-actions">
-            <button
-              type="button"
-              id="pick-random"
-              class="icon-btn"
-              aria-label="Pick something for me"
-              title="Pick something for me"
-            >
-              <span class="material-symbols-outlined">casino</span>
-            </button>
-            <button
-              type="button"
-              id="sync-selected"
-              class="icon-btn"
-              aria-label="Sync selected to Keep"
-              title="Sync selected to Keep"
-            >
-              <span class="material-symbols-outlined">cloud_upload</span>
-            </button>
-            <button
-              type="button"
-              id="clear-all"
-              class="icon-btn"
-              aria-label="Clear all"
-              title="Clear all"
-            >
-              <span class="material-symbols-outlined">clear_all</span>
-            </button>
-            <button
-              type="button"
-              id="delete-selected"
-              class="icon-btn icon-btn-danger"
-              aria-label="Delete selected"
-              title="Delete selected"
-            >
-              <span class="material-symbols-outlined">delete</span>
-            </button>
-          </div>
         </div>
 
         <div id="status" class="toast" hidden>
@@ -340,6 +297,26 @@
                 <span class="switch-track"></span>
               </label>
             </div>
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Show Books</strong>
+                <span>The Books tab. Turning it off only hides it: your books stay saved and come back when you turn it on.</span>
+              </div>
+              <label class="switch" title="Show the Books tab">
+                <input type="checkbox" id="pref-show-books" aria-label="Show Books" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Show Tabs</strong>
+                <span>The Tabs tab, for saved pages, links and notes. Turning it off only hides it: they stay saved and come back when you turn it on.</span>
+              </div>
+              <label class="switch" title="Show the Tabs tab">
+                <input type="checkbox" id="pref-show-tabs" aria-label="Show Tabs" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
             <div class="pref-select">
               <label for="pref-start">
                 <strong>When I open KeepShelf</strong>
@@ -353,7 +330,7 @@
             <div class="pref-select">
               <label for="pref-default-view">
                 <strong>Default view</strong>
-                <span>Hiding watched items also hides dropped ones. Show all is always one tap away. Applies the next time you open KeepShelf.</span>
+                <span>Hiding watched items also hides dropped ones. The status list behind the filter button shows everything. Applies the next time you open KeepShelf.</span>
               </label>
               <select id="pref-default-view" class="view-select">
                 <option value="hide">Hide watched and dropped</option>
@@ -671,6 +648,13 @@
                 <button type="button" id="paste-add" class="btn btn-primary btn-wide" disabled>Add to shelf</button>
               </div>
             </details>
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Delete everything</strong>
+                <span>Removes every item from KeepShelf. Your Google Keep lists are not affected. This can't be undone, so export a backup first.</span>
+              </div>
+              <button type="button" id="clear-all" class="btn btn-outline btn-sm danger-outline">Delete all</button>
+            </div>
             <div id="backup-settings-status" class="settings-toast" hidden>
               <div class="settings-toast-content">
                 <span id="backup-settings-status-icon" class="material-symbols-outlined">check_circle</span>

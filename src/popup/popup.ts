@@ -81,7 +81,6 @@ import {
   STATUS_FILTERS,
   defaultStatusFilter,
   effectiveStatusFilter,
-  hiddenNote,
   matchesStatusFilter,
   type DefaultView,
   type StartMode,
@@ -123,6 +122,21 @@ function storedChoice<T extends string>(key: string, allowed: T[], fallback: T):
 let startMode = storedChoice<StartMode>("keepshelf.startMode", START_MODES, "fresh");
 let defaultView = storedChoice<DefaultView>("keepshelf.defaultView", DEFAULT_VIEWS, "hide");
 let searchMode = storedChoice<SearchMode>("keepshelf.searchOnline", [...SEARCH_MODES], DEFAULT_SEARCH_MODE);
+
+/**
+ * Books and Tabs can be switched off to keep the shelf to movies, series and anime. Off only hides the tab: the saved
+ * items stay exactly where they are and are all there again when it is switched back on. On unless set to "off".
+ */
+const SECTION_KEYS = { books: "keepshelf.showBooks", tabs: "keepshelf.showTabs" } as const;
+const sectionOn = (key: string): boolean => {
+  try {
+    return localStorage.getItem(key) !== "off";
+  } catch {
+    return true;
+  }
+};
+let showBooks = sectionOn(SECTION_KEYS.books);
+let showTabs = sectionOn(SECTION_KEYS.tabs);
 const remembering = startMode === "remember";
 const TYPE_CHIPS: Array<MediaType | "all"> = ["all", "movie", "series", "anime"];
 
@@ -168,8 +182,6 @@ const onlineResultsEl = document.getElementById("online-results")!;
 const onlineTitleEl = document.getElementById("online-title")!;
 const onlineBodyEl = document.getElementById("online-body")!;
 const onlineBackEl = document.getElementById("online-back") as HTMLButtonElement;
-const hiddenNoteEl = document.getElementById("hidden-note")!;
-const hiddenNoteTextEl = document.getElementById("hidden-note-text")!;
 const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
@@ -210,7 +222,7 @@ const pickRandomBtnEl = document.getElementById("pick-random") as HTMLButtonElem
 const organiseRowEl = document.getElementById("organise-row")!;
 const moreFiltersEl = document.getElementById("more-filters")!;
 const toggleFiltersEl = document.getElementById("toggle-filters") as HTMLButtonElement;
-const copySelectedEl = document.getElementById("copy-selected") as HTMLButtonElement;
+const copyItemsEl = document.getElementById("copy-items") as HTMLButtonElement;
 const deleteSelectedEl = document.getElementById("delete-selected") as HTMLButtonElement;
 const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
 const tagPicker = createTagPicker(tagFilterEl, (tag) => {
@@ -1249,13 +1261,11 @@ function render(): void {
     activeTab === "tabs" ? "Save tab" :
     "Save media";
 
-  // The default view hides watched items; say how many, and offer the way back.
+  // The default view hides watched items, which can leave nothing: say so, and where the rest is.
   const hiddenCount = statusFilter === "pending" ? filteredItems({ ignoreStatus: true }).length - items.length : 0;
-  hiddenNoteEl.hidden = hiddenCount <= 0;
-  hiddenNoteTextEl.textContent = hiddenNote(hiddenCount, activeTab);
   filterEmptyTextEl.textContent =
     items.length === 0 && hiddenCount > 0
-      ? `Nothing left to ${activeTab === "books" ? "read" : activeTab === "tabs" ? "do" : "watch"}. Tap "Show all" to see the rest.`
+      ? `Nothing left to ${activeTab === "books" ? "read" : activeTab === "tabs" ? "do" : "watch"}. Open the filter button and choose All to see the rest.`
       : "No items for this filter.";
 
   const showGlobalEmpty = tabCount === 0;
@@ -1597,9 +1607,12 @@ function updateSyncButton(): void {
 
 /** The buttons that act on ticked rows only appear while something is ticked, which keeps the header quiet. */
 function updateSelectionUi(): void {
-  const any = getSelectedIds().length > 0;
-  copySelectedEl.hidden = !any;
-  deleteSelectedEl.hidden = !any;
+  const selected = getSelectedIds().length;
+  deleteSelectedEl.hidden = selected === 0;
+  // One copy button: the ticked rows when there are some, otherwise everything the list shows.
+  const label = selected > 0 ? `Copy ${selected} selected` : "Copy everything shown";
+  copyItemsEl.title = label;
+  copyItemsEl.setAttribute("aria-label", label);
   updateSyncButton();
 }
 
@@ -1810,12 +1823,15 @@ async function saveCurrentPage(): Promise<void> {
     }
 
     const keep = "keep" in saveResponse ? saveResponse.keep : undefined;
+    // A book saved while Books is switched off is kept, just not shown: say where it went.
+    const savedItem = "item" in saveResponse ? saveResponse.item : undefined;
+    const hiddenIn = savedItem?.type === "book" && !showBooks ? " to Books, which is switched off in Settings" : "";
     if ("duplicate" in saveResponse && saveResponse.duplicate) {
-      showSaveResult("Already saved", keep);
+      showSaveResult(`Already saved${hiddenIn ? " in Books, which is switched off in Settings" : ""}`, keep);
     } else {
       await loadItems();
       const similar = "similar" in saveResponse ? saveResponse.similar?.[0] : undefined;
-      showSaveResult(similar ? `Saved (similar to "${similar}", see Settings > Duplicates)` : "Saved", keep);
+      showSaveResult(similar ? `Saved${hiddenIn} (similar to "${similar}", see Settings > Duplicates)` : `Saved${hiddenIn}`, keep);
     }
   } finally {
     setSaveButtonBusy(false);
@@ -2440,6 +2456,12 @@ function renderPrefs(): void {
   // A restored backup may have changed it behind our back.
   searchMode = storedChoice<SearchMode>("keepshelf.searchOnline", [...SEARCH_MODES], DEFAULT_SEARCH_MODE);
   prefSearchOnlineEl.value = searchMode;
+  showBooks = sectionOn(SECTION_KEYS.books);
+  showTabs = sectionOn(SECTION_KEYS.tabs);
+  prefShowBooksEl.checked = showBooks;
+  prefShowTabsEl.checked = showTabs;
+  applySections();
+  render();
   const on = askRatingEnabled();
   prefAskRatingEl.checked = on;
   generalSummaryEl.textContent = on ? "Rating prompt on" : "Rating prompt off";
@@ -2449,6 +2471,25 @@ function renderPrefs(): void {
 const prefStartEl = document.getElementById("pref-start") as HTMLSelectElement;
 const prefDefaultViewEl = document.getElementById("pref-default-view") as HTMLSelectElement;
 const prefSearchOnlineEl = document.getElementById("pref-search-online") as HTMLSelectElement;
+const prefShowBooksEl = document.getElementById("pref-show-books") as HTMLInputElement;
+const prefShowTabsEl = document.getElementById("pref-show-tabs") as HTMLInputElement;
+prefShowBooksEl.checked = showBooks;
+prefShowTabsEl.checked = showTabs;
+
+function setSection(key: string, on: boolean): void {
+  try {
+    localStorage.setItem(key, on ? "on" : "off");
+  } catch {
+    /* the choice just won't be remembered */
+  }
+  showBooks = sectionOn(SECTION_KEYS.books);
+  showTabs = sectionOn(SECTION_KEYS.tabs);
+  applySections();
+  render();
+}
+
+prefShowBooksEl.addEventListener("change", () => setSection(SECTION_KEYS.books, prefShowBooksEl.checked));
+prefShowTabsEl.addEventListener("change", () => setSection(SECTION_KEYS.tabs, prefShowTabsEl.checked));
 prefStartEl.value = startMode;
 prefDefaultViewEl.value = defaultView;
 prefSearchOnlineEl.value = searchMode;
@@ -4032,12 +4073,6 @@ statusFilterEl.addEventListener("change", () => {
   render();
 });
 
-document.getElementById("show-all")!.addEventListener("click", () => {
-  statusFilter = "all";
-  rememberView();
-  render();
-});
-
 listFilterEl.addEventListener("change", () => {
   listFilter = listFilterEl.value;
   rememberView();
@@ -4092,6 +4127,27 @@ filtersEl.addEventListener("click", (e) => {
   render();
 });
 
+/**
+ * Shows only the tabs that are switched on, and no tab bar at all when Media is all that is left. If the tab you were
+ * on has been switched off, you land on Media.
+ */
+function applySections(): void {
+  const visible: Record<string, boolean> = { media: true, books: showBooks, tabs: showTabs };
+  shelfTabsEl.querySelectorAll<HTMLElement>(".shelf-tab").forEach((t) => {
+    t.hidden = !visible[t.dataset.tab ?? ""];
+  });
+  shelfTabsEl.hidden = !showBooks && !showTabs;
+  if (!visible[activeTab]) {
+    activeTab = "media";
+    activeFilter = "all";
+    tagFilter = "";
+    listFilter = "";
+    tabInputEl.value = "";
+    syncShelfUi();
+    rememberView();
+  }
+}
+
 /** Shows the restored tab and type chip as selected, for "Remember where I left off". */
 function syncShelfUi(): void {
   shelfTabsEl.querySelectorAll<HTMLElement>(".shelf-tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === activeTab));
@@ -4112,14 +4168,10 @@ tabInputEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") void saveTabInput();
 });
 
-document.getElementById("copy-all")!.addEventListener("click", () => {
-  void copyToClipboard(filteredItems());
-});
-
-document.getElementById("copy-selected")!.addEventListener("click", () => {
+copyItemsEl.addEventListener("click", () => {
   const ids = new Set(getSelectedIds());
-  const selected = filteredItems().filter((i) => ids.has(i.id));
-  void copyToClipboard(selected);
+  const shown = filteredItems();
+  void copyToClipboard(ids.size > 0 ? shown.filter((i) => ids.has(i.id)) : shown);
 });
 
 document.getElementById("delete-selected")!.addEventListener("click", async () => {
@@ -4147,10 +4199,10 @@ document.getElementById("delete-selected")!.addEventListener("click", async () =
 
 document.getElementById("clear-all")!.addEventListener("click", async () => {
   const confirmed = await showConfirm({
-    title: "Clear all saved items?",
+    title: "Delete everything?",
     message:
-      "This removes every item from KeepShelf. Your Google Keep lists are not affected.",
-    confirmLabel: "Clear all",
+      "This removes every item from KeepShelf, including Books and Tabs even if they are switched off. Your Google Keep lists are not affected. This can't be undone.",
+    confirmLabel: "Delete all",
     cancelLabel: "Cancel",
   });
   if (!confirmed) return;
@@ -4160,7 +4212,7 @@ document.getElementById("clear-all")!.addEventListener("click", async () => {
     if (response?.ok) {
       allItems = [];
       render();
-      showStatus("Cleared all items.");
+      showStatus("Deleted everything.");
     }
   } catch (err) {
     showStatus(err instanceof Error ? err.message : "Clear failed.", true);
@@ -4214,6 +4266,7 @@ if (isTabView) {
 }
 
 syncShelfUi();
+applySections();
 void loadItems().then(async () => {
   // Refreshes or drops TMDB data older than the retention limit; usually a no-op.
   try {
