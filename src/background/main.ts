@@ -34,7 +34,17 @@ import {
   parseTmdbToken,
 } from "../shared/tmdb.js";
 import { isFresh, sanitizeRatings } from "../shared/episode-ratings.js";
-import { MAX_QUERY, MIN_QUERY, newItemFromResult, parseSearchResults, sanitizeResult } from "../shared/tmdb-search.js";
+import {
+  MAX_QUERY,
+  MIN_QUERY,
+  franchiseBase,
+  matchesFranchise,
+  mergeFranchise,
+  newItemFromResult,
+  parseResultList,
+  parseSearchResults,
+  sanitizeResult,
+} from "../shared/tmdb-search.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
 import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
@@ -150,6 +160,55 @@ async function searchTmdb(rawQuery: string): Promise<MessageResponse> {
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not search TMDB." };
   }
+}
+
+/**
+ * "More like this" for a saved title. TMDB's recommendations come from what viewers watch, not from franchises, so
+ * the title's own sequels and remakes are added in front: the other films in its TMDB collection, and anything
+ * named like it. Each part is fetched on its own, so one failing still leaves the others.
+ */
+async function similarTmdb(id: unknown): Promise<MessageResponse> {
+  const item = typeof id === "string" ? (await getAllItems()).find((i) => i.id === id) : undefined;
+  const tmdb = item?.tmdb;
+  if (!item || !tmdb) return { ok: false, error: "This title has no TMDB info, so there is nothing to compare it with." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+
+  const base = franchiseBase(item.title);
+  const collectionParts = async () => {
+    const details = await client.get<{ belongs_to_collection?: { id?: unknown } | null }>(`/movie/${tmdb.id}`, { language: "en-US" });
+    const collectionId = details.belongs_to_collection?.id;
+    if (typeof collectionId !== "number") return [];
+    const collection = await client.get<{ parts?: unknown }>(`/collection/${collectionId}`, { language: "en-US" });
+    return parseResultList({ results: collection.parts }, "movie");
+  };
+  const sameName = async () => {
+    const found = await client.get<unknown>("/search/multi", { query: base, include_adult: "false", language: "en-US" });
+    return parseSearchResults(found).filter((r) => matchesFranchise(base, r.title));
+  };
+
+  // Only the lookups that make sense for this title are made: collections exist for films, and a name of one or two
+  // letters would match everything.
+  const recommended = client.get<unknown>(`/${tmdb.kind}/${tmdb.id}/recommendations`, { language: "en-US", page: 1 });
+  const collection = tmdb.kind === "movie" ? collectionParts() : undefined;
+  const named = base.length >= 3 ? sameName() : undefined;
+  const settled = await Promise.allSettled([recommended, collection ?? Promise.resolve([]), named ?? Promise.resolve([])]);
+  const [rec, col, nam] = settled;
+  const asked = [recommended, collection, named].filter(Boolean).length;
+  const failed = [rec, collection ? col : undefined, named ? nam : undefined].filter((r) => r?.status === "rejected").length;
+  if (failed === asked) {
+    const err = rec.status === "rejected" ? rec.reason : undefined;
+    return { ok: false, error: err instanceof Error ? err.message : "Could not get recommendations." };
+  }
+  return {
+    ok: true,
+    tmdbResults: mergeFranchise({
+      self: tmdb,
+      collection: col.status === "fulfilled" ? (col.value as ReturnType<typeof parseResultList>) : [],
+      named: nam.status === "fulfilled" ? (nam.value as ReturnType<typeof parseResultList>) : [],
+      recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
+    }),
+  };
 }
 
 /** Adds a search result to the shelf as an ordinary save, with TMDB's info for exactly that title already in place. */
@@ -508,6 +567,9 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "searchTmdb": {
       return searchTmdb(message.query);
+    }
+    case "similarTmdb": {
+      return similarTmdb(message.id);
     }
     case "addFromTmdb": {
       return addFromTmdb(message.result);

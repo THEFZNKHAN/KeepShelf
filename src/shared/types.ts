@@ -167,6 +167,7 @@ export type MessageAction =
   | { action: "refreshDates"; force?: boolean }
   | { action: "episodeRatings"; id: string; force?: boolean }
   | { action: "searchTmdb"; query: string }
+  | { action: "similarTmdb"; id: string }
   | { action: "addFromTmdb"; result: TmdbSearchResult }
   | { action: "clear" }
   | { action: "getKeepSettings" }

@@ -1347,7 +1347,12 @@ function render(): void {
 /* ── Search TMDB from the search box ──────────────────────── */
 
 interface OnlineSearch {
+  /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. */
+  kind: "search" | "like";
+  /** The words searched for, or (for "like") the title's name. */
   query: string;
+  /** For "like": the saved item the recommendations are for. */
+  sourceId?: string;
   status: "loading" | "done" | "error";
   results: TmdbSearchResult[];
   error: string;
@@ -1368,6 +1373,14 @@ function currentOnlineState() {
 
 /** Shows the Search TMDB row, or the results when they are open. Returns true when the results are on screen. */
 function updateOnlineUi(): boolean {
+  // Recommendations for a title don't depend on the search box, so typing and tabs don't decide whether they show.
+  if (online?.kind === "like") {
+    onlineOffered = undefined;
+    onlineSearchEl.hidden = true;
+    onlineResultsEl.hidden = false;
+    renderOnlineResults();
+    return true;
+  }
   const state = currentOnlineState();
   onlineOffered = state.offer ? { query: state.query } : undefined;
   if (!state.offer) {
@@ -1398,19 +1411,50 @@ function scheduleAutoSearch(): void {
 }
 
 async function startOnlineSearch(query: string): Promise<void> {
-  online = { query, status: "loading", results: [], error: "" };
+  online = { kind: "search", query, status: "loading", results: [], error: "" };
   render();
   try {
     const response = await sendToBackground({ action: "searchTmdb", query });
-    if (online?.query !== query) return;
+    if (online?.kind !== "search" || online.query !== query) return;
     if (!response.ok) throw new Error(response.error);
     if (!("tmdbResults" in response)) throw new Error("No results came back.");
-    online = { query, status: "done", results: response.tmdbResults, error: "" };
+    online = { kind: "search", query, status: "done", results: response.tmdbResults, error: "" };
   } catch (err) {
-    if (online?.query !== query) return;
-    online = { query, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
+    if (online?.kind !== "search" || online.query !== query) return;
+    online = { kind: "search", query, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
   }
   render();
+}
+
+/** Shows what TMDB recommends for a title on the shelf, in the same list as a search, each with an Add button. */
+async function startSimilar(item: SavedItem): Promise<void> {
+  const sourceId = item.id;
+  const label = itemTitle(item);
+  const current = () => online?.kind === "like" && online.sourceId === sourceId;
+  online = { kind: "like", query: label, sourceId, status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "similarTmdb", id: sourceId });
+    if (!current()) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No recommendations came back.");
+    online = { kind: "like", query: label, sourceId, status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (!current()) return;
+    online = { kind: "like", query: label, sourceId, status: "error", results: [], error: err instanceof Error ? err.message : "Could not get recommendations." };
+  }
+  render();
+}
+
+/** "More like this" on a card: close the card and show the recommendations where the search results go. */
+function openSimilar(item: SavedItem): void {
+  closePick();
+  if (!upcomingView.hidden) closeUpcoming();
+  // A search typed earlier would only be in the way of the shelf you come back to.
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  void startSimilar(item);
 }
 
 function onlineMessage(text: string, retry?: () => void): HTMLElement {
@@ -1506,18 +1550,42 @@ function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
 
 function renderOnlineResults(): void {
   if (!online) return;
-  onlineTitleEl.textContent = `“${online.query}” on TMDB`;
+  const like = online.kind === "like";
+  onlineTitleEl.textContent = like ? `Like “${online.query}”` : `“${online.query}” on TMDB`;
   if (online.status === "loading") {
-    onlineBodyEl.replaceChildren(onlineMessage("Searching TMDB…"));
+    onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : "Searching TMDB…"));
   } else if (online.status === "error") {
     const query = online.query;
-    onlineBodyEl.replaceChildren(onlineMessage(online.error, () => void startOnlineSearch(query)));
+    const sourceId = online.sourceId;
+    const retry = () => {
+      const source = sourceId ? allItems.find((i) => i.id === sourceId) : undefined;
+      if (like && source) void startSimilar(source);
+      else if (!like) void startOnlineSearch(query);
+    };
+    onlineBodyEl.replaceChildren(onlineMessage(online.error, retry));
   } else if (online.results.length === 0) {
-    onlineBodyEl.replaceChildren(onlineMessage(`Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`));
+    onlineBodyEl.replaceChildren(
+      onlineMessage(like ? `TMDB has no recommendations for “${online.query}” yet.` : `Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`)
+    );
   } else {
     const list = document.createElement("ul");
     list.className = "list";
-    list.append(...online.results.map(onlineResultRow));
+    // "More like this" leads with the title's own franchise; label it, and the recommendations after it.
+    const hasFranchise = online.kind === "like" && online.results.some((r) => r.group === "franchise");
+    let group: string | undefined;
+    for (const result of online.results) {
+      if (hasFranchise) {
+        const next = result.group === "franchise" ? "Same franchise" : "You might also like";
+        if (next !== group) {
+          const heading = document.createElement("li");
+          heading.className = "online-group";
+          heading.textContent = next;
+          list.append(heading);
+          group = next;
+        }
+      }
+      list.append(onlineResultRow(result));
+    }
     onlineBodyEl.replaceChildren(list);
   }
 }
@@ -3255,6 +3323,19 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
     const firstTag = chips.findIndex((chip) => chip.className.includes("pick-chip-tag"));
     chipEls.splice(firstTag === -1 ? chipEls.length : firstTag, 0, add);
   }
+  // Recommendations for a title TMDB knows, shown where the search results go.
+  if (info && item.tmdb) {
+    const similar = document.createElement("button");
+    similar.type = "button";
+    similar.className = "pick-chip pick-chip-link";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "recommend";
+    similar.append(icon, document.createTextNode("More like this"));
+    similar.title = `Find titles similar to ${itemTitle(item)}`;
+    similar.addEventListener("click", () => openSimilar(item));
+    chipEls.push(similar);
+  }
   pickChipsEl.replaceChildren(...chipEls);
   pickChipsEl.hidden = chipEls.length === 0;
   pickReviewEl.textContent = info && item.review ? item.review : "";
@@ -4167,6 +4248,8 @@ importFileEl.addEventListener("change", () => {
 
 searchEl.addEventListener("input", () => {
   searchQuery = searchEl.value;
+  // Typing means you want to search your shelf again, not keep reading recommendations.
+  if (online?.kind === "like") online = undefined;
   render();
   scheduleAutoSearch();
 });
@@ -4222,6 +4305,7 @@ shelfTabsEl.addEventListener("click", (e) => {
   activeFilter = "all";
   tagFilter = "";
   listFilter = "";
+  if (online?.kind === "like") online = undefined;
   shelfTabsEl.querySelectorAll(".shelf-tab").forEach((t) => {
     t.classList.toggle("active", t === btn);
   });
