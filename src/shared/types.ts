@@ -1,4 +1,5 @@
 import type { EpisodeRatings } from "./episode-ratings.js";
+import type { TmdbSearchResult } from "./tmdb-search.js";
 import type { KeepSettings, KeepSyncResult, KeepTarget } from "./keep-settings.js";
 
 export type MediaType = "movie" | "series" | "anime" | "book" | "tab" | "link" | "note";
@@ -165,6 +166,8 @@ export type MessageAction =
   | { action: "refreshStaleTmdb" }
   | { action: "refreshDates"; force?: boolean }
   | { action: "episodeRatings"; id: string; force?: boolean }
+  | { action: "searchTmdb"; query: string }
+  | { action: "addFromTmdb"; result: TmdbSearchResult }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
@@ -185,6 +188,7 @@ export type MessageResponse =
     }
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; episodeRatings: EpisodeRatings }
+  | { ok: true; tmdbResults: TmdbSearchResult[] }
   | { ok: true; bookInfo: { enabled: boolean } }
   | { ok: true; reminders: { enabled: boolean } }
   | { ok: true; message: string }

@@ -103,6 +103,7 @@ KeepShelf/
 │       ├── reminders.ts       # Release reminders: due dates, refresh rules, notification text (pure)
 │       ├── coming-up.ts       # Coming up screen: what airs or releases soon, grouped by day (pure)
 │       ├── episode-ratings.ts # Episode ratings grid: cleaning TMDB seasons, rating bands, grid layout, averages (pure)
+│       ├── tmdb-search.ts     # Search TMDB from the search box: result cleaning, anime guess, on-shelf check, the new item (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
 │       ├── tmdb-settings.ts   # TMDB token storage
@@ -149,6 +150,8 @@ KeepShelf/
 │   ├── coming-up.test.mjs     # Window, grouping and headings for the Coming up screen
 │   ├── episode-ratings.test.mjs  # Bands, cleaning, grid layout and averages for the ratings grid
 │   ├── background-ratings.test.mjs  # The episodeRatings action: session cache, errors, no token
+│   ├── tmdb-search.test.mjs   # Result parsing, anime guess, on-shelf matching, when the search is offered
+│   ├── background-search.test.mjs   # The searchTmdb and addFromTmdb actions
 │   ├── undo.test.mjs
 │   ├── tmdb.test.mjs
 │   ├── openlibrary.test.mjs

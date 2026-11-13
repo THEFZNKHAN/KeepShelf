@@ -78,6 +78,7 @@
 - [Organise and track your shelf](#organise-and-track-your-shelf)
 - [TMDB info](#tmdb-info)
 - [Episode ratings](#episode-ratings)
+- [Search TMDB from the search box](#search-tmdb-from-the-search-box)
 - [Release reminders](#release-reminders)
 - [Book info](#book-info)
 - [Supported sources](#supported-sources)
@@ -180,7 +181,21 @@ Click **Save page** in the popup, press `Alt+Shift+S`, or right-click a page, li
 
 Your own ratings and reviews, tags, custom lists, watch and read progress (episode by episode, season by season), a random picker and stats. Details in [Organise and track your shelf](#organise-and-track-your-shelf).
 
-### Episode ratings
+### Search TMDB from the search box
+
+The search box on the **Media** tab filters your shelf as you type. When what you typed isn't on it, or you want something else, tap the row under the list, **Search TMDB for "dark matter"**. The results replace the shelf: each has a poster, title, year, type, TMDB rating and a short description. Tap **Add** and it goes onto your shelf as **To watch**, with its poster, genres and episode counts already filled in, and you get an **Undo** for a few seconds. **My shelf** takes you back.
+
+- Anything already on your shelf says **On shelf** instead of Add, so you can't add it twice.
+- Descriptions are cut to two lines; rest the pointer on a result to read all of it.
+- Results are movies, series and anime. TMDB doesn't label anime, so KeepShelf files a Japanese animated title as **Anime** and everything else as a movie or a series. If one is wrong, change its type in **Edit**.
+- It needs your [TMDB token](#tmdb-info). Without one the row tells you to add it in Settings.
+- **Settings > General > Search TMDB from the search box** chooses how it behaves:
+  - **Show a "Search TMDB" row** (the default): nothing is sent until you tap the row.
+  - **Also search by itself when nothing matches**: if at least three letters match nothing on your shelf, KeepShelf searches TMDB a moment after you stop typing. Words are only sent in this case.
+  - **Off**: the row never appears and nothing is sent.
+- The Books and Tabs tabs don't search online.
+
+## Episode ratings
 
 On the card of a series or anime that has TMDB info, a **grid icon** sits at the top right. Tap it and the same card becomes a grid of episode ratings: **seasons across, episodes down**, each cell coloured by its rating (a strip under the headline numbers shows the colours from Garbage to Absolute cinema), with the average of each season pinned along the bottom. The top shows the **average**, the **best** and the **lowest** episode; tap Best or Lowest to jump to it in the grid. Use the back arrow, or **Esc**, to return to the card.
 
@@ -353,6 +368,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 - **Next air dates** for series and **release dates** for movies, used by [release reminders](#release-reminders).
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
 - An **[episode ratings grid](#episode-ratings)** for series and anime, opened from the grid icon on the item's card.
+- **[Search TMDB](#search-tmdb-from-the-search-box)** from the shelf's search box, to find and add a title you haven't saved yet.
 
 Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered by TMDB, which only has films and TV. Books have their own option, see [Book info](#book-info).
 
@@ -362,7 +378,7 @@ Anything the page itself provided wins over TMDB, and anything you type wins ove
 - If a match is wrong, open the item's **Edit** dialog and click **Wrong match? Remove**. It won't be looked up again unless you click **Fetch info**.
 
 **Good to know**
-- Titles are sent to TMDB to look them up. Nothing else is, and your token never leaves your browser except in requests to TMDB.
+- Titles are sent to TMDB to look them up. Nothing else is, and your token never leaves your browser except in requests to TMDB. When you search from the search box, the words you typed are sent too, and only when you ask (see [Search TMDB](#search-tmdb-from-the-search-box)).
 - TMDB's terms limit how long its data may be kept, so KeepShelf refreshes it after about 5 months and drops it after 6. Backups follow the same rule.
 - The IMDb, Letterboxd and other ratings still come from the page you saved. TMDB's rating is shown separately as `TMDB 8.4`.
 - [Episode ratings](#episode-ratings) are fetched only when you open the grid, kept in memory for that browser session and never saved with your shelf or in backups.

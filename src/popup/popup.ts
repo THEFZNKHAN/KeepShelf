@@ -12,7 +12,16 @@ import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
-import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_NOTICE } from "../shared/tmdb.js";
+import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
+import {
+  AUTO_SEARCH_DELAY_MS,
+  DEFAULT_SEARCH_MODE,
+  SEARCH_MODES,
+  findOnShelf,
+  onlineSearchState,
+  type SearchMode,
+  type TmdbSearchResult,
+} from "../shared/tmdb-search.js";
 import {
   WATCH_MEDIA_TYPES,
   addExampleToSite,
@@ -113,6 +122,7 @@ function storedChoice<T extends string>(key: string, allowed: T[], fallback: T):
 /** Whether to open on the default view or where you left off, and what the default view is. Both are kept in this browser. */
 let startMode = storedChoice<StartMode>("keepshelf.startMode", START_MODES, "fresh");
 let defaultView = storedChoice<DefaultView>("keepshelf.defaultView", DEFAULT_VIEWS, "hide");
+let searchMode = storedChoice<SearchMode>("keepshelf.searchOnline", [...SEARCH_MODES], DEFAULT_SEARCH_MODE);
 const remembering = startMode === "remember";
 const TYPE_CHIPS: Array<MediaType | "all"> = ["all", "movie", "series", "anime"];
 
@@ -150,6 +160,14 @@ const emptyBodyEl = document.getElementById("empty-body")!;
 const emptyHintsEl = document.getElementById("empty-hints")!;
 const filterEmptyEl = document.getElementById("filter-empty")!;
 const filterEmptyTextEl = filterEmptyEl.querySelector("p")!;
+const onlineSearchEl = document.getElementById("online-search")!;
+const onlineSearchBtnEl = document.getElementById("online-search-btn") as HTMLButtonElement;
+const onlineSearchLabelEl = document.getElementById("online-search-label")!;
+const onlineSearchSubEl = document.getElementById("online-search-sub")!;
+const onlineResultsEl = document.getElementById("online-results")!;
+const onlineTitleEl = document.getElementById("online-title")!;
+const onlineBodyEl = document.getElementById("online-body")!;
+const onlineBackEl = document.getElementById("online-back") as HTMLButtonElement;
 const hiddenNoteEl = document.getElementById("hidden-note")!;
 const hiddenNoteTextEl = document.getElementById("hidden-note-text")!;
 const countEl = document.getElementById("count")!;
@@ -1248,6 +1266,17 @@ function render(): void {
   filterEmptyEl.hidden = !showFilterEmpty;
   listEl.hidden = items.length === 0;
 
+  // With results from TMDB open, they take the place of the shelf until you go back to it.
+  if (updateOnlineUi()) {
+    listEl.hidden = true;
+    emptyEl.hidden = true;
+    filterEmptyEl.hidden = true;
+  }
+  // Nothing matched and TMDB is on offer: a short line, with the search right under it, not a tall empty box.
+  const compactEmpty = !!onlineOffered && !online && showFilterEmpty;
+  filterEmptyEl.classList.toggle("is-compact", compactEmpty);
+  if (compactEmpty && hiddenCount <= 0) filterEmptyTextEl.textContent = `Nothing on your shelf matches “${onlineOffered!.query}”.`;
+
   if (items.length === 0) {
     return;
   }
@@ -1304,6 +1333,240 @@ function render(): void {
     listEl.append(li);
   }
 }
+
+/* ── Search TMDB from the search box ──────────────────────── */
+
+interface OnlineSearch {
+  query: string;
+  status: "loading" | "done" | "error";
+  results: TmdbSearchResult[];
+  error: string;
+}
+
+/** Defined while the results view is open. */
+let online: OnlineSearch | undefined;
+/** Whether the Search TMDB row is on offer right now, and for which words. */
+let onlineOffered: { query: string } | undefined;
+let autoSearchTimer: ReturnType<typeof setTimeout> | undefined;
+/** Results being added right now ("tv:70523"), so a second tap can't add them twice. */
+const adding = new Set<string>();
+
+/** What the search box asks for, given what is on the shelf. Ignores the status filter: a hidden watched title still counts. */
+function currentOnlineState() {
+  return onlineSearchState({ mode: searchMode, tab: activeTab, query: searchQuery, localMatches: filteredItems({ ignoreStatus: true }).length });
+}
+
+/** Shows the Search TMDB row, or the results when they are open. Returns true when the results are on screen. */
+function updateOnlineUi(): boolean {
+  const state = currentOnlineState();
+  onlineOffered = state.offer ? { query: state.query } : undefined;
+  if (!state.offer) {
+    online = undefined;
+    onlineSearchEl.hidden = true;
+    onlineResultsEl.hidden = true;
+    return false;
+  }
+  // Results belong to the words they were searched for; change the words and you are back on the shelf.
+  if (online && online.query !== state.query) online = undefined;
+  onlineSearchEl.hidden = !!online;
+  onlineResultsEl.hidden = !online;
+  onlineSearchLabelEl.textContent = tmdbConfigured ? `Search TMDB for “${state.query}”` : "Add a TMDB token to search online";
+  onlineSearchSubEl.textContent = tmdbConfigured ? "Not on your shelf? Find it and add it." : "Open Settings to set it up.";
+  if (online) renderOnlineResults();
+  return !!online;
+}
+
+function scheduleAutoSearch(): void {
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  autoSearchTimer = undefined;
+  const state = currentOnlineState();
+  if (!state.auto || !tmdbConfigured || online) return;
+  autoSearchTimer = setTimeout(() => {
+    const again = currentOnlineState();
+    if (again.auto && again.query === state.query && !online) void startOnlineSearch(again.query);
+  }, AUTO_SEARCH_DELAY_MS);
+}
+
+async function startOnlineSearch(query: string): Promise<void> {
+  online = { query, status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "searchTmdb", query });
+    if (online?.query !== query) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No results came back.");
+    online = { query, status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (online?.query !== query) return;
+    online = { query, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
+  }
+  render();
+}
+
+function onlineMessage(text: string, retry?: () => void): HTMLElement {
+  const box = document.createElement("div");
+  box.className = "online-msg";
+  const p = document.createElement("p");
+  p.textContent = text;
+  box.append(p);
+  if (retry) {
+    const again = document.createElement("button");
+    again.type = "button";
+    again.className = "btn btn-outline btn-sm";
+    again.textContent = "Try again";
+    again.addEventListener("click", retry);
+    box.append(again);
+  }
+  return box;
+}
+
+function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
+  const li = document.createElement("li");
+  li.className = "list-item online-item";
+
+  let lead: HTMLElement;
+  if (result.posterPath) {
+    const img = document.createElement("img");
+    img.className = "item-thumb";
+    img.src = `${TMDB_IMAGE_BASE}w92${result.posterPath}`;
+    img.alt = "";
+    img.loading = "lazy";
+    img.referrerPolicy = "no-referrer";
+    img.addEventListener("error", () => img.replaceWith(createTypeIconEl(result.type)), { once: true });
+    lead = img;
+  } else {
+    lead = createTypeIconEl(result.type);
+  }
+
+  const body = document.createElement("div");
+  body.className = "item-body";
+  const titleRow = document.createElement("div");
+  titleRow.className = "item-title-row";
+  const title = document.createElement("h3");
+  title.className = "item-title";
+  title.textContent = result.year ? `${result.title} (${result.year})` : result.title;
+  title.title = title.textContent;
+  titleRow.append(title);
+  const facts = document.createElement("div");
+  facts.className = "item-facts";
+  facts.textContent = [typeLabel(result.type), result.rating !== undefined ? `TMDB ${result.rating}` : ""].filter(Boolean).join(" · ");
+  body.append(titleRow, facts);
+  if (result.overview) {
+    const overview = document.createElement("div");
+    overview.className = "online-overview";
+    overview.textContent = result.overview;
+    body.append(overview);
+  }
+
+  const key = `${result.kind}:${result.id}`;
+  let action: HTMLElement;
+  if (findOnShelf(result, allItems)) {
+    action = document.createElement("span");
+    action.className = "online-done";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = "check";
+    action.append(icon, document.createTextNode("On shelf"));
+  } else {
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "btn btn-outline btn-sm online-add";
+    add.disabled = adding.has(key);
+    add.textContent = adding.has(key) ? "Adding…" : "Add";
+    add.setAttribute("aria-label", `Add ${result.title} to your shelf`);
+    add.addEventListener("click", () => void addFromOnline(result));
+    action = add;
+  }
+  li.append(lead, body, action);
+
+  // The description is cut to two lines, so resting the pointer on a row shows all of it.
+  const overviewEl = body.querySelector<HTMLElement>(".online-overview");
+  if (overviewEl && result.overview) {
+    const full = result.overview;
+    li.addEventListener("mouseenter", () => {
+      clearTimeout(rowHoverTimer);
+      rowHoverTimer = setTimeout(() => {
+        if (overviewEl.scrollHeight > overviewEl.clientHeight + 1) showItemTooltip(full, li);
+      }, HOVER_DELAY_MS);
+    });
+    li.addEventListener("mouseleave", cancelRowHover);
+  }
+  return li;
+}
+
+function renderOnlineResults(): void {
+  if (!online) return;
+  onlineTitleEl.textContent = `“${online.query}” on TMDB`;
+  if (online.status === "loading") {
+    onlineBodyEl.replaceChildren(onlineMessage("Searching TMDB…"));
+  } else if (online.status === "error") {
+    const query = online.query;
+    onlineBodyEl.replaceChildren(onlineMessage(online.error, () => void startOnlineSearch(query)));
+  } else if (online.results.length === 0) {
+    onlineBodyEl.replaceChildren(onlineMessage(`Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`));
+  } else {
+    const list = document.createElement("ul");
+    list.className = "list";
+    list.append(...online.results.map(onlineResultRow));
+    onlineBodyEl.replaceChildren(list);
+  }
+}
+
+async function addFromOnline(result: TmdbSearchResult): Promise<void> {
+  const key = `${result.kind}:${result.id}`;
+  if (adding.has(key)) return;
+  adding.add(key);
+  renderOnlineResults();
+  try {
+    const response = await sendToBackground({ action: "addFromTmdb", result });
+    if (!response.ok) throw new Error(response.error);
+    const keep = "keep" in response ? response.keep : undefined;
+    const added = "item" in response ? response.item : undefined;
+    if ("duplicate" in response && response.duplicate) {
+      await loadItems();
+      showSaveResult(`${result.title} is already on your shelf`, keep);
+    } else if (keep && !["disabled", "synced", "duplicate"].includes(keep.status)) {
+      await loadItems();
+      showSaveResult(`Added ${result.title}`, keep);
+    } else {
+      await loadItems();
+      const suffix = keep?.status === "synced" ? ", added to Keep" : "";
+      showStatus(`Added ${result.title}${suffix}.`, false, UNDO_MS, added ? () => undoAdd(added.id, result.title) : undefined);
+    }
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Could not add it.", true);
+  } finally {
+    adding.delete(key);
+    renderOnlineResults();
+  }
+}
+
+async function undoAdd(id: string, title: string): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "delete", ids: [id] });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    render();
+    showStatus(`Removed ${title}.`);
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Undo failed.", true);
+  }
+}
+
+onlineSearchBtnEl.addEventListener("click", () => {
+  if (!tmdbConfigured) {
+    openSettings();
+    return;
+  }
+  const { offer, query } = currentOnlineState();
+  if (offer) void startOnlineSearch(query);
+});
+
+onlineBackEl.addEventListener("click", () => {
+  online = undefined;
+  render();
+  searchEl.focus();
+});
 
 async function loadItems(): Promise<void> {
   try {
@@ -2174,6 +2437,9 @@ function askRatingEnabled(): boolean {
 }
 
 function renderPrefs(): void {
+  // A restored backup may have changed it behind our back.
+  searchMode = storedChoice<SearchMode>("keepshelf.searchOnline", [...SEARCH_MODES], DEFAULT_SEARCH_MODE);
+  prefSearchOnlineEl.value = searchMode;
   const on = askRatingEnabled();
   prefAskRatingEl.checked = on;
   generalSummaryEl.textContent = on ? "Rating prompt on" : "Rating prompt off";
@@ -2182,8 +2448,23 @@ function renderPrefs(): void {
 
 const prefStartEl = document.getElementById("pref-start") as HTMLSelectElement;
 const prefDefaultViewEl = document.getElementById("pref-default-view") as HTMLSelectElement;
+const prefSearchOnlineEl = document.getElementById("pref-search-online") as HTMLSelectElement;
 prefStartEl.value = startMode;
 prefDefaultViewEl.value = defaultView;
+prefSearchOnlineEl.value = searchMode;
+
+prefSearchOnlineEl.addEventListener("change", () => {
+  searchMode = prefSearchOnlineEl.value as SearchMode;
+  try {
+    localStorage.setItem("keepshelf.searchOnline", searchMode);
+  } catch {
+    /* the choice just won't be remembered */
+  }
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  // Turning it off closes any results that are open.
+  online = undefined;
+  render();
+});
 
 prefStartEl.addEventListener("change", () => {
   startMode = prefStartEl.value as StartMode;
@@ -3729,6 +4010,7 @@ importFileEl.addEventListener("change", () => {
 searchEl.addEventListener("input", () => {
   searchQuery = searchEl.value;
   render();
+  scheduleAutoSearch();
 });
 
 /** With "Remember where I left off", keeps the tab, type chip, status and list for the next time the popup opens. */
