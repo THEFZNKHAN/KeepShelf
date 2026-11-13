@@ -86,7 +86,7 @@ import {
   type StartMode,
   type StatusFilter,
 } from "../shared/status-view.js";
-import { distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, type EpisodeStep } from "../shared/seasons.js";
+import { isWatched, distributeProgress, lastWatched, markSeasonDone, nextToWatch, seasonTotals, statusFromSeasons, stepEpisode, sumProgress, upToStep, watchedProgress, type EpisodeStep } from "../shared/seasons.js";
 import {
   COMING_UP_WINDOWS,
   airingWithoutDate,
@@ -3445,7 +3445,11 @@ function ratingsEl<K extends keyof HTMLElementTagNameMap>(tag: K, className?: st
   return node;
 }
 
+/** The "Marked up to S2 E5 · Undo" message goes back to the colour key after a few seconds. */
+let ratingsActionTimer: ReturnType<typeof setTimeout> | undefined;
+
 function closeRatings(): void {
+  clearTimeout(ratingsActionTimer);
   hideRatingsTip();
   ratingsFor = undefined;
   pickRatingsEl.hidden = true;
@@ -3525,9 +3529,13 @@ interface RatingsGrid {
   table: HTMLElement;
   /** Scrolls to a cell, flashes it and shows its tip, as if it had been tapped. */
   reveal(cell: GridCell): void;
+  /** Dims the episodes that are watched, from the per-season counts (index = column). */
+  repaint(progress: number[] | undefined): void;
+  /** Outlines one cell as the chosen one, or none. */
+  select(cell: GridCell | undefined): void;
 }
 
-function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
+function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement, onPick?: (cell: GridCell) => void): RatingsGrid {
   const table = ratingsEl("div", "er-grid");
   table.setAttribute("role", "grid");
   table.style.gridTemplateColumns = `auto repeat(${grid.seasons.length}, var(--er-cell-w))`;
@@ -3535,6 +3543,7 @@ function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
   for (const season of grid.seasons) table.append(ratingsEl("span", "er-colhead", `S${season}`));
 
   const cells = new Map<string, HTMLElement>();
+  const entries: Array<{ el: HTMLElement; cell: GridCell; column: number }> = [];
   grid.cells.forEach((row, r) => {
     table.append(ratingsEl("span", "er-rowhead", `E${r + 1}`));
     row.forEach((cell) => {
@@ -3554,8 +3563,12 @@ function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
       });
       btn.addEventListener("focus", () => showRatingsTip(cell, btn));
       btn.addEventListener("blur", hideRatingsTip);
-      btn.addEventListener("click", () => showRatingsTip(cell, btn));
+      btn.addEventListener("click", () => {
+        showRatingsTip(cell, btn);
+        onPick?.(cell);
+      });
       cells.set(`${cell.season}.${cell.episode}`, btn);
+      entries.push({ el: btn, cell, column: grid.seasons.indexOf(cell.season) });
       table.append(btn);
     });
   });
@@ -3584,7 +3597,17 @@ function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
       el.classList.add("is-flash");
     }, smooth ? 450 : 0);
   };
-  return { table, reveal };
+  const repaint = (progress: number[] | undefined) => {
+    for (const { el, cell, column } of entries) {
+      const watched = isWatched(progress, column, cell.episode);
+      el.classList.toggle("is-watched", watched);
+      el.setAttribute("aria-label", watched ? `${describeCell(cell)} · watched` : describeCell(cell));
+    }
+  };
+  const select = (chosen: GridCell | undefined) => {
+    for (const { el, cell } of entries) el.classList.toggle("is-selected", cell === chosen);
+  };
+  return { table, reveal, repaint, select };
 }
 
 function ratingsStat(label: string, rating: number | undefined, sub: string, onClick?: () => void): HTMLElement {
@@ -3600,24 +3623,113 @@ function ratingsStat(label: string, rating: number | undefined, sub: string, onC
   return tile;
 }
 
-function renderRatings(ratings: EpisodeRatings): void {
+function renderRatings(ratings: EpisodeRatings, itemId: string): void {
   const grid = buildGrid(ratings);
   if (!hasAnyRating(grid)) {
     ratingsMessage("TMDB has no episode ratings for this show yet.");
     return;
   }
 
+  // Marking episodes watched needs the show's season counts; without them the grid is read-only.
+  const currentItem = () => allItems.find((i) => i.id === itemId);
+  const totals = currentItem() ? seasonTotals(currentItem() as SavedItem) : undefined;
+  const progress = () => {
+    const item = currentItem();
+    return item && totals ? watchedProgress(item, totals) : undefined;
+  };
+
+  const strip = ratingsEl("div", "er-strip");
+  const legend = ratingsLegend();
+  const action = ratingsEl("div", "er-action");
+  action.hidden = true;
+  strip.append(legend, action);
+
+  let selected: GridCell | undefined;
+  let gridEl: RatingsGrid;
+  const showLegend = () => {
+    clearTimeout(ratingsActionTimer);
+    selected = undefined;
+    gridEl.select(undefined);
+    action.hidden = true;
+    legend.hidden = false;
+  };
+  const showAction = (cell: GridCell) => {
+    clearTimeout(ratingsActionTimer);
+    const column = grid.seasons.indexOf(cell.season);
+    const item = currentItem();
+    const step = item ? upToStep(item, column, cell.episode) : undefined;
+    if (!step) {
+      showLegend();
+      return;
+    }
+    legend.hidden = true;
+    action.hidden = false;
+    const label = ratingsEl("span", "er-action-label", episodeCode(cell));
+    const button = ratingsEl("button", "btn btn-outline btn-sm er-action-btn", step.unwatched ? "Not watched from here" : "Watched up to here");
+    button.type = "button";
+    button.addEventListener("click", () => void applyUpTo(cell));
+    action.replaceChildren(label, button);
+  };
+  const applyUpTo = async (cell: GridCell) => {
+    const item = currentItem();
+    if (!item) return;
+    const step = upToStep(item, grid.seasons.indexOf(cell.season), cell.episode);
+    if (!step) return;
+    const before = { progressCurrent: item.progressCurrent ?? null, seasonProgress: item.seasonProgress ?? null, status: statusOf(item) };
+    const error = await updateItemFields(item.id, step.changes);
+    clearTimeout(ratingsActionTimer);
+    if (error) {
+      action.replaceChildren(ratingsEl("span", "er-action-label is-error", error));
+      return;
+    }
+    gridEl.repaint(progress());
+    gridEl.select(undefined);
+    selected = undefined;
+    const done = ratingsEl("span", "er-action-label", `${step.unwatched ? "Unmarked from" : "Marked up to"} ${episodeCode(cell)}`);
+    const undo = ratingsEl("button", "btn btn-outline btn-sm er-action-btn", "Undo");
+    undo.type = "button";
+    undo.addEventListener("click", async () => {
+      undo.disabled = true;
+      const undoError = await updateItemFields(item.id, before);
+      if (undoError) {
+        action.replaceChildren(ratingsEl("span", "er-action-label is-error", undoError));
+        return;
+      }
+      gridEl.repaint(progress());
+      showLegend();
+    });
+    action.replaceChildren(done, undo);
+    ratingsActionTimer = setTimeout(showLegend, 6000);
+    if (step.finishes) maybeAskRating(item.id);
+  };
+
   const scroll = ratingsEl("div", "er-scroll");
-  const { table, reveal } = ratingsGridEl(grid, scroll);
-  scroll.append(table);
+  gridEl = ratingsGridEl(
+    grid,
+    scroll,
+    totals
+      ? (cell) => {
+          // Tapping the chosen episode again lets go of it.
+          if (selected === cell) {
+            showLegend();
+            return;
+          }
+          selected = cell;
+          gridEl.select(cell);
+          showAction(cell);
+        }
+      : undefined
+  );
+  scroll.append(gridEl.table);
+  gridEl.repaint(progress());
 
   const stats = ratingsEl("div", "er-stats");
   stats.append(
     ratingsStat("Average", grid.average, grid.rated === grid.total ? `${grid.total} episodes` : `${grid.rated} of ${grid.total} rated`),
-    ratingsStat("Best", grid.best?.rating, grid.best ? episodeCode(grid.best) : "", grid.best ? () => reveal(grid.best as GridCell) : undefined),
-    ratingsStat("Lowest", grid.lowest?.rating, grid.lowest ? episodeCode(grid.lowest) : "", grid.lowest ? () => reveal(grid.lowest as GridCell) : undefined)
+    ratingsStat("Best", grid.best?.rating, grid.best ? episodeCode(grid.best) : "", grid.best ? () => gridEl.reveal(grid.best as GridCell) : undefined),
+    ratingsStat("Lowest", grid.lowest?.rating, grid.lowest ? episodeCode(grid.lowest) : "", grid.lowest ? () => gridEl.reveal(grid.lowest as GridCell) : undefined)
   );
-  erBodyEl.replaceChildren(stats, ratingsLegend(), scroll);
+  erBodyEl.replaceChildren(stats, strip, scroll);
 }
 
 async function openRatings(item: SavedItem, force = false): Promise<void> {
@@ -3633,7 +3745,7 @@ async function openRatings(item: SavedItem, force = false): Promise<void> {
     if (ratingsFor !== item.id) return;
     if (!response.ok) throw new Error(response.error);
     if (!("episodeRatings" in response)) throw new Error("No ratings came back.");
-    renderRatings(response.episodeRatings);
+    renderRatings(response.episodeRatings, item.id);
   } catch (err) {
     if (ratingsFor !== item.id) return;
     ratingsMessage(err instanceof Error ? err.message : "Could not load episode ratings.", () => void openRatings(item, true));
@@ -3648,10 +3760,15 @@ pickGraphEl.addEventListener("click", () => {
   const item = allItems.find((i) => i.id === pickedId);
   if (item) void openRatings(item);
 });
-erBackEl.addEventListener("click", () => {
+/** Back from the grid to the card, redrawn so its progress and next-episode pill match what was marked. */
+function leaveRatings(): void {
   closeRatings();
+  const fresh = allItems.find((i) => i.id === pickedId);
+  if (fresh && !pickDialogEl.hidden) showDetails(fresh, "info");
   pickGraphEl.focus();
-});
+}
+
+erBackEl.addEventListener("click", leaveRatings);
 pickMoreEl.addEventListener("click", () => {
   const expanded = pickPanelEl.classList.toggle("is-expanded");
   pickPanelEl.classList.toggle("is-clamped", !expanded);
@@ -4232,8 +4349,7 @@ document.addEventListener("keydown", (event) => {
   else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden && pickPanelEl.classList.contains("is-ratings")) {
     // Escape steps back from the grid to the card first, and closes the card the next time.
-    closeRatings();
-    pickGraphEl.focus();
+    leaveRatings();
   } else if (!pickDialogEl.hidden) closePick();
   else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();

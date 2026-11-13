@@ -117,3 +117,60 @@ export function stepEpisode(item: StepItem, total?: number): EpisodeStep | undef
   const finishes = total !== undefined && total > 0 && next >= total;
   return { changes: { progressCurrent: next, status: finishes ? "done" : restart(now) }, label: `ep. ${next}`, finishes };
 }
+
+/** How many episodes of each season count as watched right now, one entry per season in `totals`. */
+export function watchedProgress(item: StepItem, totals: number[]): number[] {
+  const now: ItemStatus = item.status ?? (item.done ? "done" : "plan");
+  const seen =
+    item.seasonProgress ??
+    ((item.progressCurrent ?? 0) > 0 ? distributeProgress(item.progressCurrent ?? 0, totals) : now === "done" ? totals : []);
+  return totals.map((total, i) => Math.min(Math.max(0, seen[i] ?? 0), total));
+}
+
+/** Whether episode `episode` (1-based) of the season at `column` (0-based, in `totals` order) is watched. */
+export function isWatched(progress: number[] | undefined, column: number, episode: number): boolean {
+  return episode >= 1 && episode <= (progress?.[column] ?? 0);
+}
+
+/**
+ * Progress for "watched everything up to here": every earlier season complete, the season at `column` up to
+ * `episode` (kept inside that season's total), later seasons not started.
+ */
+export function markUpTo(totals: number[], column: number, episode: number): number[] {
+  const upTo = Math.min(Math.max(0, Math.floor(episode)), totals[column] ?? 0);
+  return totals.map((total, i) => (i < column ? total : i === column ? upTo : 0));
+}
+
+export interface UpToStep {
+  /** What to save. */
+  changes: { seasonProgress: number[]; status: ItemStatus };
+  /** True when this unwatched episodes instead of marking more. */
+  unwatched: boolean;
+  /** True when it leaves every episode watched, so the show is finished. */
+  finishes: boolean;
+}
+
+/**
+ * Taps an episode in the ratings grid. An episode you haven't watched marks everything up to it as watched; one you
+ * have watched takes it, and everything after it, back to unwatched. Undefined when the show has no season counts
+ * or the season isn't one of them. Status follows the episodes: all watched is done, some is in progress, none goes
+ * back to plan (a dropped show you pick up again is in progress).
+ */
+export function upToStep(item: StepItem, column: number, episode: number): UpToStep | undefined {
+  const totals = seasonTotals(item);
+  if (!totals || !Number.isInteger(column) || column < 0 || column >= totals.length) return undefined;
+  if (!Number.isInteger(episode) || episode < 1) return undefined;
+  const ep = Math.min(episode, totals[column]);
+
+  const now: ItemStatus = item.status ?? (item.done ? "done" : "plan");
+  const seen = watchedProgress(item, totals);
+  const unwatched = isWatched(seen, column, ep);
+  const progress = markUpTo(totals, column, unwatched ? ep - 1 : ep);
+
+  const finishes = nextToWatch(progress, totals) === undefined;
+  let status: ItemStatus;
+  if (finishes) status = "done";
+  else if (sumProgress(progress) === 0) status = now === "dropped" ? "dropped" : "plan";
+  else status = "in_progress";
+  return { changes: { seasonProgress: progress, status }, unwatched, finishes };
+}

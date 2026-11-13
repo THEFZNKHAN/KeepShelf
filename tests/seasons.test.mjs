@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  distributeProgress, lastWatched, markSeasonDone, mergeSeasonProgress, nextToWatch,
-  seasonTotals, statusFromSeasons, stepEpisode, sumProgress, validateSeasonProgress,
+  distributeProgress, isWatched, lastWatched, markSeasonDone, markUpTo, mergeSeasonProgress, nextToWatch,
+  seasonTotals, statusFromSeasons, stepEpisode, sumProgress, upToStep, validateSeasonProgress, watchedProgress,
 } from "../dist-test/seasons.js";
 
 const totals = [10, 8, 6];
@@ -137,4 +137,86 @@ test("stepEpisode leaves the item it was given alone", () => {
   const copy = JSON.parse(JSON.stringify(item));
   stepEpisode(item);
   assert.deepEqual(item, copy);
+});
+
+test("markUpTo fills the earlier seasons, stops inside the chosen one, and leaves later ones alone", () => {
+  assert.deepEqual(markUpTo(totals, 0, 4), [4, 0, 0]);
+  assert.deepEqual(markUpTo(totals, 1, 3), [10, 3, 0]);
+  assert.deepEqual(markUpTo(totals, 2, 6), [10, 8, 6]);
+  assert.deepEqual(markUpTo(totals, 1, 0), [10, 0, 0], "up to nothing in season 2 leaves season 1 complete");
+  assert.deepEqual(markUpTo(totals, 0, 0), [0, 0, 0]);
+});
+
+test("markUpTo keeps the episode inside the season", () => {
+  assert.deepEqual(markUpTo(totals, 1, 99), [10, 8, 0]);
+  assert.deepEqual(markUpTo(totals, 0, -3), [0, 0, 0]);
+  assert.deepEqual(markUpTo(totals, 0, 2.9), [2, 0, 0]);
+  assert.deepEqual(markUpTo(totals, 7, 3), [10, 8, 6], "a season that isn't there counts everything as earlier");
+});
+
+test("isWatched reads one episode of one season", () => {
+  assert.equal(isWatched([10, 3, 0], 1, 3), true);
+  assert.equal(isWatched([10, 3, 0], 1, 4), false);
+  assert.equal(isWatched([10, 3, 0], 0, 1), true);
+  assert.equal(isWatched([10, 3, 0], 2, 1), false);
+  assert.equal(isWatched(undefined, 0, 1), false);
+  assert.equal(isWatched([5], 3, 1), false, "no entry for that season");
+  assert.equal(isWatched([5], 0, 0), false);
+});
+
+const withSeasons = (extra = {}) => ({ tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1, seasonEpisodes: totals }, ...extra });
+
+test("watchedProgress uses the saved seasons, spreads a plain count, and treats a finished show as fully watched", () => {
+  assert.deepEqual(watchedProgress(withSeasons({ seasonProgress: [10, 2] }), totals), [10, 2, 0]);
+  assert.deepEqual(watchedProgress(withSeasons({ progressCurrent: 12 }), totals), [10, 2, 0]);
+  assert.deepEqual(watchedProgress(withSeasons({ status: "done" }), totals), [10, 8, 6], "marked done without episodes");
+  assert.deepEqual(watchedProgress(withSeasons({ done: true }), totals), [10, 8, 6]);
+  assert.deepEqual(watchedProgress(withSeasons({}), totals), [0, 0, 0]);
+  assert.deepEqual(watchedProgress(withSeasons({ seasonProgress: [50, -2, 3] }), totals), [10, 0, 3], "clamped into each season");
+});
+
+test("upToStep marks everything up to an unwatched episode and starts the show", () => {
+  const step = upToStep(withSeasons({ status: "plan" }), 1, 3);
+  assert.deepEqual(step.changes, { seasonProgress: [10, 3, 0], status: "in_progress" });
+  assert.equal(step.unwatched, false);
+  assert.equal(step.finishes, false);
+});
+
+test("upToStep on a watched episode takes it and everything after it back", () => {
+  const item = withSeasons({ status: "in_progress", seasonProgress: [10, 5, 0] });
+  const step = upToStep(item, 1, 3);
+  assert.deepEqual(step.changes, { seasonProgress: [10, 2, 0], status: "in_progress" });
+  assert.equal(step.unwatched, true);
+  const first = upToStep(item, 0, 1);
+  assert.deepEqual(first.changes, { seasonProgress: [0, 0, 0], status: "plan" }, "nothing left watched goes back to plan");
+  assert.equal(first.unwatched, true);
+});
+
+test("upToStep on the last episode finishes the show, and a finished show can be wound back", () => {
+  const last = upToStep(withSeasons({ status: "in_progress", seasonProgress: [10, 8, 5] }), 2, 6);
+  assert.deepEqual(last.changes, { seasonProgress: [10, 8, 6], status: "done" });
+  assert.equal(last.finishes, true);
+  const done = withSeasons({ status: "done", seasonProgress: [10, 8, 6] });
+  const back = upToStep(done, 2, 4);
+  assert.deepEqual(back.changes, { seasonProgress: [10, 8, 3], status: "in_progress" });
+  assert.equal(back.unwatched, true);
+  assert.equal(back.finishes, false);
+  const unmarked = upToStep(withSeasons({ status: "done" }), 1, 1);
+  assert.deepEqual(unmarked.changes, { seasonProgress: [10, 0, 0], status: "in_progress" }, "done without episode counts counts as everything watched");
+});
+
+test("upToStep picks a dropped show back up, and keeps a dropped show dropped when nothing is watched", () => {
+  assert.equal(upToStep(withSeasons({ status: "dropped" }), 0, 2).changes.status, "in_progress");
+  const none = upToStep(withSeasons({ status: "dropped", seasonProgress: [1, 0, 0] }), 0, 1);
+  assert.deepEqual(none.changes, { seasonProgress: [0, 0, 0], status: "dropped" });
+});
+
+test("upToStep keeps the episode inside the season and refuses what it cannot place", () => {
+  assert.deepEqual(upToStep(withSeasons({}), 1, 99).changes.seasonProgress, [10, 8, 0], "past the season's last episode means the whole season");
+  assert.equal(upToStep({ tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1 } }, 0, 1), undefined, "no season counts");
+  assert.equal(upToStep({}, 0, 1), undefined);
+  assert.equal(upToStep(withSeasons({}), 5, 1), undefined, "a season that isn't there");
+  assert.equal(upToStep(withSeasons({}), -1, 1), undefined);
+  assert.equal(upToStep(withSeasons({}), 0, 0), undefined);
+  assert.equal(upToStep(withSeasons({}), 0, 1.5), undefined);
 });

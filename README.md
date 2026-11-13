@@ -201,6 +201,7 @@ On the card of a series or anime that has TMDB info, a **grid icon** sits at the
 
 - The ratings are **TMDB's own**, so they can differ from IMDb's. A very new episode may show **–** because nobody has rated it yet.
 - Only the grid scrolls, the card around it stays put. Season and episode labels stay in place while the cells move, so a 15-season show such as Supernatural stays readable. Hover over a cell (or tap it on a touch screen, or tab to it) and a small tip beside it shows the episode title, rating, votes and air date.
+- **Mark episodes watched from the grid.** Tap an episode and the strip above the grid offers **Watched up to here**: every earlier episode and season is marked watched, and the ones you've watched fade back with a tick, so what is left stands out. Tap an episode you've already watched and it offers **Not watched from here** instead. Each change has an **Undo** for a few seconds, marking the last episode finishes the show (and offers the rating box), and the card you go back to shows the new progress. It needs the show's season counts from TMDB (fetch info for your shelf); without them the grid is read-only.
 - It needs your [TMDB token](#tmdb-info) and a TMDB match for the title. Movies, books and titles with no match don't show the icon.
 - A show costs one request to TMDB (a few more for very long ones). The result is kept in memory for the browser session, for up to a day, then fetched again. It is never saved with your shelf or in a backup.
 
