@@ -3802,3 +3802,52 @@ button.er-stat:hover {
   background: var(--error);
   color: #fff;
 }
+
+/* ── Settings: calmer cards ── */
+
+/* A small label that groups the settings under it, so a long card reads in short chunks. */
+.s-sub {
+  margin: 8px 0 -4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--outline);
+}
+
+.s-sub:first-child {
+  margin-top: 0;
+}
+
+/* A switch row with a one-line hint: tighter than the rows that explain themselves at length. */
+.pref-row.is-compact {
+  align-items: center;
+}
+
+.pref-row.is-compact .pref-text span {
+  font-size: 11px;
+  line-height: 15px;
+}
+
+/* A word inside a hint that does something. */
+.s-inline {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--on-surface);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.s-inline:hover {
+  color: var(--primary);
+}
+
+.s-inline:disabled {
+  color: var(--outline);
+  cursor: default;
+  text-decoration: none;
+}

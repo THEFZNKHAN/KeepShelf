@@ -275,78 +275,121 @@
       </header>
 
       <div class="settings-body">
-        <h2 class="s-group">Preferences</h2>
+        <h2 class="s-group">Your shelf</h2>
         <details class="s-card" id="card-general">
           <summary>
             <span class="material-symbols-outlined s-card-icon">tune</span>
-            <span class="s-card-title">General</span>
-            <span class="s-card-summary" id="general-summary">Rating prompt on</span>
+            <span class="s-card-title">Shelf &amp; views</span>
+            <span class="s-card-summary" id="general-summary">Media</span>
             <span class="material-symbols-outlined s-card-chevron">expand_more</span>
           </summary>
           <div class="s-card-body">
-            <div class="pref-row">
+            <div class="s-sub">Tabs on the shelf</div>
+            <div class="pref-row is-compact">
               <div class="pref-text">
-                <strong>Ask for a rating when I finish something</strong>
-                <span>
-                  Shows a quick rating and review box when you mark a movie, series, anime or book as watched or read.
-                  You can always skip it.
-                </span>
-              </div>
-              <label class="switch" title="Ask for a rating when I finish something">
-                <input type="checkbox" id="pref-ask-rating" aria-label="Ask for a rating when I finish something" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="pref-row">
-              <div class="pref-text">
-                <strong>Show Books</strong>
-                <span>The Books tab. Turning it off only hides it: your books stay saved and come back when you turn it on.</span>
+                <strong>Books</strong>
+                <span>Hidden, never deleted.</span>
               </div>
               <label class="switch" title="Show the Books tab">
                 <input type="checkbox" id="pref-show-books" aria-label="Show Books" />
                 <span class="switch-track"></span>
               </label>
             </div>
-            <div class="pref-row">
+            <div class="pref-row is-compact">
               <div class="pref-text">
-                <strong>Show Tabs</strong>
-                <span>The Tabs tab, for saved pages, links and notes. Turning it off only hides it: they stay saved and come back when you turn it on.</span>
+                <strong>Tabs</strong>
+                <span>Saved pages, links and notes. Hidden, never deleted.</span>
               </div>
               <label class="switch" title="Show the Tabs tab">
                 <input type="checkbox" id="pref-show-tabs" aria-label="Show Tabs" />
                 <span class="switch-track"></span>
               </label>
             </div>
+            <div class="s-sub">When you open KeepShelf</div>
             <div class="pref-select">
               <label for="pref-start">
-                <strong>When I open KeepShelf</strong>
-                <span>The default view, or exactly where you left off: tab, type, status and list.</span>
+                <strong>Start on</strong>
               </label>
               <select id="pref-start" class="view-select">
-                <option value="fresh">Start with my default view</option>
-                <option value="remember">Remember where I left off</option>
+                <option value="fresh">My default view</option>
+                <option value="remember">Where I left off</option>
               </select>
             </div>
             <div class="pref-select">
               <label for="pref-default-view">
                 <strong>Default view</strong>
-                <span>Hiding watched items also hides dropped ones. The status list behind the filter button shows everything. Applies the next time you open KeepShelf.</span>
+                <span>Watched and dropped items can stay out of the way.</span>
               </label>
               <select id="pref-default-view" class="view-select">
                 <option value="hide">Hide watched and dropped</option>
                 <option value="all">Show everything</option>
               </select>
             </div>
-            <div class="pref-select">
-              <label for="pref-search-online">
-                <strong>Search TMDB from the search box</strong>
-                <span>For movies, series and anime. What you type is sent to TMDB only when you search; automatic search waits until nothing on your shelf matches. Needs your TMDB token.</span>
+            <div class="s-sub">When you finish something</div>
+            <div class="pref-row is-compact">
+              <div class="pref-text">
+                <strong>Ask me to rate it</strong>
+                <span>A quick rating and review box. You can skip it.</span>
+              </div>
+              <label class="switch" title="Ask for a rating when I finish something">
+                <input type="checkbox" id="pref-ask-rating" aria-label="Ask for a rating when I finish something" />
+                <span class="switch-track"></span>
               </label>
-              <select id="pref-search-online" class="view-select">
-                <option value="row">Show a “Search TMDB” row</option>
-                <option value="auto">Also search by itself when nothing matches</option>
-                <option value="off">Off</option>
-              </select>
+            </div>
+          </div>
+        </details>
+        <details class="s-card" id="card-watch">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">play_circle</span>
+            <span class="s-card-title">Watch sites</span>
+            <span class="s-card-summary" id="watch-summary">None</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <p class="s-hint">
+              Add a site where you watch and each title gets a button that opens its page there. KeepShelf only builds
+              the link; it never visits the site.
+            </p>
+            <details class="s-more">
+              <summary>How it works</summary>
+              <div class="s-more-body">
+                <p>Paste the address of one title's page and say which title it is. KeepShelf works out how the site builds
+                its addresses and uses that for every other title.</p>
+                <p>If the site has an address style that works for both movies and series, use that one and you only need a
+                single page.</p>
+                <p>Sites that use ids need a TMDB id or an IMDb id for the title, so add your TMDB token (in the TMDB settings)
+                and fetch info for your shelf first, then pick a title that has info.</p>
+                <p>If a site's title addresses can't be worked out (some add random letters), paste a search results page
+                for one title instead, and each title gets a button that opens that site's search. Search for a title with
+                two or more words. For a title like "One Piece: Wan pîsu", search for the part before the colon,
+                "One Piece", and pick that title.</p>
+                <p>If the address is an episode page (such as …/one-piece-episode-1180), the link opens the next episode you
+                haven't watched, or episode 1 if you haven't started. Keep your episode progress up to date and the link
+                follows it.</p>
+              </div>
+            </details>
+            <div class="watch-example">
+              <span class="watch-example-label"><span class="watch-step">1</span>A title's page on the site, or a search for one title</span>
+              <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
+              <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
+            </div>
+            <details class="s-more">
+              <summary>Add a page for the other kind (movie or series)</summary>
+              <div class="s-more-body">
+                <div class="watch-example">
+                  <span class="watch-example-label"><span class="watch-step">2</span>A series if the first was a movie, or the other way round</span>
+                  <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
+                  <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
+                </div>
+              </div>
+            </details>
+            <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
+            <ul id="watch-list" class="watch-list"></ul>
+            <div id="watch-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="watch-settings-status-text"></span>
+              </div>
             </div>
           </div>
         </details>
@@ -359,13 +402,103 @@
           </summary>
           <div class="s-card-body">
             <p class="s-hint">
-              Right-click a page, link or selected text and choose “Save … to KeepShelf”, or press
-              <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>. The toolbar icon shows ✓ when saved.
-              Change the shortcut at <span class="mono">chrome://extensions/shortcuts</span>.
+              Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, or right-click a page, link or selected text and choose
+              “Save … to KeepShelf”. Change the shortcut at <span class="mono">chrome://extensions/shortcuts</span>.
             </p>
           </div>
         </details>
         <h2 class="s-group">Connections</h2>
+        <details class="s-card" id="card-tmdb">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">movie</span>
+            <span class="s-card-title">TMDB</span>
+            <span class="s-card-summary" id="tmdb-summary">Not set</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <p class="s-hint">
+              Adds genres, ratings, posters and episode counts, and lets you find titles to add. Get a free token at
+              <span class="mono">themoviedb.org/settings/api</span> and paste the <strong>API Read Access Token</strong>.
+              It stays in this browser.
+            </p>
+            <div class="field-input-row">
+              <input
+                type="password"
+                id="tmdb-token"
+                placeholder="API Read Access Token"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="button" id="tmdb-test" class="btn btn-outline btn-sm">Test</button>
+              <button type="button" id="tmdb-save" class="btn btn-primary btn-sm">Save</button>
+            </div>
+            <span id="tmdb-token-status" class="field-status">Not set</span>
+            <div class="s-sub">Using it</div>
+            <button type="button" id="tmdb-enrich-all" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
+              Fetch info for my shelf
+            </button>
+            <div class="pref-select">
+              <label for="pref-search-online">
+                <strong>Search TMDB from the search box</strong>
+                <span>Words are sent to TMDB only when you search.</span>
+              </label>
+              <select id="pref-search-online" class="view-select">
+                <option value="row">Show a “Search TMDB” row</option>
+                <option value="auto">Also search by itself when nothing matches</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
+            <div class="pref-row is-compact">
+              <div class="pref-text">
+                <strong>Release reminders</strong>
+                <span>A notification when an episode or movie comes out. <button type="button" id="reminders-check" class="s-inline">Check now</button></span>
+              </div>
+              <label class="switch" title="Release reminders">
+                <input type="checkbox" id="pref-reminders" aria-label="Release reminders" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <div id="tmdb-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="tmdb-settings-status-text"></span>
+              </div>
+            </div>
+            <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
+          </div>
+        </details>
+        <details class="s-card" id="card-bookinfo">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">menu_book</span>
+            <span class="s-card-title">Book info</span>
+            <span class="s-card-summary" id="bookinfo-summary">Off</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <div class="pref-row">
+              <div class="pref-text">
+                <strong>Fetch book details</strong>
+                <span>Page count, genres, cover and rating from Open Library. Titles and authors are sent there. No account needed.</span>
+              </div>
+              <label class="switch" title="Fetch book details from Open Library">
+                <input type="checkbox" id="pref-book-info" aria-label="Fetch book details from Open Library" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <button type="button" id="bookinfo-enrich-all" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
+              Fetch info for my books
+            </button>
+            <div id="bookinfo-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="bookinfo-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="bookinfo-settings-status-text"></span>
+              </div>
+            </div>
+            <p class="s-fine" id="bookinfo-notice"></p>
+          </div>
+        </details>
         <details class="s-card" id="card-keep">
           <summary>
             <span class="material-symbols-outlined s-card-icon">cloud_sync</span>
@@ -440,150 +573,6 @@
             </div>
           </div>
         </details>
-        <details class="s-card" id="card-tmdb">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">movie</span>
-            <span class="s-card-title">TMDB info</span>
-            <span class="s-card-summary" id="tmdb-summary">Not set</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Optional. Fills in genres, ratings, runtime, episode totals and posters for new saves. Get a free token at
-              <span class="mono">themoviedb.org/settings/api</span> and paste the <strong>API Read Access Token</strong>.
-              Only titles are sent to TMDB, and the token stays in this browser.
-            </p>
-            <div class="field-input-row">
-              <input
-                type="password"
-                id="tmdb-token"
-                placeholder="API Read Access Token"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <button type="button" id="tmdb-test" class="btn btn-outline btn-sm">Test</button>
-              <button type="button" id="tmdb-save" class="btn btn-primary btn-sm">Save</button>
-            </div>
-            <span id="tmdb-token-status" class="field-status">Not set</span>
-            <button type="button" id="tmdb-enrich-all" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
-              Fetch info for my shelf
-            </button>
-            <div class="pref-row">
-              <div class="pref-text">
-                <strong>Release reminders</strong>
-                <span>
-                  A notification when a series you haven't finished has a new episode, or a movie on your list comes
-                  out, today or tomorrow. Checks TMDB a few times a day for the dates; needs the token above.
-                </span>
-              </div>
-              <label class="switch" title="Release reminders">
-                <input type="checkbox" id="pref-reminders" aria-label="Release reminders" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <button type="button" id="reminders-check" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">notifications_active</span>
-              Check for releases now
-            </button>
-            <div id="tmdb-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="tmdb-settings-status-text"></span>
-              </div>
-            </div>
-            <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
-          </div>
-        </details>
-        <details class="s-card" id="card-bookinfo">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">menu_book</span>
-            <span class="s-card-title">Book info</span>
-            <span class="s-card-summary" id="bookinfo-summary">Off</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <div class="pref-row">
-              <div class="pref-text">
-                <strong>Fetch book details from Open Library</strong>
-                <span>
-                  Fills in page count, genres, a cover, a description and a community rating for your books. Titles and
-                  authors are sent to openlibrary.org to look them up. No account or key needed.
-                </span>
-              </div>
-              <label class="switch" title="Fetch book details from Open Library">
-                <input type="checkbox" id="pref-book-info" aria-label="Fetch book details from Open Library" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <button type="button" id="bookinfo-enrich-all" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
-              Fetch info for my books
-            </button>
-            <div id="bookinfo-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="bookinfo-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="bookinfo-settings-status-text"></span>
-              </div>
-            </div>
-            <p class="s-fine" id="bookinfo-notice"></p>
-          </div>
-        </details>
-        <details class="s-card" id="card-watch">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">play_circle</span>
-            <span class="s-card-title">Watch sites</span>
-            <span class="s-card-summary" id="watch-summary">None</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Optional. Add a site where you watch, and each title gets a button that opens its page there. None are
-              included, and KeepShelf never visits the site: it only builds the link.
-            </p>
-            <details class="s-more">
-              <summary>How it works</summary>
-              <div class="s-more-body">
-                <p>Paste the address of one title's page and say which title it is. KeepShelf works out how the site builds
-                its addresses and uses that for every other title.</p>
-                <p>If the site has an address style that works for both movies and series, use that one and you only need a
-                single page.</p>
-                <p>Sites that use ids need a TMDB id or an IMDb id for the title, so set up your TMDB token above and fetch
-                info for your shelf first, then pick a title that has info.</p>
-                <p>If a site's title addresses can't be worked out (some add random letters), paste a search results page
-                for one title instead, and each title gets a button that opens that site's search. Search for a title with
-                two or more words. For a title like "One Piece: Wan pîsu", search for the part before the colon,
-                "One Piece", and pick that title.</p>
-                <p>If the address is an episode page (such as …/one-piece-episode-1180), the link opens the next episode you
-                haven't watched, or episode 1 if you haven't started. Keep your episode progress up to date and the link
-                follows it.</p>
-              </div>
-            </details>
-            <div class="watch-example">
-              <span class="watch-example-label"><span class="watch-step">1</span>A title's page on the site, or a search for one title</span>
-              <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
-              <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
-            </div>
-            <details class="s-more">
-              <summary>Add a page for the other kind (movie or series)</summary>
-              <div class="s-more-body">
-                <div class="watch-example">
-                  <span class="watch-example-label"><span class="watch-step">2</span>A series if the first was a movie, or the other way round</span>
-                  <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
-                  <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
-                </div>
-              </div>
-            </details>
-            <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
-            <ul id="watch-list" class="watch-list"></ul>
-            <div id="watch-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="watch-settings-status-text"></span>
-              </div>
-            </div>
-          </div>
-        </details>
         <h2 class="s-group">Your data</h2>
         <details class="s-card" id="card-backup">
           <summary>
@@ -594,16 +583,13 @@
           </summary>
           <div class="s-card-body">
             <p class="s-hint">
-              Your shelf lives only in this browser, so export a backup now and then. Import accepts a KeepShelf backup or a
-              Letterboxd or Goodreads CSV. Items already on your shelf are skipped.
+              Your shelf lives only in this browser, so export a backup now and then. You can import a KeepShelf backup or a
+              Letterboxd or Goodreads CSV; items already on your shelf are skipped.
             </p>
             <div class="pref-row">
               <div class="pref-text">
                 <strong>Include my settings</strong>
-                <span>
-                  Your TMDB token, Keep links, watch sites and switches, so a new install needs no re-typing. The file then
-                  contains your TMDB token, so keep it private.
-                </span>
+                <span>Saves your TMDB token too, so keep the file private.</span>
               </div>
               <label class="switch" title="Include my settings in the backup">
                 <input type="checkbox" id="backup-include-settings" aria-label="Include my settings in the backup" checked />
@@ -651,7 +637,7 @@
             <div class="pref-row">
               <div class="pref-text">
                 <strong>Delete everything</strong>
-                <span>Removes every item from KeepShelf. Your Google Keep lists are not affected. This can't be undone, so export a backup first.</span>
+                <span>Can't be undone, so export a backup first. Google Keep is not affected.</span>
               </div>
               <button type="button" id="clear-all" class="btn btn-outline btn-sm danger-outline">Delete all</button>
             </div>
