@@ -23,6 +23,8 @@ export const PREF_CHOICES: Record<string, readonly string[]> = {
   "keepshelf.startMode": ["fresh", "remember"],
   "keepshelf.defaultView": ["hide", "all"],
   "keepshelf.searchOnline": ["row", "auto", "off"],
+  "keepshelf.showBooks": ["on", "off"],
+  "keepshelf.showTabs": ["on", "off"],
 };
 
 /** What was read from storage, before any checking. */

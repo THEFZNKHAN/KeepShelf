@@ -242,7 +242,7 @@ Export your whole shelf as JSON (optionally with your settings), import a KeepSh
 
 ### Clipboard export
 
-**Copy all** copies every visible item as plain text, one line each. **Copy selected** copies only the items you ticked.
+The **copy icon** next to the search box copies every item the list is showing as plain text, one line each. Tick some rows first and it copies only those (hover it to see "Copy 3 selected").
 
 ### Privacy first
 
@@ -271,7 +271,7 @@ For series, anime and books you can also record progress, such as episodes done 
 
 KeepShelf opens on **Not watched**: what is still to watch or in progress. Watched and dropped items stay out of the way, so the list is what you actually want to pick from. (On Books it is "Not read", on Tabs it is "To do".)
 
-- A line under the filters says how many are hidden, such as **3 watched or dropped hidden · Show all**. Tap **Show all** to see everything. The next time you open KeepShelf it is back to the default view.
+- To see everything for a while, open the filter button next to the search box and pick **All** in the status list. The next time you open KeepShelf it is back to the default view.
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
 - In **Settings > General**, **When I open KeepShelf** chooses between **Start with my default view** and **Remember where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
 
@@ -301,7 +301,7 @@ If you were already tracking a show with a single number, opening it spreads tha
 After you **delete** items or **merge duplicates**, the message at the top (or in Settings, for merges) has an **Undo** button for 8 seconds. Click it and the items come back with their original order, tags, ratings, reviews and progress. For a merge, the kept item also returns to how it was before.
 
 - Undo works only while the popup stays open. Closing it ends the 8 seconds.
-- **Clear all** still asks for confirmation first and can't be undone, so export a backup before using it.
+- **Delete everything** (in **Settings > Backup & import**) still asks for confirmation first and can't be undone, so export a backup before using it.
 
 ### Personal rating and review
 
@@ -505,6 +505,8 @@ Notes:
 
 ## Tabs, links and notes
 
+**Books and Tabs are optional.** If you only keep movies, series and anime, switch them off in **Settings > General** (**Show Books**, **Show Tabs**). The tab disappears, and with both off the whole tab bar goes, so the list gets more room. Nothing is deleted: your books, saved pages, links and notes stay exactly as they are, and are all back the moment you switch the tab on again. Backups still include them, and a book you save while Books is off is kept (the message says so).
+
 The **Tabs** shelf is a lightweight bookmark manager. Switch to the **Tabs** tab in the popup.
 
 - **Save tab** (the button at the top) bookmarks the page you are on, with its title and URL. It works on any website.
@@ -519,7 +521,7 @@ Anything not on the supported-sources list can still be saved this way.
 
 ## Output format
 
-Every saved item becomes one line. These are the formats KeepShelf produces, and what **Copy all** and Keep sync use:
+Every saved item becomes one line. These are the formats KeepShelf produces, and what the copy icon and Keep sync use:
 
 ```
 The Dark Knight (2008) | 2h 32m | IMDb 9.0
@@ -619,8 +621,8 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 ### Manage your shelf
 
 1. Use the filter chips, status, tag and list dropdowns, search box and sort menu to narrow the view.
-2. Tick the box on each item (tapping a row opens its card instead), then **Copy selected**, **Sync selected** to Keep, or delete with the trash icon (you can **Undo** for a few seconds). The sync button only appears when the Keep list for the tab you are on (Media, Books or Tabs) is switched on in Settings, so it stays out of the way if you don't use Keep.
-3. **Clear all** empties your shelf. Keep notes are never affected.
+2. Tick the box on each item (tapping a row opens its card instead), then use the copy icon, the cloud icon to sync them to Keep, or the trash icon to delete them (you can **Undo** for a few seconds). The sync button only appears when the Keep list for the tab you are on (Media, Books or Tabs) is switched on in Settings, so it stays out of the way if you don't use Keep.
+3. **Delete everything**, at the bottom of **Settings > Backup & import**, empties your shelf. Keep notes are never affected.
 
 ### Configure Keep sync
 
@@ -694,7 +696,7 @@ Your shelf lives only in this browser, so export a backup now and then.
 
 ### Add titles from a pasted list
 
-Under **Backup & import**, **Add titles from a pasted list** takes lines like the ones KeepShelf's **Copy all** writes, or a Keep checklist:
+Under **Backup & import**, **Add titles from a pasted list** takes lines like the ones KeepShelf's copy icon writes, or a Keep checklist:
 
 ```
 Drishyam (2015) | 2h 43m | IMDb 8.2

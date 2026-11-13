@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  DEFAULT_VIEWS, START_MODES, STATUS_FILTERS, defaultStatusFilter, effectiveStatusFilter, hiddenNote, matchesStatusFilter,
+  DEFAULT_VIEWS, START_MODES, STATUS_FILTERS, defaultStatusFilter, effectiveStatusFilter, matchesStatusFilter,
 } from "../dist-test/status-view.js";
 
 const STATUSES = ["plan", "in_progress", "done", "dropped"];
@@ -44,10 +44,4 @@ test("a shelf that doesn't offer a filter falls back sensibly", () => {
   assert.equal(effectiveStatusFilter("done", tabs), "done");
   assert.equal(effectiveStatusFilter("pending", STATUS_FILTERS), "pending");
   assert.equal(effectiveStatusFilter("all", tabs), "all");
-});
-
-test("the hidden note is worded for the shelf", () => {
-  assert.equal(hiddenNote(21, "media"), "21 watched or dropped hidden");
-  assert.equal(hiddenNote(3, "books"), "3 read or dropped hidden");
-  assert.equal(hiddenNote(5, "tabs"), "5 done hidden");
 });

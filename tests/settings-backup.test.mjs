@@ -72,7 +72,7 @@ test("a damaged Keep entry can't smuggle in unknown fields", () => {
 });
 
 test("preferences are limited to the known list", () => {
-  assert.deepEqual(Object.keys(PREF_CHOICES).sort(), ["keepshelf.askRating", "keepshelf.defaultView", "keepshelf.searchOnline", "keepshelf.startMode"]);
+  assert.deepEqual(Object.keys(PREF_CHOICES).sort(), ["keepshelf.askRating", "keepshelf.defaultView", "keepshelf.searchOnline", "keepshelf.showBooks", "keepshelf.showTabs", "keepshelf.startMode"]);
   assert.equal(sanitizeSettings({ prefs: { "keepshelf.status": "all", "keepshelf.dismissedDuplicates": "[]" } }), undefined);
 });
 

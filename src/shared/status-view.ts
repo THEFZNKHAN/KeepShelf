@@ -41,9 +41,3 @@ export function effectiveStatusFilter(filter: StatusFilter, available: StatusFil
   if (filter === "pending" && available.includes("todo")) return "todo";
   return "all";
 }
-
-/** "21 watched or dropped hidden" for the line under the filters, worded for the shelf. */
-export function hiddenNote(count: number, shelf: "media" | "books" | "tabs"): string {
-  const what = shelf === "books" ? "read or dropped" : shelf === "tabs" ? "done" : "watched or dropped";
-  return `${count} ${what} hidden`;
-}

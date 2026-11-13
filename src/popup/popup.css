@@ -222,13 +222,6 @@ body {
   color: var(--on-primary);
 }
 
-.action-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 3px;
-}
-
 /* ── Search / status / sort row ─────────────────────────── */
 .view-row {
   display: flex;
@@ -280,16 +273,6 @@ body {
 .search-input:focus,
 .view-select:focus {
   border-color: var(--primary);
-}
-
-.action-group {
-  display: flex;
-  gap: var(--gap-sm);
-  align-items: center;
-}
-
-.icon-actions {
-  gap: var(--gap-xs);
 }
 
 .btn {
@@ -2708,32 +2691,6 @@ body.in-tab {
   font-size: 14px;
 }
 
-/* The default view hides watched items; this line says how many and gives the way back. */
-.hidden-note {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 11.5px;
-  color: var(--on-surface-variant);
-}
-
-.hidden-note[hidden] {
-  display: none;
-}
-
-.link-btn {
-  padding: 0;
-  border: none;
-  background: none;
-  font-family: inherit;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--on-surface);
-  text-decoration: underline;
-  cursor: pointer;
-}
-
 /* The top of the suggestion: the heading, a filter button, and the filters when open. */
 .pick-top {
   display: flex;
@@ -3827,4 +3784,21 @@ button.er-stat:hover {
 
 .online-msg p {
   margin: 0;
+}
+
+/* Books and Tabs can be switched off in Settings; the tab (or the whole bar) just isn't there. */
+.shelf-tab[hidden],
+.shelf-tabs[hidden] {
+  display: none;
+}
+
+/* A quiet red button for the one action that cannot be undone. */
+.btn.danger-outline {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.btn.danger-outline:hover {
+  background: var(--error);
+  color: #fff;
 }
