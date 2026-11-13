@@ -29,12 +29,12 @@ export function matchesStatusFilter(status: ItemStatus, filter: StatusFilter): b
 }
 
 /**
- * The status filter to apply while the search box has words in it. "Not watched" is the default view's way of keeping
- * watched titles out of the way, but someone searching for a title wants it found whether or not they have watched it,
- * so it stands aside while searching. A status picked on purpose (To watch, Watched, ...) is kept.
+ * The status filter to apply while the search box has words in it. Someone searching for a title wants it found
+ * whether it is to watch, in progress, watched or dropped, so the status filter (including the default "Not watched"
+ * view) stands aside while they search, and comes back when the box is cleared.
  */
 export function statusFilterWhileSearching(filter: StatusFilter, searching: boolean): StatusFilter {
-  return searching && filter === "pending" ? "all" : filter;
+  return searching ? "all" : filter;
 }
 
 export function defaultStatusFilter(view: DefaultView): StatusFilter {

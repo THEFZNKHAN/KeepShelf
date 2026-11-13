@@ -46,11 +46,9 @@ test("a shelf that doesn't offer a filter falls back sensibly", () => {
   assert.equal(effectiveStatusFilter("all", tabs), "all");
 });
 
-test("while searching, the default Not watched view steps aside so a watched title can be found", () => {
-  assert.equal(statusFilterWhileSearching("pending", true), "all");
-  assert.equal(statusFilterWhileSearching("pending", false), "pending", "not searching: the default view is kept");
-  for (const choice of ["all", "todo", "progress", "done", "dropped"]) {
-    assert.equal(statusFilterWhileSearching(choice, true), choice, `${choice} was picked on purpose`);
-    assert.equal(statusFilterWhileSearching(choice, false), choice);
+test("while searching, the status filter steps aside so a title is found whatever its status", () => {
+  for (const choice of ["all", "pending", "todo", "progress", "done", "dropped"]) {
+    assert.equal(statusFilterWhileSearching(choice, true), "all", `${choice} while searching`);
+    assert.equal(statusFilterWhileSearching(choice, false), choice, `${choice} when not searching is kept`);
   }
 });

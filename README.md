@@ -247,7 +247,7 @@ Optionally append every save to your own Google Keep checklists. No Google Cloud
 
 ### Backup, import and export
 
-Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. See [Backup and import](#backup-and-import).
+Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. You can also export for Letterboxd or Trakt. See [Backup and import](#backup-and-import).
 
 ### Clipboard export
 
@@ -280,7 +280,7 @@ For series, anime and books you can also record progress, such as episodes done 
 
 KeepShelf opens on **Not watched**: what is still to watch or in progress. Watched and dropped items stay out of the way, so the list is what you actually want to pick from. (On Books it is "Not read", on Tabs it is "To do".)
 
-- **Searching ignores the hiding.** While there is something in the search box, titles you have watched are searched too, so you can always find one. Clear the box and the default view is back.
+- **Searching looks at everything.** While there is something in the search box, the status filter steps aside (the status box shows **All** and is greyed out), so a title is found whether it is to watch, in progress, watched or dropped. Clear the box and your status choice, or the default view, is back.
 - To see everything for a while, open the filter button next to the search box and pick **All** in the status list. The next time you open KeepShelf it is back to the default view.
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
 - In **Settings > Shelf & views**, **Start on** chooses between **My default view** and **Where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
@@ -705,6 +705,15 @@ Your shelf lives only in this browser, so export a backup now and then.
 - Items already on your shelf are skipped, and imported items are not sent to Keep.
 - If a backup has settings, KeepShelf asks **"Restore your settings?"** and lists what is in it. **Restore settings** replaces the ones you have now; **Skip** imports only the items. Older backups have no settings and import as before.
 - Letterboxd and Goodreads imports mark watched and read items as finished.
+
+### Export for Letterboxd and Trakt
+
+Under **Backup & import**, **For Letterboxd** and **For Trakt** write your shelf as CSV files those services can import. Each shows exactly what went in and what was left out.
+
+- **For Letterboxd** (films only, [letterboxd.com/import](https://letterboxd.com/import/)) downloads two files: **watched** (films you have watched, with the date you finished them, your rating as 0.5 to 5 stars, your review and your tags) and **watchlist** (films still to watch or in progress). Letterboxd has no TV, so series and anime series are left out, and films you dropped are skipped. Films are matched by their TMDB and IMDb ids when KeepShelf has them, so [fetch info for your shelf](#tmdb-info) first for the best matching.
+- **For Trakt** downloads one file with films, series and anime: watched titles carry their watched date and your rating (1 to 10), and everything else goes on the watchlist. Only titles with an IMDb id saved are included, because a bare number can match the wrong title on Trakt; the rest are counted as left out (fetch info first). A series you are partway through goes on the watchlist, because a CSV can't say which episodes you have seen. Dropped titles are skipped.
+- Trakt's importer is not officially documented and has changed before, so try it with the file first and check the result on Trakt. Imports can be undone from your Trakt settings.
+- Nothing is sent anywhere: the files are written in your browser and saved through the normal download. Text you wrote (titles, reviews, tags) that starts with `=`, `+`, `-` or `@` gets a leading apostrophe so a spreadsheet never runs it as a formula.
 
 ### Add titles from a pasted list
 

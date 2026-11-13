@@ -1,4 +1,6 @@
 import { clipText, ratingScore, formatBookTitlePart, formatDurationOrSeasons, formatItemLine, formatItemsList, formatRatingLabel } from "../shared/format.js";
+import { buildLetterboxdExport } from "../shared/letterboxd-export.js";
+import { buildTraktExport } from "../shared/trakt-export.js";
 import { buildBackup, parseImportFile, settingsFromBackupJson } from "../shared/import.js";
 import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } from "../shared/settings-backup.js";
 import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
@@ -360,7 +362,7 @@ function filteredItems(options: { ignoreStatus?: boolean } = {}): SavedItem[] {
     items = items.filter((i) => i.type === activeFilter);
   }
   const query = searchQuery.trim().toLowerCase();
-  // While searching, the default "Not watched" view steps aside so a title you have watched can still be found.
+  // While searching, the status filter steps aside so a title is found whatever its status.
   const status = statusFilterWhileSearching(effectiveStatus(), query !== "");
   if (!options.ignoreStatus) items = items.filter((i) => matchesStatusFilter(statusOf(i), status));
   if (tagFilter) items = items.filter((i) => allTags(i).includes(tagFilter));
@@ -1253,7 +1255,11 @@ function render(): void {
     done: labels.done,
     dropped: "Dropped",
   };
-  fillOptions(statusFilterEl, availableStatuses().map((v) => [v, statusText[v]]), effectiveStatus());
+  // Searching looks at every status, so the box says All and can't be changed until the search is cleared.
+  const searching = searchQuery.trim() !== "";
+  fillOptions(statusFilterEl, availableStatuses().map((v) => [v, statusText[v]]), searching ? "all" : effectiveStatus());
+  statusFilterEl.disabled = searching;
+  statusFilterEl.title = searching ? "Search looks at every status" : "";
   renderOrganiseFilters();
   fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
   // Picking something to watch or read doesn't apply to bookmarks.
@@ -4133,6 +4139,78 @@ async function exportBackup(): Promise<void> {
   }
 }
 
+/** Saves text as a file through the browser's download, the way the backup does. */
+function downloadText(fileName: string, text: string, mime: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: mime }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+async function readShelf(): Promise<SavedItem[]> {
+  const response = await sendToBackground({ action: "getAll" });
+  if (!response.ok || !("items" in response)) throw new Error("Could not read your shelf.");
+  return response.items;
+}
+
+/** Letterboxd takes films only, as a watched file and a watchlist file. Series and anime series can't go. */
+async function exportForLetterboxd(): Promise<void> {
+  try {
+    const out = buildLetterboxdExport(await readShelf());
+    if (out.watched.count + out.watchlist.count === 0) {
+      showBackupStatus(
+        out.skippedSeries > 0
+          ? `Nothing to export: Letterboxd has no TV, and the ${plural(out.skippedSeries, "series title")} on your shelf can't go.`
+          : "Nothing to export: no films on your shelf yet.",
+        true
+      );
+      return;
+    }
+    const day = new Date().toISOString().slice(0, 10);
+    const files: Array<[string, string]> = [];
+    if (out.watched.count > 0) files.push([`keepshelf-letterboxd-watched-${day}.csv`, out.watched.csv]);
+    if (out.watchlist.count > 0) files.push([`keepshelf-letterboxd-watchlist-${day}.csv`, out.watchlist.csv]);
+    // One after the other, so the browser doesn't take the second for a repeated download and block it.
+    files.forEach(([name, csv], i) => setTimeout(() => downloadText(name, csv, "text/csv;charset=utf-8"), i * 400));
+    const parts = [`${plural(out.watched.count, "watched film")}`, `${out.watchlist.count} to watch`];
+    const skipped = [
+      out.skippedSeries ? `${plural(out.skippedSeries, "series title")} (Letterboxd has no TV)` : "",
+      out.skippedDropped ? `${out.skippedDropped} dropped` : "",
+    ].filter(Boolean);
+    showBackupStatus(`Letterboxd: ${parts.join(" and ")}.${skipped.length ? ` Left out: ${skipped.join(", ")}.` : ""}`, false, 12000);
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
+  }
+}
+
+/** Trakt takes films, series and anime in one file, for the titles that have an IMDb id saved. */
+async function exportForTrakt(): Promise<void> {
+  try {
+    const out = buildTraktExport(await readShelf());
+    if (out.watched + out.watchlist === 0) {
+      showBackupStatus(
+        out.skippedNoId > 0
+          ? `Nothing to export: ${plural(out.skippedNoId, "title")} have no IMDb id saved. Fetch info for your shelf in Settings > TMDB first.`
+          : "Nothing to export: no films or series on your shelf yet.",
+        true
+      );
+      return;
+    }
+    downloadText(`keepshelf-trakt-${new Date().toISOString().slice(0, 10)}.csv`, out.csv, "text/csv;charset=utf-8");
+    const skipped = [
+      out.skippedNoId ? `${plural(out.skippedNoId, "title")} with no IMDb id (fetch TMDB info first)` : "",
+      out.skippedDropped ? `${out.skippedDropped} dropped` : "",
+    ].filter(Boolean);
+    showBackupStatus(`Trakt: ${out.watched} watched and ${out.watchlist} to watch.${skipped.length ? ` Left out: ${skipped.join(", ")}.` : ""}`, false, 12000);
+  } catch (err) {
+    showBackupStatus(err instanceof Error ? err.message : "Export failed.", true);
+  }
+}
+
 async function importFile(file: File): Promise<void> {
   try {
     const text = await file.text();
@@ -4298,6 +4376,8 @@ pasteStatusEl.addEventListener("change", renderPasteSummary);
 pasteAddEl.addEventListener("click", () => void addPastedList());
 
 document.getElementById("export-backup")!.addEventListener("click", () => void exportBackup());
+document.getElementById("export-letterboxd")!.addEventListener("click", () => void exportForLetterboxd());
+document.getElementById("export-trakt")!.addEventListener("click", () => void exportForTrakt());
 
 document.getElementById("import-file-btn")!.addEventListener("click", () => {
   if (isTabView) {
