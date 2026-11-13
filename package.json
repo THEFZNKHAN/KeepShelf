@@ -1,6 +1,6 @@
 {
   "name": "keepshelf",
-  "version": "1.4.0",
+  "version": "1.6.2",
   "private": true,
   "type": "module",
   "scripts": {
