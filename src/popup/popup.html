@@ -700,6 +700,9 @@
     <div id="pick-dialog" class="confirm-dialog" hidden>
       <div class="confirm-backdrop" data-pick-dismiss></div>
       <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-heading">
+        <button type="button" id="pick-graph" class="icon-btn pick-graph" aria-label="Episode ratings" title="Episode ratings" hidden>
+          <span class="material-symbols-outlined">grid_view</span>
+        </button>
         <div class="pick-top" id="pick-top">
           <div class="pick-top-row">
             <p class="pick-kicker" id="pick-heading">How about this?</p>
@@ -732,6 +735,20 @@
           <button type="button" id="pick-again" class="btn btn-primary btn-sm"><span class="material-symbols-outlined btn-icon">casino</span>Pick another</button>
           <button type="button" id="pick-close" class="btn btn-primary btn-sm" hidden>Close</button>
         </div>
+        <section id="pick-ratings" class="pick-ratings" aria-labelledby="er-title" hidden>
+          <header class="er-head">
+            <button type="button" id="er-back" class="icon-btn" aria-label="Back to the card" title="Back">
+              <span class="material-symbols-outlined">arrow_back</span>
+            </button>
+            <div id="er-poster" class="er-poster"></div>
+            <div class="er-titles">
+              <h3 id="er-title" class="er-title">Episode ratings</h3>
+              <p id="er-sub" class="er-sub"></p>
+            </div>
+          </header>
+          <div id="er-body" class="er-body" aria-live="polite"></div>
+          <div id="er-tip" class="er-tip" role="tooltip" hidden></div>
+        </section>
       </div>
     </div>
 

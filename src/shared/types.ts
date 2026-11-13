@@ -1,3 +1,4 @@
+import type { EpisodeRatings } from "./episode-ratings.js";
 import type { KeepSettings, KeepSyncResult, KeepTarget } from "./keep-settings.js";
 
 export type MediaType = "movie" | "series" | "anime" | "book" | "tab" | "link" | "note";
@@ -163,6 +164,7 @@ export type MessageAction =
   | { action: "removeTmdbMatch"; id: string }
   | { action: "refreshStaleTmdb" }
   | { action: "refreshDates"; force?: boolean }
+  | { action: "episodeRatings"; id: string; force?: boolean }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
@@ -182,6 +184,7 @@ export type MessageResponse =
       unmatched?: number;
     }
   | { ok: true; tmdb: { configured: boolean } }
+  | { ok: true; episodeRatings: EpisodeRatings }
   | { ok: true; bookInfo: { enabled: boolean } }
   | { ok: true; reminders: { enabled: boolean } }
   | { ok: true; message: string }

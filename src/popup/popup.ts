@@ -39,6 +39,19 @@ import { groupTags } from "../shared/tag-filter.js";
 import { createTagPicker } from "./tag-picker.js";
 import { OPENLIBRARY_NOTICE, bookCoverUrl, bookRating, isBookItem, needsBookInfo, totalPages } from "../shared/openlibrary.js";
 import { renderStats } from "./stats-view.js";
+import {
+  RATING_BANDS,
+  buildGrid,
+  describeCell,
+  episodeCode,
+  longDate,
+  formatRating,
+  hasAnyRating,
+  ratingBand,
+  type EpisodeGrid,
+  type EpisodeRatings,
+  type GridCell,
+} from "../shared/episode-ratings.js";
 import { findDuplicateGroups, pickKeeper } from "../shared/fuzzy.js";
 import { pickCandidates, pickRandom } from "../shared/random-pick.js";
 import {
@@ -2286,7 +2299,7 @@ async function watchedNextEpisode(item: SavedItem): Promise<void> {
 /** If the item's own card is open, redraws it so its progress and the next episode are current. */
 function refreshOpenCard(id: string): void {
   const fresh = allItems.find((i) => i.id === id);
-  if (fresh && !pickDialogEl.hidden && pickedId === id && pickPanelEl.classList.contains("is-info")) showDetails(fresh, "info");
+  if (fresh && !pickDialogEl.hidden && pickedId === id && pickPanelEl.classList.contains("is-info") && !pickPanelEl.classList.contains("is-ratings")) showDetails(fresh, "info");
 }
 
 /** Marks an item finished (or not). Finishing is saved first, so closing the rating box never loses it. */
@@ -2848,6 +2861,13 @@ const pickWatchEl = document.getElementById("pick-watch")!;
 const pickKickerEl = document.getElementById("pick-heading")!;
 const pickTopEl = document.getElementById("pick-top")!;
 const pickPanelEl = pickDialogEl.querySelector<HTMLElement>(".pick-panel")!;
+const pickGraphEl = document.getElementById("pick-graph") as HTMLButtonElement;
+const pickRatingsEl = document.getElementById("pick-ratings")!;
+const erBackEl = document.getElementById("er-back") as HTMLButtonElement;
+const erSubEl = document.getElementById("er-sub")!;
+const erPosterEl = document.getElementById("er-poster")!;
+const erBodyEl = document.getElementById("er-body")!;
+const erTipEl = document.getElementById("er-tip")!;
 const pickActionsEl = document.getElementById("pick-actions")!;
 const pickFooterEl = document.getElementById("pick-footer")!;
 const pickAgainEl = document.getElementById("pick-again") as HTMLButtonElement;
@@ -2874,6 +2894,11 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   cancelRowHover();
   pickedId = item.id;
   const info = mode === "info";
+  closeRatings();
+  // Series and anime that TMDB knows get a graph icon that turns the card into the episode ratings grid.
+  const hasGraph = info && item.tmdb?.kind === "tv";
+  pickGraphEl.hidden = !hasGraph;
+  pickPanelEl.classList.toggle("has-graph", hasGraph);
   // Both cards share one layout (poster beside the facts); the buttons are what differ.
   pickPanelEl.classList.add("is-card");
   pickPanelEl.classList.toggle("is-info", info);
@@ -3010,6 +3035,9 @@ function savePickFilters(): void {
 function showPickEmpty(): void {
   cancelRowHover();
   pickedId = undefined;
+  closeRatings();
+  pickGraphEl.hidden = true;
+  pickPanelEl.classList.remove("has-graph");
   pickPanelEl.classList.add("is-card", "is-pick");
   pickPanelEl.classList.remove("is-info", "is-clamped", "is-expanded");
   pickTopEl.hidden = false;
@@ -3078,14 +3106,230 @@ pickFilterToggleEl.addEventListener("click", () => {
 
 
 function closePick(): void {
+  closeRatings();
   pickDialogEl.hidden = true;
   pickedId = undefined;
+}
+
+/* ── Episode ratings (the card's second view) ─────────────── */
+
+/** Which item the open ratings view is for, so a slow answer for a card you already left is ignored. */
+let ratingsFor: string | undefined;
+
+function ratingsEl<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function closeRatings(): void {
+  hideRatingsTip();
+  ratingsFor = undefined;
+  pickRatingsEl.hidden = true;
+  pickPanelEl.classList.remove("is-ratings");
+}
+
+function ratingsMessage(text: string, retry?: () => void): void {
+  const box = ratingsEl("div", "er-msg");
+  box.append(ratingsEl("p", undefined, text));
+  if (retry) {
+    const again = ratingsEl("button", "btn btn-outline btn-sm", "Try again");
+    again.type = "button";
+    again.addEventListener("click", retry);
+    box.append(again);
+  }
+  erBodyEl.replaceChildren(box);
+}
+
+/** Worst to best, as a strip of swatches; hover one for its name and range. */
+function ratingsLegend(): HTMLElement {
+  const legend = ratingsEl("div", "er-legend");
+  legend.append(ratingsEl("span", "er-legend-end", "Low"));
+  for (const { band, label, min } of [...RATING_BANDS].reverse()) {
+    const swatch = ratingsEl("span", `er-swatch band-${band}`);
+    swatch.title = band === "absolute" ? `${label} · ${min}+` : `${label} · from ${min}`;
+    legend.append(swatch);
+  }
+  legend.append(ratingsEl("span", "er-legend-end", "High"));
+  return legend;
+}
+
+interface RatingsGrid {
+  table: HTMLElement;
+  /** Scrolls to a cell, flashes it and reads it out, as if it had been tapped. */
+  reveal(cell: GridCell): void;
+}
+
+/** The floating tip next to a cell: which episode, its rating, and the votes and date. Never covers the cell itself. */
+function showRatingsTip(cell: GridCell, anchor: HTMLElement): void {
+  const head = ratingsEl("div", "er-tip-head");
+  head.append(ratingsEl("span", "er-tip-code", episodeCode(cell)), ratingsEl("span", `er-tip-rating band-${cell.band}`, formatRating(cell.rating)));
+  const meta = [
+    cell.rating === undefined ? "Not rated yet" : cell.votes ? `${cell.votes.toLocaleString("en-US")} votes` : "",
+    longDate(cell.airDate),
+  ].filter(Boolean);
+  erTipEl.replaceChildren(head);
+  if (cell.name) erTipEl.append(ratingsEl("div", "er-tip-name", cell.name));
+  if (meta.length) erTipEl.append(ratingsEl("div", "er-tip-meta", meta.join(" · ")));
+  erTipEl.hidden = false;
+
+  // Above the cell when there is room, below it otherwise, and always inside the window.
+  const gap = 6;
+  const margin = 8;
+  const a = anchor.getBoundingClientRect();
+  const t = erTipEl.getBoundingClientRect();
+  const above = a.top - t.height - gap >= margin;
+  const top = above ? a.top - t.height - gap : Math.min(a.bottom + gap, window.innerHeight - t.height - margin);
+  // Keep it inside the card, not just inside the window.
+  const card = pickPanelEl.getBoundingClientRect();
+  const minLeft = Math.max(margin, card.left + 6);
+  const maxLeft = Math.min(window.innerWidth - t.width - margin, card.right - t.width - 6);
+  const left = Math.max(minLeft, Math.min(a.left + a.width / 2 - t.width / 2, maxLeft));
+  erTipEl.style.top = `${Math.round(top)}px`;
+  erTipEl.style.left = `${Math.round(left)}px`;
+}
+
+function hideRatingsTip(): void {
+  erTipEl.hidden = true;
+}
+
+// Touching anything that is not a cell lets go of a tip a tap left open.
+document.addEventListener("pointerdown", (e) => {
+  if (!erTipEl.hidden && !(e.target as HTMLElement).closest?.(".er-cell")) hideRatingsTip();
+});
+
+interface RatingsGrid {
+  table: HTMLElement;
+  /** Scrolls to a cell, flashes it and shows its tip, as if it had been tapped. */
+  reveal(cell: GridCell): void;
+}
+
+function ratingsGridEl(grid: EpisodeGrid, scroll: HTMLElement): RatingsGrid {
+  const table = ratingsEl("div", "er-grid");
+  table.setAttribute("role", "grid");
+  table.style.gridTemplateColumns = `auto repeat(${grid.seasons.length}, var(--er-cell-w))`;
+  table.append(ratingsEl("span", "er-corner"));
+  for (const season of grid.seasons) table.append(ratingsEl("span", "er-colhead", `S${season}`));
+
+  const cells = new Map<string, HTMLElement>();
+  grid.cells.forEach((row, r) => {
+    table.append(ratingsEl("span", "er-rowhead", `E${r + 1}`));
+    row.forEach((cell) => {
+      if (!cell) {
+        table.append(ratingsEl("span", "er-cell is-empty"));
+        return;
+      }
+      const btn = ratingsEl("button", `er-cell band-${cell.band}`, formatRating(cell.rating));
+      btn.type = "button";
+      btn.setAttribute("aria-label", describeCell(cell));
+      // A mouse previews on hover. A finger has no hover, so a tap shows the tip and it stays until you tap elsewhere.
+      btn.addEventListener("pointerenter", (e) => {
+        if (e.pointerType !== "touch") showRatingsTip(cell, btn);
+      });
+      btn.addEventListener("pointerleave", (e) => {
+        if (e.pointerType !== "touch" && document.activeElement !== btn) hideRatingsTip();
+      });
+      btn.addEventListener("focus", () => showRatingsTip(cell, btn));
+      btn.addEventListener("blur", hideRatingsTip);
+      btn.addEventListener("click", () => showRatingsTip(cell, btn));
+      cells.set(`${cell.season}.${cell.episode}`, btn);
+      table.append(btn);
+    });
+  });
+
+  table.append(ratingsEl("span", "er-avg-head", "AVG"));
+  for (const average of grid.seasonAverages) table.append(ratingsEl("span", "er-avg", formatRating(average)));
+
+  // The tip is tied to where a cell is, so it goes as soon as the grid moves.
+  scroll.addEventListener("scroll", hideRatingsTip, { passive: true });
+
+  const reveal = (cell: GridCell) => {
+    const el = cells.get(`${cell.season}.${cell.episode}`);
+    if (!el) return;
+    const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Scroll only the grid's own box, never the card around it.
+    scroll.scrollTo({
+      left: el.offsetLeft - (scroll.clientWidth - el.offsetWidth) / 2,
+      top: el.offsetTop - (scroll.clientHeight - el.offsetHeight) / 2,
+      behavior: smooth ? "smooth" : "auto",
+    });
+    // Show the tip once the grid has stopped moving, or it would point at where the cell used to be.
+    window.setTimeout(() => {
+      el.focus({ preventScroll: true });
+      el.classList.remove("is-flash");
+      void el.offsetWidth;
+      el.classList.add("is-flash");
+    }, smooth ? 450 : 0);
+  };
+  return { table, reveal };
+}
+
+function ratingsStat(label: string, rating: number | undefined, sub: string, onClick?: () => void): HTMLElement {
+  const tile = ratingsEl(onClick ? "button" : "div", "er-stat");
+  if (tile instanceof HTMLButtonElement) tile.type = "button";
+  const value = ratingsEl("span", "er-stat-value");
+  value.append(ratingsEl("span", `er-dot band-${ratingBand(rating)}`), document.createTextNode(formatRating(rating)));
+  tile.append(ratingsEl("span", "er-stat-label", label), value, ratingsEl("span", "er-stat-sub", sub));
+  if (onClick) {
+    tile.addEventListener("click", onClick);
+    tile.title = "Show it in the grid";
+  }
+  return tile;
+}
+
+function renderRatings(ratings: EpisodeRatings): void {
+  const grid = buildGrid(ratings);
+  if (!hasAnyRating(grid)) {
+    ratingsMessage("TMDB has no episode ratings for this show yet.");
+    return;
+  }
+
+  const scroll = ratingsEl("div", "er-scroll");
+  const { table, reveal } = ratingsGridEl(grid, scroll);
+  scroll.append(table);
+
+  const stats = ratingsEl("div", "er-stats");
+  stats.append(
+    ratingsStat("Average", grid.average, grid.rated === grid.total ? `${grid.total} episodes` : `${grid.rated} of ${grid.total} rated`),
+    ratingsStat("Best", grid.best?.rating, grid.best ? episodeCode(grid.best) : "", grid.best ? () => reveal(grid.best as GridCell) : undefined),
+    ratingsStat("Lowest", grid.lowest?.rating, grid.lowest ? episodeCode(grid.lowest) : "", grid.lowest ? () => reveal(grid.lowest as GridCell) : undefined)
+  );
+  erBodyEl.replaceChildren(stats, ratingsLegend(), scroll);
+}
+
+async function openRatings(item: SavedItem, force = false): Promise<void> {
+  ratingsFor = item.id;
+  pickPanelEl.classList.add("is-ratings");
+  pickRatingsEl.hidden = false;
+  erSubEl.textContent = `${itemTitle(item)} · TMDB ratings`;
+  erPosterEl.replaceChildren(createLeadingEl(item));
+  ratingsMessage("Loading ratings…");
+  erBackEl.focus();
+  try {
+    const response = await sendToBackground({ action: "episodeRatings", id: item.id, force });
+    if (ratingsFor !== item.id) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("episodeRatings" in response)) throw new Error("No ratings came back.");
+    renderRatings(response.episodeRatings);
+  } catch (err) {
+    if (ratingsFor !== item.id) return;
+    ratingsMessage(err instanceof Error ? err.message : "Could not load episode ratings.", () => void openRatings(item, true));
+  }
 }
 
 document.getElementById("pick-random")!.addEventListener("click", () => pickForMe());
 document.getElementById("pick-again")!.addEventListener("click", () => pickForMe(pickedId));
 pickDialogEl.querySelector("[data-pick-dismiss]")!.addEventListener("click", closePick);
 pickCloseEl.addEventListener("click", closePick);
+pickGraphEl.addEventListener("click", () => {
+  const item = allItems.find((i) => i.id === pickedId);
+  if (item) void openRatings(item);
+});
+erBackEl.addEventListener("click", () => {
+  closeRatings();
+  pickGraphEl.focus();
+});
 pickMoreEl.addEventListener("click", () => {
   const expanded = pickPanelEl.classList.toggle("is-expanded");
   pickPanelEl.classList.toggle("is-clamped", !expanded);
@@ -3652,7 +3896,11 @@ document.addEventListener("keydown", (event) => {
   if (!confirmDialogEl.hidden) closeConfirmDialog(false);
   else if (!editDialogEl.hidden) closeEditDialog();
   else if (!rateDialogEl.hidden) closeRateDialog();
-  else if (!pickDialogEl.hidden) closePick();
+  else if (!pickDialogEl.hidden && pickPanelEl.classList.contains("is-ratings")) {
+    // Escape steps back from the grid to the card first, and closes the card the next time.
+    closeRatings();
+    pickGraphEl.focus();
+  } else if (!pickDialogEl.hidden) closePick();
   else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();
   else if (tagPicker.isOpen()) tagPicker.close();

@@ -102,6 +102,7 @@ KeepShelf/
 │       ├── status-view.ts     # Status filters (Not watched, ...), the default view and what it hides (pure)
 │       ├── reminders.ts       # Release reminders: due dates, refresh rules, notification text (pure)
 │       ├── coming-up.ts       # Coming up screen: what airs or releases soon, grouped by day (pure)
+│       ├── episode-ratings.ts # Episode ratings grid: cleaning TMDB seasons, rating bands, grid layout, averages (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
 │       ├── tmdb-settings.ts   # TMDB token storage
@@ -146,6 +147,8 @@ KeepShelf/
 │   ├── status-view.test.mjs   # Which items each status filter keeps, and the default view
 │   ├── reminders.test.mjs     # Due dates, refresh rules, notification text
 │   ├── coming-up.test.mjs     # Window, grouping and headings for the Coming up screen
+│   ├── episode-ratings.test.mjs  # Bands, cleaning, grid layout and averages for the ratings grid
+│   ├── background-ratings.test.mjs  # The episodeRatings action: session cache, errors, no token
 │   ├── undo.test.mjs
 │   ├── tmdb.test.mjs
 │   ├── openlibrary.test.mjs

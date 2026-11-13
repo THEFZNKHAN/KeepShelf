@@ -1,3 +1,4 @@
+import { MAX_SEASONS, collectSeasons, type EpisodeRatings } from "./episode-ratings.js";
 import { normalizeTitle, similarity } from "./fuzzy.js";
 import { bookGenres } from "./openlibrary.js";
 import { normalizeTags } from "./user-data.js";
@@ -239,6 +240,52 @@ const DETAIL_APPEND: Record<TmdbKind, string> = {
 export async function fetchDetails(client: TmdbClient, kind: TmdbKind, id: number, now = Date.now()): Promise<TmdbInfo> {
   const details = await client.get<Details>(`/${kind}/${id}`, { append_to_response: DETAIL_APPEND[kind], language: "en-US" });
   return toTmdbInfo(kind, details, now);
+}
+
+/** TMDB lets one request carry at most 20 appended parts; the main call uses one of those for nothing else, so 19 is safe. */
+const SEASONS_PER_REQUEST = 19;
+
+const seasonParts = (numbers: number[]) => numbers.map((n) => `season/${n}`).join(",");
+
+/**
+ * Every episode's rating for a show, one grid's worth. TMDB can return many seasons in a single call
+ * (`append_to_response=season/1,season/2,...`), so a normal show costs one request. The answer also lists the
+ * seasons that really exist, so a show whose numbering has gaps, or one with more seasons than fit in a call,
+ * gets a few follow-up calls for just the ones still missing. Specials (season 0) are left out.
+ */
+export async function fetchEpisodeRatings(client: TmdbClient, tmdbId: number, knownSeasons = 1, now = Date.now()): Promise<EpisodeRatings> {
+  const got = new Map<number, unknown>();
+  const take = (details: Record<string, unknown>) => {
+    for (const [key, value] of Object.entries(details)) {
+      const m = /^season\/(\d+)$/.exec(key);
+      if (m && value && typeof value === "object") got.set(Number(m[1]), { ...(value as object), season_number: Number(m[1]) });
+    }
+  };
+
+  const guess = Math.min(Math.max(Math.floor(knownSeasons) || 1, 1), SEASONS_PER_REQUEST);
+  const first = await client.get<Details & Record<string, unknown>>(`/tv/${tmdbId}`, {
+    append_to_response: seasonParts(Array.from({ length: guess }, (_, i) => i + 1)),
+    language: "en-US",
+  });
+  take(first);
+
+  const real = (first.seasons ?? [])
+    .map((s) => s.season_number)
+    .filter((n): n is number => typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 999)
+    .slice(0, MAX_SEASONS);
+  const missing = real.filter((n) => !got.has(n));
+  for (let i = 0; i < missing.length; i += 20) {
+    const more = await client.get<Record<string, unknown>>(`/tv/${tmdbId}`, {
+      append_to_response: seasonParts(missing.slice(i, i + 20)),
+      language: "en-US",
+    });
+    take(more);
+  }
+
+  // Keep only seasons TMDB says exist (when it says), so a stray guess never shows up as an empty column.
+  const wanted = real.length ? new Set(real) : undefined;
+  const seasons = collectSeasons([...got.entries()].filter(([n]) => !wanted || wanted.has(n)).map(([, v]) => v));
+  return { fetchedAt: now, seasons };
 }
 
 /** Finds the TMDB entry for a saved item: exact by IMDb id when the source URL has one, otherwise by title and year. */

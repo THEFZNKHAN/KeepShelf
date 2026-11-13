@@ -25,6 +25,7 @@ import {
   TmdbError,
   createTmdbClient,
   fetchDetails,
+  fetchEpisodeRatings,
   isEnrichable,
   isStale,
   lacksSeasons,
@@ -32,6 +33,7 @@ import {
   mustPurge,
   parseTmdbToken,
 } from "../shared/tmdb.js";
+import { isFresh, sanitizeRatings } from "../shared/episode-ratings.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
 import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
@@ -96,6 +98,43 @@ async function syncAndRecord(item: SavedItem): Promise<KeepSyncResult> {
 async function tmdbClient() {
   const auth = await getTmdbAuth();
   return auth ? createTmdbClient(auth) : undefined;
+}
+
+/**
+ * Episode ratings are kept in session storage only: in memory, one key per show, gone when the browser closes. They are
+ * not saved with the shelf, so they add nothing to the items, backups or TMDB's six-month retention rule.
+ */
+const RATINGS_KEY = "keepshelf_er_";
+
+async function episodeRatingsFor(id: string, force: boolean): Promise<MessageResponse> {
+  const tmdb = (await getAllItems()).find((i) => i.id === id)?.tmdb;
+  if (!tmdb || tmdb.kind !== "tv") return { ok: false, error: "This title has no TMDB series info, so there are no episode ratings." };
+
+  const key = `${RATINGS_KEY}${tmdb.id}`;
+  const now = Date.now();
+  const session = chrome.storage.session;
+  if (!force) {
+    try {
+      const cached = sanitizeRatings((await session?.get(key))?.[key]);
+      if (cached && isFresh(cached, now)) return { ok: true, episodeRatings: cached };
+    } catch {
+      /* no cache available: ask TMDB */
+    }
+  }
+
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const ratings = await fetchEpisodeRatings(client, tmdb.id, tmdb.seasons, now);
+    try {
+      await session?.set({ [key]: ratings });
+    } catch {
+      /* still show them, just don't keep them */
+    }
+    return { ok: true, episodeRatings: ratings };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not load episode ratings." };
+  }
 }
 
 /** Best-effort TMDB lookup after a save. A failure never blocks the save or the Keep sync. */
@@ -437,6 +476,9 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     case "refreshDates": {
       await refreshDatesQuietly(Date.now(), Boolean(message.force));
       return { ok: true, items: await getAllItems() };
+    }
+    case "episodeRatings": {
+      return episodeRatingsFor(message.id, Boolean(message.force));
     }
     case "refreshStaleTmdb": {
       return { ok: true, items: await refreshStaleTmdb() };
