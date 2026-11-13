@@ -45,6 +45,7 @@ import {
   parseSearchResults,
   sanitizeResult,
 } from "../shared/tmdb-search.js";
+import { TRAILER_LANGUAGES, pickTrailer } from "../shared/trailer.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { buildUserPatch } from "../shared/user-data.js";
 import { getNotified, isRemindersEnabled, setNotified, setRemindersEnabled } from "../shared/reminders-settings.js";
@@ -209,6 +210,25 @@ async function similarTmdb(id: unknown): Promise<MessageResponse> {
       recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
     }),
   };
+}
+
+/**
+ * A title's trailer link, picked from TMDB's videos. English and untagged videos first; a film with none (many are
+ * only in their own language) is asked again across the common languages. Fetched when the button is pressed, never stored.
+ */
+async function trailerFor(id: unknown): Promise<MessageResponse> {
+  const tmdb = typeof id === "string" ? (await getAllItems()).find((i) => i.id === id)?.tmdb : undefined;
+  if (!tmdb) return { ok: false, error: "This title has no TMDB info, so there is no trailer to look for." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const path = `/${tmdb.kind}/${tmdb.id}/videos`;
+    let trailer = pickTrailer(await client.get<unknown>(path, { language: "en-US", include_video_language: "en,null" }));
+    if (!trailer) trailer = pickTrailer(await client.get<unknown>(path, { language: "en-US", include_video_language: TRAILER_LANGUAGES }));
+    return { ok: true, trailer: trailer ?? null };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not look for a trailer." };
+  }
 }
 
 /** Adds a search result to the shelf as an ordinary save, with TMDB's info for exactly that title already in place. */
@@ -567,6 +587,9 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "searchTmdb": {
       return searchTmdb(message.query);
+    }
+    case "trailerFor": {
+      return trailerFor(message.id);
     }
     case "similarTmdb": {
       return similarTmdb(message.id);

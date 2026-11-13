@@ -27,6 +27,7 @@ let status = 200;
 let withCollection = false;
 let extraSearch = [];
 let failPath = "";
+let videos = {};
 globalThis.fetch = async (url) => {
   const u = new URL(url);
   if (u.hostname !== "api.themoviedb.org") throw new Error("unexpected host " + u.hostname);
@@ -49,6 +50,10 @@ globalThis.fetch = async (url) => {
       { id: 603, media_type: "movie", title: "The Matrix", release_date: "1999-03-30", vote_average: 8.2, vote_count: 20000, genre_ids: [28], original_language: "en" },
     ] }) };
   }
+  if (u.pathname.endsWith("/videos")) {
+    const lang = u.searchParams.get("include_video_language") ?? "";
+    return { ok: true, status: 200, json: async () => (videos[lang.startsWith("en,null,hi") ? "wide" : "en"] ?? { results: [] }) };
+  }
   if (u.pathname.endsWith("/recommendations")) {
     return { ok: true, status: 200, json: async () => ({ results: [
       { id: 70523, name: "Dark", first_air_date: "2017-12-01", poster_path: "/dark.jpg", vote_average: 8.4, vote_count: 9000, genre_ids: [18], original_language: "de" },
@@ -65,7 +70,7 @@ const FAKE_KEY = "0123456789abcdef0123456789abcdef";
 const dark = { id: 70523, kind: "tv", type: "series", title: "Dark", year: "2017" };
 
 before(async () => { await import("../dist-test/background-main.js"); });
-const reset = () => { calls.length = 0; status = 200; withCollection = false; extraSearch = []; failPath = ""; store.trackbuddy_items = []; store.keepshelf_tmdb_token = FAKE_KEY; };
+const reset = () => { calls.length = 0; status = 200; withCollection = false; extraSearch = []; failPath = ""; videos = {}; store.trackbuddy_items = []; store.keepshelf_tmdb_token = FAKE_KEY; };
 
 test("searchTmdb returns movies and series from one request, and sends only the typed words", async () => {
   reset();
@@ -236,4 +241,50 @@ test("similarTmdb passes TMDB's errors on in plain words", async () => {
   const res = await send({ action: "similarTmdb", id: "dark" });
   assert.equal(res.ok, false);
   assert.match(res.error, /rate|many|limit|slow/i);
+});
+
+const yt = (key, extra = {}) => ({ key, site: "YouTube", type: "Trailer", official: true, published_at: "2020-01-01T00:00:00Z", name: `Trailer ${key}`, ...extra });
+
+test("trailerFor returns a validated YouTube link from one request", async () => {
+  reset();
+  seed();
+  videos = { en: { results: [yt("clip0000001", { type: "Clip" }), yt("trailer0001"), { key: "../../x", site: "YouTube", type: "Trailer" }] } };
+  const res = await send({ action: "trailerFor", id: "dark" });
+  assert.deepEqual(res, { ok: true, trailer: { url: "https://www.youtube.com/watch?v=trailer0001", name: "Trailer trailer0001" } });
+  assert.deepEqual(calls.map((c) => c.path), ["/3/tv/70523/videos"]);
+  assert.equal(calls[0].params.include_video_language, "en,null");
+  assert.equal(calls[0].params.language, "en-US");
+});
+
+test("trailerFor asks again across languages when there is no English trailer", async () => {
+  reset();
+  seed();
+  videos = { en: { results: [] }, wide: { results: [yt("hindi000001")] } };
+  const res = await send({ action: "trailerFor", id: "film" });
+  assert.equal(res.trailer.url, "https://www.youtube.com/watch?v=hindi000001");
+  assert.deepEqual(calls.map((c) => c.path), ["/3/movie/9/videos", "/3/movie/9/videos"]);
+  assert.match(calls[1].params.include_video_language, /^en,null,hi/);
+});
+
+test("trailerFor says there is none when TMDB has nothing usable", async () => {
+  reset();
+  seed();
+  videos = { en: { results: [{ key: "vimeo000001", site: "Vimeo", type: "Trailer" }] }, wide: { results: [] } };
+  assert.deepEqual(await send({ action: "trailerFor", id: "dark" }), { ok: true, trailer: null });
+});
+
+test("trailerFor has nothing to go on without TMDB info, a known title or a token, and passes errors on", async () => {
+  reset();
+  seed();
+  for (const id of ["plain", "missing", undefined, 5]) assert.equal((await send({ action: "trailerFor", id })).ok, false, String(id));
+  assert.equal(calls.length, 0);
+  status = 401;
+  const bad = await send({ action: "trailerFor", id: "dark" });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /token/i);
+  reset();
+  seed();
+  delete store.keepshelf_tmdb_token;
+  assert.deepEqual(await send({ action: "trailerFor", id: "dark" }), { ok: false, error: "Add your TMDB token in Settings first." });
+  assert.equal(calls.length, 0);
 });

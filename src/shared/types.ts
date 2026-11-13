@@ -168,6 +168,7 @@ export type MessageAction =
   | { action: "episodeRatings"; id: string; force?: boolean }
   | { action: "searchTmdb"; query: string }
   | { action: "similarTmdb"; id: string }
+  | { action: "trailerFor"; id: string }
   | { action: "addFromTmdb"; result: TmdbSearchResult }
   | { action: "clear" }
   | { action: "getKeepSettings" }
@@ -190,6 +191,7 @@ export type MessageResponse =
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; episodeRatings: EpisodeRatings }
   | { ok: true; tmdbResults: TmdbSearchResult[] }
+  | { ok: true; trailer: { url: string; name: string } | null }
   | { ok: true; bookInfo: { enabled: boolean } }
   | { ok: true; reminders: { enabled: boolean } }
   | { ok: true; message: string }

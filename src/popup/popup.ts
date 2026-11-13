@@ -3352,6 +3352,8 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
 
   pickWatchEl.classList.add("is-compact");
   pickWatchEl.replaceChildren(
+    // A trailer for any title TMDB knows, ahead of the sites where you watch it.
+    ...(info && item.tmdb ? [trailerButton(item)] : []),
     ...watchLinks(item, watchSites).map((link) => {
       const btn = document.createElement("button");
       btn.type = "button";
@@ -3381,6 +3383,49 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   const cutOff = [pickOverviewEl, pickReviewEl].some((el) => !el.hidden && el.scrollHeight > el.clientHeight + 1);
   pickMoreEl.hidden = !cutOff;
   pickMoreEl.textContent = "More";
+}
+
+/** The Trailer button: asks TMDB when pressed, opens the link in a new tab, and says on the button if there isn't one. */
+function trailerButton(item: SavedItem): HTMLButtonElement {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "btn btn-outline btn-sm";
+  const icon = document.createElement("span");
+  icon.className = "material-symbols-outlined btn-icon";
+  icon.textContent = "smart_display";
+  const label = document.createTextNode("Trailer");
+  btn.append(icon, label);
+  btn.title = `Watch the trailer for ${itemTitle(item)}`;
+  btn.setAttribute("aria-label", `Watch the trailer for ${itemTitle(item)}`);
+
+  const say = (text: string, resetAfterMs = 0) => {
+    label.textContent = text;
+    if (resetAfterMs > 0) {
+      setTimeout(() => {
+        label.textContent = "Trailer";
+        btn.disabled = false;
+      }, resetAfterMs);
+    }
+  };
+  btn.addEventListener("click", async () => {
+    btn.disabled = true;
+    say("Looking…");
+    try {
+      const response = await sendToBackground({ action: "trailerFor", id: item.id });
+      if (!response.ok) throw new Error(response.error);
+      if (!("trailer" in response)) throw new Error("No answer came back.");
+      if (!response.trailer) {
+        say("No trailer on TMDB", 3000);
+        return;
+      }
+      void chrome.tabs.create({ url: response.trailer.url });
+      say("Trailer", 1);
+    } catch (err) {
+      btn.title = err instanceof Error ? err.message : "Could not look for a trailer.";
+      say("Couldn't load it", 3000);
+    }
+  });
+  return btn;
 }
 
 function showPick(item: SavedItem): void {

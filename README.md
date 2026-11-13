@@ -195,6 +195,10 @@ The search box on the **Media** tab filters your shelf as you type. When what yo
   - **Off**: the row never appears and nothing is sent.
 - The Books and Tabs tabs don't search online.
 
+### Trailer
+
+Press **Trailer** on the card of any title that has TMDB info and its trailer opens on YouTube in a new tab. KeepShelf picks a trailer over a teaser over other clips, an official one over a fan upload, and the newest. It looks for English trailers first, then in the common film languages, so a Hindi or Korean film finds its own. If TMDB has no usable video the button says **No trailer on TMDB** for a moment. Nothing is embedded or stored: it asks TMDB when you press the button, and only a YouTube address that passed a check is ever opened. It needs your TMDB token.
+
 ### More like this
 
 On the card of any title that has TMDB info, **More like this** shows what TMDB recommends for it, in the same list as a search. TMDB's recommendations come from what viewers watch, not from franchises, so the title's own sequels, remakes and the other films in its TMDB collection are listed first under **Same franchise** (oldest first), and the recommendations follow under **You might also like**. Sequels are found by name ("Drishyam 2", "Dune: Part Two", a remake with the same title) and by TMDB's collection data; a sequel with a completely different name and no collection on TMDB won't be in either list. Each result has a poster, rating and description, an **Add** button, or **On shelf** if you already have it. **My shelf** takes you back, and typing in the search box or changing tab closes it too. It works even if the TMDB search row is switched off, because you asked for it, and it needs your TMDB token. Nothing is saved with the title: the recommendations are fetched when you ask.
@@ -373,7 +377,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 - **Next air dates** for series and **release dates** for movies, used by [release reminders](#release-reminders).
 - TMDB rating, age rating (US), overview, and a poster when the source page had none.
 - An **[episode ratings grid](#episode-ratings)** for series and anime, opened from the grid icon on the item's card.
-- **[Search TMDB](#search-tmdb-from-the-search-box)** from the shelf's search box, and **[More like this](#more-like-this)** on a card, to find and add titles you haven't saved yet.
+- **[Search TMDB](#search-tmdb-from-the-search-box)** from the shelf's search box, **[More like this](#more-like-this)** and a **[Trailer](#trailer)** button on a card, to find and add titles you haven't saved yet.
 
 Anything the page itself provided wins over TMDB, and anything you type wins over both. Books are not covered by TMDB, which only has films and TV. Books have their own option, see [Book info](#book-info).
 
