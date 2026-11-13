@@ -101,6 +101,7 @@ import {
   streamingNote,
   streamingStatuses,
 } from "../shared/coming-up.js";
+import { newSeasonEntries } from "../shared/new-seasons.js";
 
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
@@ -706,6 +707,26 @@ function renderUpcoming(checking = false): void {
     }
     empty.append(heading, detail);
     upcomingBodyEl.append(empty);
+  }
+
+  // Series you finished that have a season you haven't watched. One already in the dated list below isn't repeated.
+  const datedNew = new Set(groups.flatMap((g) => g.entries.filter((e) => e.newSeason).map((e) => e.item.id)));
+  const newSeasons = tmdbConfigured ? newSeasonEntries(allItems, now).filter((e) => !datedNew.has(e.item.id)) : [];
+  if (newSeasons.length > 0) {
+    const details = document.createElement("details");
+    details.className = "up-nodate";
+    details.open = true;
+    const summary = document.createElement("summary");
+    setSummary(summary, "New seasons of shows you finished", newSeasons.length);
+    summary.title = "Shows marked Done that have a season beyond the ones you had watched. Dates come from TMDB's last check.";
+    details.append(summary);
+    const list = upcomingList();
+    for (const entry of newSeasons) {
+      const tip = entry.premiere ? `Premieres ${entry.premiere.date}` : entry.out.length ? "Already out on TMDB" : "Announced, no date yet";
+      list.append(upcomingRow(entry.item, entry.label, `You finished S${entry.watched}`, tip, entry.rank === 2));
+    }
+    details.append(list);
+    upcomingBodyEl.append(details);
   }
 
   for (const group of groups) {

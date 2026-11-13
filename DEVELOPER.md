@@ -107,6 +107,7 @@ KeepShelf/
 │       ├── trailer.ts         # Picks which TMDB video becomes a title's trailer link (pure)
 │       ├── csv.ts             # Writing CSV: quoting, spreadsheet-formula guard, local dates (pure)
 │       ├── letterboxd-export.ts  # The Letterboxd export: films, watched and watchlist files (pure)
+│       ├── new-seasons.ts     # Finished series with a season you haven't watched: out, airing, dated or announced (pure)
 │       ├── trakt-export.ts    # The Trakt export: films, series and anime by IMDb id (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
@@ -158,6 +159,7 @@ KeepShelf/
 │   ├── trailer.test.mjs       # Which video becomes the trailer
 │   ├── csv.test.mjs           # CSV writing and the formula guard
 │   ├── letterboxd-export.test.mjs  # What goes in the Letterboxd files, and what is left out
+│   ├── new-seasons.test.mjs   # Which finished series have an unwatched season, and how they are ordered
 │   ├── trakt-export.test.mjs  # What goes in the Trakt file, and what is left out
 │   ├── background-search.test.mjs   # The searchTmdb and addFromTmdb actions
 │   ├── undo.test.mjs
