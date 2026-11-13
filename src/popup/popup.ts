@@ -2464,8 +2464,8 @@ function renderPrefs(): void {
   render();
   const on = askRatingEnabled();
   prefAskRatingEl.checked = on;
-  generalSummaryEl.textContent = on ? "Rating prompt on" : "Rating prompt off";
-  generalSummaryEl.classList.toggle("is-ok", on);
+  // The collapsed row says which tabs are on the shelf, the one thing here that changes what you see.
+  generalSummaryEl.textContent = ["Media", showBooks ? "Books" : "", showTabs ? "Tabs" : ""].filter(Boolean).join(" · ");
 }
 
 const prefStartEl = document.getElementById("pref-start") as HTMLSelectElement;

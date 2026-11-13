@@ -189,7 +189,7 @@ The search box on the **Media** tab filters your shelf as you type. When what yo
 - Descriptions are cut to two lines; rest the pointer on a result to read all of it.
 - Results are movies, series and anime. TMDB doesn't label anime, so KeepShelf files a Japanese animated title as **Anime** and everything else as a movie or a series. If one is wrong, change its type in **Edit**.
 - It needs your [TMDB token](#tmdb-info). Without one the row tells you to add it in Settings.
-- **Settings > General > Search TMDB from the search box** chooses how it behaves:
+- **Settings > TMDB > Search TMDB from the search box** chooses how it behaves:
   - **Show a "Search TMDB" row** (the default): nothing is sent until you tap the row.
   - **Also search by itself when nothing matches**: if at least three letters match nothing on your shelf, KeepShelf searches TMDB a moment after you stop typing. Words are only sent in this case.
   - **Off**: the row never appears and nothing is sent.
@@ -273,7 +273,7 @@ KeepShelf opens on **Not watched**: what is still to watch or in progress. Watch
 
 - To see everything for a while, open the filter button next to the search box and pick **All** in the status list. The next time you open KeepShelf it is back to the default view.
 - The status dropdown has **All**, **Not watched**, **To watch**, **In progress**, **Watched** and **Dropped**, so you can look at any one of them.
-- In **Settings > General**, **When I open KeepShelf** chooses between **Start with my default view** and **Remember where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
+- In **Settings > Shelf & views**, **Start on** chooses between **My default view** and **Where I left off** (the tab, type, status and list you last used). **Default view** chooses **Hide watched and dropped** or **Show everything**. Search and tag filters always start empty.
 
 ### Mark the next episode watched
 
@@ -358,7 +358,7 @@ Hover or focus any bar for exact numbers, or expand **View as table**.
 **Set it up**
 1. Create a free account at themoviedb.org and request an API key under **Settings, API**.
 2. Copy the **API Read Access Token** (a long string starting with `eyJ`). The 32-character API key also works.
-3. In KeepShelf, open **Settings, TMDB**, paste it, click **Save**, then **Test**.
+3. In KeepShelf, open **Settings > TMDB**, paste it, click **Save**, then **Test**.
 4. Click **Fetch info for my shelf** to fill in what you already saved.
 
 **What you get** for movies, series and anime, filled in for you:
@@ -393,7 +393,7 @@ Get a desktop notification when something on your shelf is about to come out. It
 
 **Set it up**
 1. Add your TMDB token first (see [TMDB info](#tmdb-info)). The switch stays disabled until a token is saved.
-2. Open **Settings, TMDB info** and switch on **Release reminders**.
+2. Open **Settings > TMDB** and switch on **Release reminders**.
 3. Click **Check for releases now** to try it. Chrome may also need notifications allowed for it in your operating system.
 
 **What you get**
@@ -505,7 +505,7 @@ Notes:
 
 ## Tabs, links and notes
 
-**Books and Tabs are optional.** If you only keep movies, series and anime, switch them off in **Settings > General** (**Show Books**, **Show Tabs**). The tab disappears, and with both off the whole tab bar goes, so the list gets more room. Nothing is deleted: your books, saved pages, links and notes stay exactly as they are, and are all back the moment you switch the tab on again. Backups still include them, and a book you save while Books is off is kept (the message says so).
+**Books and Tabs are optional.** If you only keep movies, series and anime, switch them off in **Settings > Shelf & views** (under **Tabs on the shelf**). The tab disappears, and with both off the whole tab bar goes, so the list gets more room. Nothing is deleted: your books, saved pages, links and notes stay exactly as they are, and are all back the moment you switch the tab on again. Backups still include them, and a book you save while Books is off is kept (the message says so).
 
 The **Tabs** shelf is a lightweight bookmark manager. Switch to the **Tabs** tab in the popup.
 
@@ -610,7 +610,7 @@ Then click **Reload** on the KeepShelf card at `chrome://extensions`.
 
 ### Get release reminders
 
-1. Save your TMDB token, then switch on **Release reminders** under **Settings, TMDB info**.
+1. Save your TMDB token, then switch on **Release reminders** under **Settings > TMDB**.
 2. Click **Check for releases now** to see it work.
 
 ### Save a tab or bookmark
@@ -883,7 +883,7 @@ Text inserted without trusted browser input is discarded by Keep. Reload the ext
 | Wrong TMDB info on an item | Edit, then Wrong match? Remove |
 | No season boxes in the Edit dialog | The show needs TMDB info. Add your token, then click **Fetch info** on the item (older shows fill in automatically on the next popup or browser start) |
 | "Season 2 has 8 episodes, so 9 is too many" | A season can't be set above its episode count on TMDB. Lower the number, or clear the season boxes to use the single Episodes done field |
-| Release reminders switch is disabled | Save your TMDB token first (Settings, TMDB info) |
+| Release reminders switch is disabled | Save your TMDB token first (Settings > TMDB) |
 | No release notification appears | Click **Check for releases now**. If it says nothing is coming, nothing is due today or tomorrow. If it says it reminded you, allow notifications for Chrome in your operating system settings |
 | Undo button disappeared | It lasts 8 seconds and only while the popup is open |
 | Nothing to pick | Everything in the current view is finished or dropped; clear a filter or add items |
