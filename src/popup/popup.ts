@@ -15,6 +15,7 @@ import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
 import type { TraktPreview, TraktStatus } from "../shared/trakt-sync.js";
+import type { PullPreview } from "../shared/trakt-pull.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   AUTO_SEARCH_DELAY_MS,
@@ -2945,6 +2946,13 @@ const traktPreviewBoxEl = document.getElementById("trakt-preview-box") as HTMLDe
 const traktPreviewSummaryEl = document.getElementById("trakt-preview-summary")!;
 const traktPreviewTotalsEl = document.getElementById("trakt-preview-totals")!;
 const traktPreviewListEl = document.getElementById("trakt-preview-list")!;
+const traktPullEl = document.getElementById("trakt-pull") as HTMLButtonElement;
+const traktPullLabelEl = document.getElementById("trakt-pull-label")!;
+const traktPullBoxEl = document.getElementById("trakt-pull-box") as HTMLDetailsElement;
+const traktPullSummaryEl = document.getElementById("trakt-pull-summary")!;
+const traktPullTotalsEl = document.getElementById("trakt-pull-totals")!;
+const traktPullListEl = document.getElementById("trakt-pull-list")!;
+const traktPullApplyEl = document.getElementById("trakt-pull-apply") as HTMLButtonElement;
 /** Rows shown at most; a whole shelf can be hundreds of titles. */
 const PREVIEW_ROWS = 300;
 
@@ -2976,6 +2984,8 @@ function renderTrakt(): void {
   traktConnectEl.disabled = traktBusy || !hasId;
   traktSyncEl.disabled = traktBusy || !connected || !!t?.running;
   traktPreviewEl.disabled = traktBusy || !connected || !!t?.running;
+  traktPullEl.disabled = traktBusy || !connected || !!t?.running;
+  traktPullApplyEl.disabled = traktBusy || !!t?.running;
   traktSyncLabelEl.textContent = t?.running ? "Sending…" : t?.ready ? "Send what's waiting now" : "Send everything now";
   watchTraktProgress(!!t?.running);
   prefTraktAutoEl.checked = t?.auto !== false;
@@ -3135,6 +3145,77 @@ traktPreviewEl.addEventListener("click", async () => {
   } finally {
     traktPreviewLabelEl.textContent = "Preview what will be sent";
     renderTrakt();
+  }
+});
+
+function renderTraktPull(pull: PullPreview): void {
+  const count = pull.updates.length + pull.additions.length;
+  traktPullBoxEl.hidden = false;
+  traktPullBoxEl.open = true;
+  setSummary(traktPullSummaryEl, count ? "Would change on your shelf" : "Nothing to get", count);
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  traktPullTotalsEl.textContent = count
+    ? `${plural(pull.updates.length, "title")} updated, ${plural(pull.additions.length, "title")} added, ${pull.unchanged} already the same. Nothing has changed yet.`
+    : `Your shelf already has everything from Trakt (${pull.unchanged} titles match).`;
+  const line = (title: string, text: string) => {
+    const li = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = title;
+    li.append(name, ` — ${text}`);
+    return li;
+  };
+  const rows = [
+    ...pull.updates.map((u) => line(u.title, u.parts.join("; "))),
+    ...pull.additions.map((a) => line(a.title, `new: ${a.parts.join("; ")}`)),
+  ];
+  const shown = rows.slice(0, PREVIEW_ROWS);
+  if (rows.length > PREVIEW_ROWS) {
+    const more = document.createElement("li");
+    more.textContent = `…and ${rows.length - PREVIEW_ROWS} more.`;
+    shown.push(more);
+  }
+  traktPullListEl.replaceChildren(...shown);
+  traktPullApplyEl.hidden = count === 0;
+}
+
+traktPullEl.addEventListener("click", async () => {
+  traktPullEl.disabled = true;
+  traktPullLabelEl.textContent = "Reading Trakt…";
+  try {
+    const response = await sendToBackground({ action: "traktPullPreview" });
+    if (!response.ok) throw new Error(response.error);
+    if ("traktPull" in response) renderTraktPull(response.traktPull);
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Couldn't read Trakt.", true);
+  } finally {
+    traktPullLabelEl.textContent = "Get from Trakt";
+    renderTrakt();
+  }
+});
+
+document.getElementById("trakt-pull-cancel")!.addEventListener("click", () => {
+  traktPullBoxEl.hidden = true;
+});
+
+traktPullApplyEl.addEventListener("click", async () => {
+  traktBusy = true;
+  if (trakt) trakt = { ...trakt, running: true };
+  renderTrakt();
+  showTraktStatus("Getting your Trakt library… adding titles can take a while.", false, 600000);
+  try {
+    const response = await sendToBackground({ action: "traktPullApply" });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) {
+      allItems = response.items;
+      render();
+      showTraktStatus(`Done: ${response.enriched ?? 0} updated, ${response.added ?? 0} added from Trakt.`);
+    }
+    traktPullBoxEl.hidden = true;
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Getting from Trakt failed.", true);
+  } finally {
+    traktBusy = false;
+    await loadTraktSettings();
   }
 });
 

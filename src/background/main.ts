@@ -64,6 +64,8 @@ import {
   connect as connectTrakt,
   disconnect as disconnectTrakt,
   previewTrakt,
+  previewPull,
+  applyPull,
   scheduleTraktSync,
   setClientId as setTraktClientId,
   setOptions as setTraktOptions,
@@ -686,6 +688,15 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       return { ok: true, trakt: await traktStatus() };
     case "traktPreview":
       return { ok: true, traktPreview: await previewTrakt() };
+    case "traktPullPreview":
+      return { ok: true, traktPull: await previewPull() };
+    case "traktPullApply": {
+      const { updated, added } = await applyPull(async (kind, id) => {
+        const client = await tmdbClient();
+        return client ? fetchDetails(client, kind, id) : undefined;
+      });
+      return { ok: true, items: await getAllItems(), added, enriched: updated };
+    }
     case "traktSync":
       await syncTrakt("catchup");
       return { ok: true, trakt: await traktStatus() };

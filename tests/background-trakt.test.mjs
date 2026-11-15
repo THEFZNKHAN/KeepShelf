@@ -48,7 +48,7 @@ let tokenCount = 0;
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
   const body = init.body ? JSON.parse(init.body) : undefined;
-  requests.push({ host: u.hostname, path: u.pathname, method: init.method ?? "GET", body, headers: init.headers });
+  requests.push({ host: u.hostname, path: u.pathname, method: init.method ?? "GET", body, headers: init.headers, cache: init.cache });
   const json = (status, value) => ({ ok: status < 400, status, headers: { get: () => null }, json: async () => value, text: async () => JSON.stringify(value) });
   if (u.hostname === "auth.trakt.tv") {
     if (u.pathname === "/oauth/token") {
@@ -65,9 +65,22 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
   if (u.pathname === "/sync/watched/movies") return json(200, watchedMovies);
-  if (u.pathname === "/sync/watched/shows") return json(200, watchedShows);
+  if (u.pathname === "/sync/watched/shows") {
+    // Like Trakt now: the watched list has no seasons; each show's episodes are on its progress page.
+    return json(200, watchedShows.map(({ seasons: _s, ...rest }) => ({ ...rest, show: { ...rest.show, ids: { ...rest.show.ids, trakt: rest.show.ids.tmdb } } })));
+  }
+  const progress = /^\/shows\/(\d+)\/progress\/watched$/.exec(u.pathname);
+  if (progress) {
+    const entry = watchedShows.find((e) => String(e.show.ids.tmdb) === progress[1]);
+    if (!entry) return json(404, {});
+    return json(200, { seasons: entry.seasons.map((x) => ({ number: x.number, episodes: x.episodes.map((e) => ({ number: e.number, completed: true })) })) });
+  }
   if (u.pathname === "/sync/ratings/movies" && (init.method ?? "GET") === "GET") return json(200, [{ rating: 8, movie: { ids: { tmdb: 777 } } }]);
   if (u.pathname === "/sync/ratings/shows" && (init.method ?? "GET") === "GET") return json(200, []);
+  if (u.pathname === "/sync/watchlist/movies" && (init.method ?? "GET") === "GET") return json(200, []);
+  if (u.pathname === "/sync/watchlist/shows" && (init.method ?? "GET") === "GET") {
+    return json(200, [{ show: { title: "Frieren", year: 2023, ids: { tmdb: 209867 }, genres: ["anime", "animation"] } }]);
+  }
   if (u.pathname.startsWith("/sync/")) return json(201, { added: {}, not_found: { movies: (body?.movies ?? []).filter((m) => m.ids.tmdb === 404).map((m) => ({ ids: m.ids })), shows: [] } });
   return json(404, {});
 };
@@ -168,6 +181,7 @@ test("Send everything reads Trakt first and sends only what is missing, with air
   const res = await send({ action: "traktSync" });
   assert.equal(res.ok, true, res.error);
   assert.equal(res.trakt.ready, true);
+  assert.ok(requests.some((r) => r.path === "/shows/70523/progress/watched"), "episodes come from the show's progress page");
   const history = posts("/sync/history");
   assert.equal(history.length, 1);
   const body = history[0].body;
@@ -248,6 +262,38 @@ test("a full account limit stops with a clear message", async () => {
   assert.match(res.error, /limit/i);
   const status = await send({ action: "traktStatus" });
   assert.match(status.trakt.lastError, /limit/i);
+});
+
+test("Get from Trakt: the preview only reads, and lists the titles that would be added", async () => {
+  // Watched only on Trakt: its episodes are on its progress page, not in the watched list.
+  watchedShows.push({ show: { title: "Naruto", year: 2002, ids: { tmdb: 46260 } }, seasons: [{ number: 1, episodes: [{ number: 1 }, { number: 2 }, { number: 3 }] }] });
+  const before = requests.length;
+  const shelf = JSON.stringify(items());
+  const res = await send({ action: "traktPullPreview" });
+  assert.equal(res.ok, true, res.error);
+  assert.equal(requests.slice(before).some((r) => r.method !== "GET"), false);
+  assert.equal(JSON.stringify(items()), shelf);
+  assert.deepEqual(res.traktPull.additions.map((a) => a.title), ["Frieren (2023)", "Naruto (2002)"]);
+  assert.deepEqual(res.traktPull.additions[0].parts, ["anime", "to watch"]);
+  assert.deepEqual(res.traktPull.additions[1].parts, ["series", "3 episodes watched"]);
+  // Every read goes to Trakt itself, never to an old copy in the browser's cache.
+  assert.equal(requests.slice(before).every((r) => r.cache === "no-store"), true);
+});
+
+test("applying adds it as To watch, and the next send doesn't push it back to Trakt", async () => {
+  const res = await send({ action: "traktPullApply" });
+  assert.equal(res.ok, true, res.error);
+  assert.equal(res.added, 2);
+  assert.equal(items().find((i) => i.title === "Naruto").progressCurrent, 3);
+  const frieren = items().find((i) => i.title === "Frieren");
+  assert.equal(frieren.type, "anime");
+  assert.equal(frieren.status, "plan");
+  assert.equal(frieren.trakt.sent.watchlist, true);
+  const before = requests.length;
+  await send({ action: "traktSync" });
+  const posted = requests.slice(before).filter((r) => r.method === "POST");
+  assert.equal(posted.some((r) => JSON.stringify(r.body).includes("209867")), false, "a pulled title must not be sent back");
+  assert.equal(posted.some((r) => JSON.stringify(r.body).includes("46260")), false, "pulled episodes must not be sent back");
 });
 
 test("disconnecting revokes the token and forgets what was sent", async () => {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { batches, buildBodies, buildPreview, changeKey, describeChange, keepTraktRatings, notFoundIn, pendingChange, pendingChanges, ratingsFrom, seedFromWatched, traktIds } from "../dist-test/trakt-sync.js";
+import { batches, buildBodies, buildPreview, entryTmdb, seasonsFromProgress, traktShowId, changeKey, describeChange, keepTraktRatings, notFoundIn, pendingChange, pendingChanges, ratingsFrom, seedFromWatched, traktIds } from "../dist-test/trakt-sync.js";
 
 const OPTS = { watchlist: false };
 const NOW = Date.UTC(2026, 10, 15, 12, 0, 0);
@@ -161,4 +161,24 @@ test("a preview describes each title in words and totals it up", () => {
   assert.deepEqual(describeChange({ ...changes[0], movie: false, rating: null }), ["rating removed"]);
   const p = buildPreview(changes, []);
   assert.deepEqual([p.movies, p.episodes, p.ratings, p.watchlist, p.rows.length], [1, 13, 1, 1, 3]);
+});
+
+test("a show's progress page gives its watched episodes, season by season", () => {
+  const answer = { aired: 26, completed: 12, seasons: [
+    { number: 1, episodes: [{ number: 1, completed: true }, { number: 2, completed: true }, { number: 3, completed: false }] },
+    { number: 2, episodes: [{ number: 1, completed: false }] },
+    { number: 0, episodes: [{ number: 1, completed: true }] },
+  ] };
+  assert.deepEqual(seasonsFromProgress(answer), [{ number: 1, episodes: [{ number: 1 }, { number: 2 }] }, { number: 2, episodes: [] }]);
+  assert.deepEqual(seasonsFromProgress(null), []);
+  // Fed back as a watched-list entry, the first send sees those episodes as already on Trakt.
+  const seed = seedFromWatched([show({ status: "in_progress", seasonProgress: [3, 0, 0] })], [], [{ show: { ids: { tmdb: 70523 } }, seasons: seasonsFromProgress(answer) }], OPTS);
+  assert.deepEqual(seed.get("s").seasons, [2, 0, 0]);
+});
+
+test("shows are asked about by Trakt id or slug", () => {
+  assert.equal(traktShowId({ show: { ids: { trakt: 1388, slug: "breaking-bad" } } }), "1388");
+  assert.equal(traktShowId({ show: { ids: { slug: "breaking-bad" } } }), "breaking-bad");
+  assert.equal(traktShowId({ show: { ids: { slug: "../evil" } } }), undefined);
+  assert.equal(entryTmdb({ show: { ids: { tmdb: 1396 } } }), 1396);
 });

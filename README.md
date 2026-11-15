@@ -722,6 +722,15 @@ The first **Send everything** reads what Trakt already has, so nothing already i
 
 Nothing is ever removed from your Trakt history: unmarking an episode here leaves Trakt as it is, and marking it again doesn't add a second play. Titles Trakt couldn't match are listed under **Not matched on Trakt**. Long anime are sometimes numbered differently on TMDB and Trakt; when Trakt already has at least as many episodes of a show, KeepShelf leaves it alone rather than guess.
 
+### Get from Trakt
+
+**Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings and your watchlist. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.
+
+- The side with more watched wins: progress only moves forward, a movie watched on Trakt becomes Done, a show watched to the end becomes Done, and a finished show with a newer season started on Trakt goes back to In progress.
+- A rating you set in KeepShelf is kept; Trakt's fills in where you have none.
+- Titles that aren't on the shelf are added (with TMDB info when your token is set): watched ones as Done or In progress, your Trakt watchlist as To watch. Trakt's anime are filed as anime.
+- Everything that came from Trakt is recorded as already sent, so it is never sent back as a second play.
+
 **Disconnect** signs KeepShelf out on Trakt too and forgets what was sent, so a different account starts fresh. A free Trakt account has limits (usually the watchlist); when one is full KeepShelf stops and says so.
 
 KeepShelf uses Trakt but is not endorsed or certified by Trakt.

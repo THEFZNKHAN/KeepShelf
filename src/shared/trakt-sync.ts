@@ -414,3 +414,39 @@ export function buildPreview(changes: TraktChange[], kept: KeptRating[]): TraktP
     watchlist: changes.filter((c) => c.watchlist).length,
   };
 }
+
+interface ProgressAnswer {
+  seasons?: Array<{ number?: unknown; episodes?: Array<{ number?: unknown; completed?: unknown }> }>;
+}
+
+/**
+ * A show's watched episodes from GET /shows/{id}/progress/watched, in the shape of a watched-list entry's seasons.
+ * Trakt's watched list no longer carries the episodes, so this is where they come from.
+ */
+export function seasonsFromProgress(raw: unknown): Array<{ number: number; episodes: Array<{ number: number }> }> {
+  const seasons = (raw as ProgressAnswer | null)?.seasons;
+  if (!Array.isArray(seasons)) return [];
+  const out: Array<{ number: number; episodes: Array<{ number: number }> }> = [];
+  for (const season of seasons) {
+    if (typeof season?.number !== "number" || season.number < 1 || season.number > 999) continue;
+    const episodes = (Array.isArray(season.episodes) ? season.episodes : [])
+      .filter((e) => e?.completed === true && typeof e.number === "number" && e.number >= 1)
+      .map((e) => ({ number: e.number as number }));
+    out.push({ number: season.number, episodes });
+  }
+  return out;
+}
+
+/** The id to ask Trakt about a show with: its Trakt id, or its slug. */
+export function traktShowId(entry: unknown): string | undefined {
+  const ids = (entry as { show?: { ids?: { trakt?: unknown; slug?: unknown } } } | null)?.show?.ids;
+  if (typeof ids?.trakt === "number" && Number.isInteger(ids.trakt) && ids.trakt > 0) return String(ids.trakt);
+  if (typeof ids?.slug === "string" && /^[a-z0-9-]{1,120}$/.test(ids.slug)) return ids.slug;
+  return undefined;
+}
+
+/** The TMDB id of a watched-list show entry, for deciding which shows are worth asking about. */
+export function entryTmdb(entry: unknown): number | undefined {
+  const tmdb = (entry as { show?: { ids?: { tmdb?: unknown } } } | null)?.show?.ids?.tmdb;
+  return typeof tmdb === "number" ? tmdb : undefined;
+}

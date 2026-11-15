@@ -3977,3 +3977,9 @@ button.er-stat:hover {
   font-size: 12px;
   line-height: 1.5;
 }
+
+.trakt-pull-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}

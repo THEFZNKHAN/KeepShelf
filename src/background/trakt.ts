@@ -37,8 +37,13 @@ import {
   buildPreview,
   keepTraktRatings,
   ratingsFrom,
+  entryTmdb,
+  seasonsFromProgress,
+  traktShowId,
 } from "../shared/trakt-sync.js";
-import { STORAGE_KEY, getAllItems } from "../shared/storage.js";
+import { STORAGE_KEY, getAllItems, importItems } from "../shared/storage.js";
+import { describePull, itemForAddition, parseTraktLibrary, planPull, type PulledTitle, type PullPreview } from "../shared/trakt-pull.js";
+import type { TmdbInfo } from "../shared/types.js";
 import type { SavedItem } from "../shared/types.js";
 
 const SETTINGS_KEY = "keepshelf_trakt";
@@ -189,7 +194,8 @@ const MAX_RATE_WAIT_MS = 60000;
 
 async function timedFetch(url: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    // Never from the browser's cache: a cached copy of your watched list would miss what you marked since.
+    return await fetch(url, { ...init, cache: "no-store", signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
   } catch (err) {
     if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
       throw new TraktError("Trakt didn't answer in time. Try again in a moment.");
@@ -351,12 +357,39 @@ function sentAfter(before: TraktSent, change: TraktChange, parts: { history: boo
 }
 
 /**
+ * Trakt's watched shows with their episodes. The watched list itself no longer carries the seasons, so each show that
+ * matters (`wanted`) is read from its progress page. A failure stops everything: guessing here could send second plays.
+ */
+async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Promise<unknown[]> {
+  const raw = await api<unknown>("/sync/watched/shows");
+  const list = Array.isArray(raw) ? raw : [];
+  const out: unknown[] = [];
+  for (const [index, entry] of list.entries()) {
+    const has = Array.isArray((entry as { seasons?: unknown })?.seasons) && ((entry as { seasons: unknown[] }).seasons.length > 0);
+    const id = traktShowId(entry);
+    if (has || !id || !wanted(entry)) {
+      out.push(entry);
+      continue;
+    }
+    await setState({ progress: `Reading show ${index + 1} of ${list.length} on Trakt…` });
+    const progress = await api<unknown>(`/shows/${encodeURIComponent(id)}/progress/watched?hidden=false&specials=false&count_specials=false`);
+    out.push({ ...(entry as object), seasons: seasonsFromProgress(progress) });
+  }
+  return out;
+}
+
+/**
  * Reads what Trakt already has (watched movies and shows, and ratings) and works out what counts as sent. Read-only:
  * nothing is written here, to Trakt or to the shelf.
  */
 async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ sent: Map<string, TraktSent>; kept: KeptRating[] }> {
   const movies = await api<unknown>("/sync/watched/movies");
-  const shows = await api<unknown>("/sync/watched/shows");
+  // Only the shows on the shelf with episodes to compare are worth a request each.
+  const shelfShows = new Set(items.filter((i) => i.tmdb?.kind === "tv").map((i) => i.tmdb!.id));
+  const shows = await watchedShowsWithEpisodes((entry) => {
+    const tmdb = entryTmdb(entry);
+    return tmdb === undefined || shelfShows.has(tmdb);
+  });
   const ratedMovies = await api<unknown>("/sync/ratings/movies");
   const ratedShows = await api<unknown>("/sync/ratings/shows");
   const sent = seedFromWatched(items, movies, shows, options);
@@ -522,4 +555,86 @@ export async function traktStatus(): Promise<TraktStatus> {
       .filter((i) => i.trakt?.problem)
       .map((i) => ({ id: i.id, title: i.title, problem: i.trakt!.problem! })),
   };
+}
+
+/* ── Getting from Trakt ──────────────────────────────────── */
+
+/** Your whole Trakt library, read only: watched movies and shows, ratings and the watchlist. */
+async function readLibrary(): Promise<PulledTitle[]> {
+  const get = (path: string) => api<unknown>(`${path}?extended=full`);
+  return parseTraktLibrary({
+    watchedMovies: await get("/sync/watched/movies"),
+    // Episodes come from each show's progress page; the full list adds genres and aired counts.
+    watchedShows: await watchedShowsWithEpisodes(() => true),
+    watchedShowsInfo: await get("/sync/watched/shows"),
+    ratedMovies: await get("/sync/ratings/movies"),
+    ratedShows: await get("/sync/ratings/shows"),
+    watchlistMovies: await get("/sync/watchlist/movies"),
+    watchlistShows: await get("/sync/watchlist/shows"),
+  });
+}
+
+async function requireConnected(): Promise<void> {
+  const settings = await getSettings();
+  if (!settings.clientId || !(await getAuth())) throw new TraktError("Connect to Trakt first.");
+}
+
+/** What getting from Trakt would change on the shelf. Reads Trakt; changes nothing. */
+export async function previewPull(): Promise<PullPreview> {
+  await requireConnected();
+  return describePull(planPull(await getAllItems(), await readLibrary(), Date.now()));
+}
+
+/**
+ * Applies what is on Trakt to the shelf: reads Trakt again (so it matches the shelf as it is now), updates the titles
+ * that changed and adds the missing ones, with TMDB info when a token is set. Everything is recorded as already sent.
+ */
+export async function applyPull(fetchInfo: (kind: "movie" | "tv", id: number) => Promise<TmdbInfo | undefined>): Promise<{ updated: number; added: number }> {
+  await requireConnected();
+  if (running) throw new TraktError("Trakt is busy sending. Try again in a moment.");
+  let result = { updated: 0, added: 0 };
+  running = (async () => {
+    try {
+      await setState({ progress: "Reading your Trakt library…" });
+      const plan = planPull(await getAllItems(), await readLibrary(), Date.now());
+      const patches = new Map(plan.updates.map((u) => [u.id, u.patch]));
+      if (patches.size) {
+        await serial(async () => {
+          const items = await getAllItems();
+          await chrome.storage.local.set({ [STORAGE_KEY]: items.map((i) => (patches.has(i.id) ? { ...i, ...patches.get(i.id) } : i)) });
+        });
+      }
+      const fresh: Array<Omit<SavedItem, "id" | "savedAt">> = [];
+      for (const [index, addition] of plan.additions.entries()) {
+        await setState({ progress: `Adding ${index + 1} of ${plan.additions.length}: ${addition.title}` });
+        let info: TmdbInfo | undefined;
+        if (addition.tmdb) {
+          try {
+            info = await fetchInfo(addition.kind, addition.tmdb);
+          } catch {
+            /* added without TMDB info; "Fetch info" can fill it in later */
+          }
+        }
+        fresh.push(itemForAddition(addition, info));
+      }
+      let added = 0;
+      if (fresh.length) added = await serial(async () => (await importItems(fresh)).added);
+      result = { updated: plan.updates.filter((u) => u.parts.length).length, added };
+      await setState({
+        progress: undefined,
+        lastError: undefined,
+        lastRun: Date.now(),
+        lastMessage: `Got from Trakt: ${result.updated} updated, ${result.added} added.`,
+      });
+    } catch (err) {
+      await setState({ progress: undefined, lastRun: Date.now(), lastError: err instanceof Error ? err.message : "Getting from Trakt failed." });
+      throw err;
+    }
+  })();
+  try {
+    await running;
+  } finally {
+    running = undefined;
+  }
+  return result;
 }
