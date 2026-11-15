@@ -64,7 +64,23 @@ globalThis.fetch = async (url, init = {}) => {
   const u = new URL(url);
   const body = init.body ? JSON.parse(init.body) : undefined;
   requests.push({ host: u.hostname, path: u.pathname, method: init.method ?? "GET", body, headers: init.headers, cache: init.cache });
-  const json = (status, value) => ({ ok: status < 400, status, headers: { get: () => null }, json: async () => value, text: async () => JSON.stringify(value) });
+  // Like Trakt: a long list comes in pages. Asked for a page, it sends that page and the page count; not asked, only
+  // the first 10 items (which is how a missed page would show).
+  const json = (status, value) => {
+    let body = value;
+    const headers = {};
+    if (Array.isArray(value) && (init.method ?? "GET") === "GET") {
+      const page = Number(u.searchParams.get("page"));
+      const limit = Number(u.searchParams.get("limit")) || 10;
+      if (page) {
+        body = value.slice((page - 1) * limit, page * limit);
+        headers["x-pagination-page-count"] = String(Math.max(1, Math.ceil(value.length / limit)));
+      } else {
+        body = value.slice(0, 10);
+      }
+    }
+    return { ok: status < 400, status, headers: { get: (name) => headers[name.toLowerCase()] ?? null }, json: async () => body, text: async () => JSON.stringify(body) };
+  };
   if (u.hostname === "auth.trakt.tv") {
     if (u.pathname === "/oauth/token") {
       tokenCount++;
@@ -399,6 +415,17 @@ test("only one Trakt job runs at a time", async () => {
   assert.equal(second.ok, false);
   assert.match(second.error, /already working with Trakt/);
   assert.equal((await first).ok, true);
+});
+
+test("a long library is read to its last page: 250 movies on Trakt all come through", async () => {
+  const saved = watchedMovies;
+  watchedMovies = Array.from({ length: 250 }, (_, i) => ({ movie: { title: `Film ${i + 1}`, year: 2000, ids: { tmdb: 500000 + i } } }));
+  const res = await send({ action: "traktPullPreview" });
+  assert.equal(res.ok, true, res.error);
+  assert.equal(res.traktPull.additions.filter((a) => a.title.startsWith("Film ")).length, 250);
+  const pages = requests.filter((r) => r.path === "/sync/watched/movies").slice(-3);
+  assert.equal(pages.length, 3, "three pages of 100");
+  watchedMovies = saved;
 });
 
 test("the automatic check is an alarm that follows the setting", async () => {
