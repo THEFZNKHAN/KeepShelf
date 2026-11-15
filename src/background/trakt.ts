@@ -630,7 +630,22 @@ async function readLibrary(items: SavedItem[], since?: number): Promise<PulledTi
     ratedShows: await get("/sync/ratings/shows"),
     watchlistMovies: await get("/sync/watchlist/movies"),
     watchlistShows: await get("/sync/watchlist/shows"),
+    lists: await personalLists(),
   });
+}
+
+/** Your personal lists with their items, for tags. A few dozen at most; each is one request. */
+async function personalLists(): Promise<Array<{ name: string; items: unknown }>> {
+  const raw = await api<unknown>("/users/me/lists");
+  const lists = (Array.isArray(raw) ? raw : []) as Array<{ name?: unknown; ids?: { trakt?: unknown; slug?: unknown } }>;
+  const out: Array<{ name: string; items: unknown }> = [];
+  for (const entry of lists.slice(0, 30)) {
+    const id = typeof entry?.ids?.trakt === "number" ? String(entry.ids.trakt) : typeof entry?.ids?.slug === "string" ? entry.ids.slug : undefined;
+    if (typeof entry?.name !== "string" || !id || !/^[\w-]{1,120}$/.test(id)) continue;
+    await setState({ progress: `Reading your list “${entry.name.slice(0, 40)}”…` });
+    out.push({ name: entry.name, items: await api<unknown>(`/users/me/lists/${encodeURIComponent(id)}/items?extended=full`) });
+  }
+  return out;
 }
 
 async function requireConnected(): Promise<void> {

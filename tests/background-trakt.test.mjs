@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 // A fake chrome with real storage and a fake Trakt. Fake values only.
 const store = {};
 const session = {};
+let traktLists = [];
 let onMessage, onAlarm;
 const REDIRECT = "https://fakeextensionid.chromiumapp.org/trakt";
 const CLIENT = "fakeclientid0123456789abcdef0123456789abcdef0123456789abcdef0123";
@@ -79,6 +80,9 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
   if (u.pathname === "/sync/last_activities") return json(200, activities);
+  if (u.pathname === "/users/me/lists") return json(200, traktLists.map((l) => ({ name: l.name, ids: { trakt: l.id } })));
+  const listItems = /^\/users\/me\/lists\/(\d+)\/items$/.exec(u.pathname);
+  if (listItems) return json(200, traktLists.find((l) => String(l.id) === listItems[1])?.items ?? []);
   if (u.pathname === "/movies/tt0113277/ratings") return json(200, { rating: 8.4123, votes: 2500 });
   if (u.pathname === "/recommendations/movies") return json(200, [{ title: "Collateral", year: 2004, ids: { tmdb: 1538 } }]);
   if (u.pathname === "/recommendations/shows") return json(200, [{ title: "Frieren", year: 2023, ids: { tmdb: 209867 }, genres: ["anime"] }]);
@@ -339,6 +343,25 @@ test("a fixed match reads Trakt for that title again, so nothing is sent twice",
   const fixed = items().find((i) => i.id === "Unknown film");
   assert.equal(fixed.trakt.reseed, undefined);
   assert.equal(fixed.trakt.sent.movie, true);
+});
+
+test("Trakt lists come in as tags, and a listed title not on the shelf is added as To watch", async () => {
+  traktLists = [{ id: 7, name: "Favourites", items: [
+    { type: "movie", movie: { title: "Heat", year: 1995, ids: { tmdb: 949 } } },
+    { type: "show", show: { title: "Mindhunter", year: 2017, ids: { tmdb: 67744 } } },
+    { type: "episode", show: { title: "Dark", year: 2017, ids: { tmdb: 70523 } }, episode: { season: 1, number: 1 } },
+  ] }];
+  const preview = await send({ action: "traktPullPreview" });
+  assert.equal(preview.ok, true, preview.error);
+  assert.ok(preview.traktPull.updates.some((u) => u.title === "Heat" && u.parts.includes("tagged trakt: favourites")));
+  assert.ok(preview.traktPull.updates.some((u) => u.title === "Dark" && u.parts.includes("tagged trakt: favourites")), "an episode on a list tags its show");
+  const added = preview.traktPull.additions.find((a) => a.title.startsWith("Mindhunter"));
+  assert.deepEqual(added.parts, ["series", "to watch", "tagged trakt: favourites"]);
+  const res = await send({ action: "traktPullApply" });
+  assert.equal(res.ok, true, res.error);
+  assert.ok(items().find((i) => i.id === "Heat").tags.includes("trakt: favourites"));
+  assert.equal(items().find((i) => i.title === "Mindhunter").status, "plan");
+  traktLists = [];
 });
 
 test("Recommended for you lists Trakt's picks, shows and movies in turn", async () => {

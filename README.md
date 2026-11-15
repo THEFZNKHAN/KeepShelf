@@ -745,11 +745,12 @@ With a Trakt Client ID saved (signing in isn't needed), a title's card shows Tra
 
 ### Get from Trakt
 
-**Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings and your watchlist. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.
+**Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings, your watchlist and your lists. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.
 
 - The side with more watched wins: progress only moves forward, a movie watched on Trakt becomes Done, a show watched to the end becomes Done, and a finished show with a newer season started on Trakt goes back to In progress.
 - A rating you set in KeepShelf is kept; Trakt's fills in where you have none.
 - Titles that aren't on the shelf are added (with TMDB info when your token is set): watched ones as Done or In progress, your Trakt watchlist as To watch. Trakt's anime are filed as anime.
+- Your personal Trakt lists come in as **tags**: each list becomes a tag such as `trakt: favourites` on the titles in it (an episode or season on a list tags its show), so a title can carry several. A listed title that isn't on the shelf is added as To watch. Tags are only ever added: taking a title off a Trakt list doesn't remove the tag.
 - Everything that came from Trakt is recorded as already sent, so it is never sent back as a second play.
 
 To have this happen by itself, set **Get changes from Trakt** to **Every hour**, **Every 6 hours** or **Once a day** (it's **Off** by default). Each check first asks Trakt when your account last changed; when nothing has, that one request is all it costs. When something has, it applies the changes with the same rules, without a preview, and reads only the shows watched since the last check. The card shows when it last checked and what it found.

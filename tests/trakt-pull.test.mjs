@@ -165,3 +165,30 @@ test("an automatic check reads only shows that are new to the shelf or watched s
   assert.equal(showChangedSince(entry(2, "2026-11-10T00:00:00.000Z"), since, onShelf), true, "not on the shelf yet");
   assert.equal(showChangedSince(entry(1, "2026-11-10T00:00:00.000Z"), undefined, onShelf), true, "first check reads everything");
 });
+
+import { listTag } from "../dist-test/trakt-pull.js";
+
+test("a Trakt list becomes a tag on its titles; tags are only ever added", () => {
+  assert.equal(listTag("Favourites"), "trakt: favourites");
+  assert.equal(listTag("A Very Long List Name That Goes On And On").length <= 30, true);
+  assert.equal(listTag("  "), undefined);
+  const lib = parseTraktLibrary({ lists: [
+    { name: "Favourites", items: [{ type: "movie", movie: { title: "Heat", year: 1995, ids: { tmdb: 949 } } }] },
+    { name: "Rewatch", items: [{ type: "movie", movie: { title: "Heat", year: 1995, ids: { tmdb: 949 } } }, { type: "season", show: { title: "Dark", year: 2017, ids: { tmdb: 70523 } } }] },
+  ] });
+  assert.deepEqual(lib.find((t) => t.title === "Heat").tags, ["trakt: favourites", "trakt: rewatch"]);
+  assert.deepEqual(lib.find((t) => t.title === "Dark").tags, ["trakt: rewatch"]);
+  const u = planPull([movie({ status: "done", done: true, tags: ["mine", "trakt: favourites"] })], lib, NOW).updates.find((x) => x.id === "m");
+  assert.deepEqual(u.patch.tags, ["mine", "trakt: favourites", "trakt: rewatch"]);
+  assert.deepEqual(u.parts, ["tagged trakt: rewatch"]);
+  // Already tagged: nothing to do.
+  assert.equal(planPull([movie({ status: "done", done: true, tags: ["trakt: favourites", "trakt: rewatch"] })], lib, NOW).updates.length, 0);
+  const [dark] = planPull([], lib, NOW).additions.filter((a) => a.title === "Dark");
+  assert.equal(dark.status, "plan");
+  assert.deepEqual(itemForAddition(dark, undefined).tags, ["trakt: rewatch"]);
+});
+
+test("a list edit on Trakt counts as activity for the automatic check", () => {
+  const a = { episodes: { watched_at: "x" }, lists: { updated_at: "2026-11-15T00:00:00.000Z" } };
+  assert.notEqual(activityFingerprint(a), activityFingerprint({ ...a, lists: { updated_at: "2026-11-16T00:00:00.000Z" } }));
+});
