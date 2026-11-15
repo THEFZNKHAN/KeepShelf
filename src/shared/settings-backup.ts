@@ -1,6 +1,16 @@
 import { normalizeKeepSettings, type KeepSettings } from "./keep-settings.js";
 import { parseTmdbToken } from "./tmdb.js";
 import { sanitizeWatchSites, type WatchSite } from "./watch-sites.js";
+import { cleanClientId } from "./trakt-auth.js";
+import { PULL_INTERVALS, type PullInterval } from "./trakt-pull.js";
+
+/** The Trakt app and its switches. Never the sign-in: after a restore you connect again. */
+export interface TraktSettingsBackup {
+  clientId?: string;
+  auto?: boolean;
+  watchlist?: boolean;
+  pull?: PullInterval;
+}
 
 /**
  * The settings that travel with a backup, so a fresh install needs no re-typing. Everything is checked on the
@@ -17,6 +27,7 @@ export interface SettingsBackup {
   bookInfoEnabled?: boolean;
   /** Preferences the popup keeps in its own storage, by name. */
   prefs?: Record<string, string>;
+  trakt?: TraktSettingsBackup;
 }
 
 /** The popup preferences that are part of a backup, and the only values each may hold. */
@@ -38,6 +49,7 @@ export interface SettingsSource {
   newSeasonReminders?: unknown;
   bookInfoEnabled?: unknown;
   prefs?: Record<string, string | null | undefined>;
+  trakt?: unknown;
 }
 
 function hasKeepSetup(keep: KeepSettings): boolean {
@@ -75,6 +87,18 @@ export function sanitizeSettings(raw: unknown): SettingsBackup | undefined {
     if (Object.keys(prefs).length > 0) out.prefs = prefs;
   }
 
+  if (input.trakt && typeof input.trakt === "object" && !Array.isArray(input.trakt)) {
+    const t = input.trakt as Record<string, unknown>;
+    const trakt: TraktSettingsBackup = {};
+    const clientId = cleanClientId(t.clientId);
+    if (clientId) trakt.clientId = clientId;
+    if (typeof t.auto === "boolean") trakt.auto = t.auto;
+    if (typeof t.watchlist === "boolean") trakt.watchlist = t.watchlist;
+    if ((PULL_INTERVALS as readonly unknown[]).includes(t.pull)) trakt.pull = t.pull as PullInterval;
+    // Switches alone, with no app to use them, are nothing to restore.
+    if (trakt.clientId) out.trakt = trakt;
+  }
+
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
@@ -89,6 +113,7 @@ export function describeSettings(settings: SettingsBackup): string[] {
   if (settings.tmdbToken) parts.push("your TMDB token");
   if (settings.keep) parts.push("your Keep links");
   if (settings.watchSites) parts.push(`${settings.watchSites.length} watch site${settings.watchSites.length === 1 ? "" : "s"}`);
+  if (settings.trakt) parts.push("your Trakt app (connect again afterwards)");
   if (settings.remindersEnabled !== undefined || settings.newSeasonReminders !== undefined || settings.bookInfoEnabled !== undefined || settings.prefs) {
     parts.push("your switches and preferences");
   }

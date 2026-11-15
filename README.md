@@ -748,7 +748,7 @@ KeepShelf uses Trakt but is not endorsed or certified by Trakt.
 Your shelf lives only in this browser, so export a backup now and then.
 
 - **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress (per season too).
-- **Include my settings** (on by default, next to the export button) also saves your TMDB token, Keep links, watch sites, the reminders and book-info switches, and your other preferences. **The file then contains your TMDB token, so keep it private**; turn the switch off to export only your shelf.
+- **Include my settings** (on by default, next to the export button) also saves your TMDB token, Keep links, watch sites, your Trakt app (its Client ID and the Trakt switches, but never the sign-in, so you press **Connect** again after restoring), the reminders and book-info switches, and your other preferences. **The file then contains your TMDB token, so keep it private**; turn the switch off to export only your shelf.
 - **Import** accepts:
   - a **KeepShelf backup** (`.json`)
   - a **Letterboxd** export CSV (watchlist, watched, diary or ratings)

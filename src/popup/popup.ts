@@ -4421,6 +4421,8 @@ const backupIncludeSettingsEl = document.getElementById("backup-include-settings
 async function gatherSettings(): Promise<SettingsBackup | undefined> {
   const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, NEW_SEASONS_KEY, BOOK_INFO_KEY]);
   const keep = await sendToBackground({ action: "getKeepSettings" });
+  const traktNow = await sendToBackground({ action: "traktStatus" });
+  const t = traktNow.ok && "trakt" in traktNow ? traktNow.trakt : undefined;
   const prefs: Record<string, string | null> = {};
   for (const key of Object.keys(PREF_CHOICES)) prefs[key] = localStorage.getItem(key);
   return collectSettings(
@@ -4432,6 +4434,7 @@ async function gatherSettings(): Promise<SettingsBackup | undefined> {
       newSeasonReminders: stored[NEW_SEASONS_KEY],
       bookInfoEnabled: stored[BOOK_INFO_KEY],
       prefs,
+      trakt: t?.clientId ? { clientId: t.clientId, auto: t.auto, watchlist: t.watchlist, pull: t.pull } : undefined,
     },
     { includeToken: true }
   );
@@ -4455,6 +4458,11 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
   if (settings.remindersEnabled !== undefined) await ask({ action: "setRemindersEnabled", enabled: settings.remindersEnabled });
   if (settings.newSeasonReminders !== undefined) await ask({ action: "setNewSeasonReminders", enabled: settings.newSeasonReminders });
   if (settings.bookInfoEnabled !== undefined) await ask({ action: "setBookInfoEnabled", enabled: settings.bookInfoEnabled });
+  if (settings.trakt?.clientId) {
+    // The same Client ID keeps an existing sign-in; a different one signs out, as typing it in Settings would.
+    await ask({ action: "traktSetClientId", clientId: settings.trakt.clientId });
+    await ask({ action: "traktSetOptions", auto: settings.trakt.auto, watchlist: settings.trakt.watchlist, pull: settings.trakt.pull });
+  }
   for (const [key, value] of Object.entries(settings.prefs ?? {})) {
     try {
       localStorage.setItem(key, value);
@@ -4462,7 +4470,7 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
       /* the preference just won't be restored */
     }
   }
-  await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites()]);
+  await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites(), loadTraktSettings()]);
   renderPrefs();
 }
 
