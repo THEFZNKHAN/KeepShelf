@@ -253,6 +253,16 @@ async function api<T>(path: string, method: "GET" | "POST" = "GET", body?: unkno
       tokens = await freshTokens(clientId, true);
       continue;
     }
+    if (response.status === 420 && method === "GET") {
+      // On a read, Trakt uses 420 to say "too many requests for now": wait and try again.
+      if (attempt < 3) {
+        const wait = retryAfterMs(response.headers.get("Retry-After"), attempt + 1);
+        await setState({ progress: `Trakt asked to slow down; waiting ${Math.ceil(wait / 1000)} s…` });
+        await sleep(wait);
+        continue;
+      }
+      throw new TraktError("Trakt is limiting requests right now. Try again in a few minutes.");
+    }
     if (response.status === 420) {
       throw new TraktError("Your Trakt account limit is full (on a free account this is usually the watchlist). Turn off watchlist sync or make room on Trakt.");
     }
@@ -380,6 +390,24 @@ export async function disconnect(): Promise<void> {
 let running: Promise<void> | undefined;
 let again = false;
 
+/**
+ * Runs one Trakt job at a time (a preview, a send, a Get): two at once would read the whole library twice and run into
+ * Trakt's rate limit. The automatic jobs skip their turn while another runs; a button gets a "busy" message.
+ */
+async function exclusive<T>(task: () => Promise<T>): Promise<T> {
+  if (running) throw new TraktError("KeepShelf is already working with Trakt. Try again in a moment.");
+  let result!: T;
+  running = (async () => {
+    result = await task();
+  })();
+  try {
+    await running;
+  } finally {
+    running = undefined;
+  }
+  return result;
+}
+
 function itemsById(items: SavedItem[]): Map<string, SavedItem> {
   return new Map(items.map((i) => [i.id, i]));
 }
@@ -403,6 +431,15 @@ function sentAfter(before: TraktSent, change: TraktChange, parts: { history: boo
  * Trakt's watched shows with their episodes. The watched list itself no longer carries the seasons, so each show that
  * matters (`wanted`) is read from its progress page. A failure stops everything: guessing here could send second plays.
  */
+/**
+ * Show progress read in the last few minutes, by Trakt id, with the show's "last watched" at the time. A Preview and the
+ * Apply right after it then read each show once, not twice; a show watched since is read again.
+ */
+const PROGRESS_FRESH_MS = 10 * 60 * 1000;
+const progressCache = new Map<string, { lastWatched: string; at: number; seasons: ReturnType<typeof seasonsFromProgress> }>();
+/** A small gap between show reads, so a big library stays well inside Trakt's rate limit. */
+const READ_GAP_MS = 250;
+
 async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Promise<unknown[]> {
   const raw = await api<unknown>("/sync/watched/shows");
   const list = Array.isArray(raw) ? raw : [];
@@ -414,9 +451,18 @@ async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Pr
       out.push(entry);
       continue;
     }
+    const lastWatched = String((entry as { last_watched_at?: unknown })?.last_watched_at ?? "");
+    const cached = progressCache.get(id);
+    if (cached && cached.lastWatched === lastWatched && Date.now() - cached.at < PROGRESS_FRESH_MS) {
+      out.push({ ...(entry as object), seasons: cached.seasons });
+      continue;
+    }
     await setState({ progress: `Reading show ${index + 1} of ${list.length} on Trakt…` });
     const progress = await api<unknown>(`/shows/${encodeURIComponent(id)}/progress/watched?hidden=false&specials=false&count_specials=false`);
-    out.push({ ...(entry as object), seasons: seasonsFromProgress(progress) });
+    const seasons = seasonsFromProgress(progress);
+    progressCache.set(id, { lastWatched, at: Date.now(), seasons });
+    out.push({ ...(entry as object), seasons });
+    await sleep(READ_GAP_MS);
   }
   return out;
 }
@@ -461,6 +507,10 @@ async function seed(options: SyncOptions, onlyReseed = false): Promise<void> {
 
 /** What a send would do right now, without sending or saving anything. */
 export async function previewTrakt(): Promise<TraktPreview> {
+  return exclusive(previewTraktNow);
+}
+
+async function previewTraktNow(): Promise<TraktPreview> {
   const settings = await getSettings();
   if (!settings.clientId || !(await getAuth())) throw new TraktError("Connect to Trakt first.");
   const options: SyncOptions = { watchlist: settings.watchlist };
@@ -527,8 +577,12 @@ async function sendBatch(batch: TraktChange[], mode: "now" | "catchup", label: s
  */
 export async function syncTrakt(mode: "auto" | "catchup"): Promise<void> {
   if (running) {
-    if (mode === "auto") again = true;
-    return running;
+    // An automatic send waits its turn; the button says another job is running.
+    if (mode === "auto") {
+      again = true;
+      return;
+    }
+    throw new TraktError("KeepShelf is already working with Trakt. Try again in a moment.");
   }
   running = (async () => {
     const settings = await getSettings();
@@ -656,8 +710,14 @@ async function requireConnected(): Promise<void> {
 /** What getting from Trakt would change on the shelf. Reads Trakt; changes nothing. */
 export async function previewPull(): Promise<PullPreview> {
   await requireConnected();
-  const items = await getAllItems();
-  return describePull(planPull(items, await readLibrary(items), Date.now()));
+  return exclusive(async () => {
+    try {
+      const items = await getAllItems();
+      return describePull(planPull(items, await readLibrary(items), Date.now()));
+    } finally {
+      await setState({ progress: undefined });
+    }
+  });
 }
 
 /**
@@ -669,7 +729,7 @@ export async function applyPull(
   options: { since?: number; auto?: boolean; fingerprint?: string } = {}
 ): Promise<{ updated: number; added: number }> {
   await requireConnected();
-  if (running) throw new TraktError("Trakt is busy sending. Try again in a moment.");
+  if (running) throw new TraktError("KeepShelf is already working with Trakt. Try again in a moment.");
   let result = { updated: 0, added: 0 };
   running = (async () => {
     try {
