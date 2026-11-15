@@ -372,6 +372,35 @@ test("Recommended for you lists Trakt's picks, shows and movies in turn", async 
   assert.match(asked[0].headers.Authorization, /^Bearer /, "personal picks need the sign-in");
 });
 
+test("a 420 on a read is Trakt asking to slow down: it is retried, not reported as a full account", async () => {
+  fail["/sync/watched/movies"] = 420;
+  const res = await send({ action: "traktPullPreview" });
+  assert.equal(res.ok, true, res.error);
+  const reads = requests.filter((r) => r.path === "/sync/watched/movies");
+  assert.ok(reads.length >= 2, "the read was tried again");
+});
+
+test("a Preview and the Apply after it read each show's progress once", async () => {
+  const before = requests.length;
+  await send({ action: "traktPullPreview" });
+  await send({ action: "traktPullApply" });
+  const progressReads = requests.slice(before).filter((r) => r.path.endsWith("/progress/watched"));
+  const perShow = new Map();
+  for (const r of progressReads) perShow.set(r.path, (perShow.get(r.path) ?? 0) + 1);
+  assert.equal([...perShow.values()].every((n) => n === 1), true, "no show is read twice in a row");
+});
+
+test("only one Trakt job runs at a time", async () => {
+  // A 420 makes the first one wait a moment, so the second arrives while it runs.
+  fail["/sync/watched/movies"] = 420;
+  const first = send({ action: "traktPullPreview" });
+  await new Promise((r) => setTimeout(r, 50));
+  const second = await send({ action: "traktPreview" });
+  assert.equal(second.ok, false);
+  assert.match(second.error, /already working with Trakt/);
+  assert.equal((await first).ok, true);
+});
+
 test("the automatic check is an alarm that follows the setting", async () => {
   let res = await send({ action: "traktSetOptions", pull: "6h" });
   assert.equal(res.trakt.pull, "6h");
