@@ -320,6 +320,10 @@ export interface TraktStatus {
   running: boolean;
   /** What a running send is doing, such as "Part 1 of 2: history…". */
   progress?: string;
+  /** How often changes are got from Trakt by itself: "off", "1h", "6h" or "24h". */
+  pull: string;
+  pullAt?: number;
+  pullMessage?: string;
   lastRun?: number;
   lastMessage?: string;
   lastError?: string;

@@ -42,7 +42,19 @@ import {
   traktShowId,
 } from "../shared/trakt-sync.js";
 import { STORAGE_KEY, getAllItems, importItems } from "../shared/storage.js";
-import { describePull, itemForAddition, parseTraktLibrary, planPull, type PulledTitle, type PullPreview } from "../shared/trakt-pull.js";
+import {
+  PULL_MINUTES,
+  activityFingerprint,
+  describePull,
+  itemForAddition,
+  parseTraktLibrary,
+  planPull,
+  sanitizePullInterval,
+  showChangedSince,
+  type PulledTitle,
+  type PullInterval,
+  type PullPreview,
+} from "../shared/trakt-pull.js";
 import type { TmdbInfo } from "../shared/types.js";
 import type { SavedItem } from "../shared/types.js";
 
@@ -60,6 +72,8 @@ interface TraktSettings {
   auto: boolean;
   /** Keep the Trakt watchlist in step with "To watch". */
   watchlist: boolean;
+  /** Get changes from Trakt by itself, and how often. */
+  pull: PullInterval;
 }
 
 interface TraktAuth {
@@ -77,6 +91,11 @@ interface TraktState {
   lastError?: string;
   /** What a send is doing right now, for the Settings card. */
   progress?: string;
+  /** When changes were last got from Trakt, and what came of it. */
+  pullAt?: number;
+  pullMessage?: string;
+  /** Trakt's last activities at that time: unchanged means nothing new to get. */
+  pullFingerprint?: string;
 }
 
 export class TraktError extends Error {}
@@ -89,6 +108,7 @@ async function getSettings(): Promise<TraktSettings> {
     ...(cleanClientId(raw?.clientId) ? { clientId: cleanClientId(raw?.clientId) } : {}),
     auto: raw?.auto !== false,
     watchlist: raw?.watchlist === true,
+    pull: sanitizePullInterval(raw?.pull),
   };
 }
 
@@ -263,13 +283,31 @@ export async function setClientId(value: string): Promise<void> {
   await saveSettings({ ...settings, clientId });
 }
 
-export async function setOptions(options: { auto?: boolean; watchlist?: boolean }): Promise<void> {
+export async function setOptions(options: { auto?: boolean; watchlist?: boolean; pull?: string }): Promise<void> {
   const settings = await getSettings();
   await saveSettings({
     ...settings,
     ...(typeof options.auto === "boolean" ? { auto: options.auto } : {}),
     ...(typeof options.watchlist === "boolean" ? { watchlist: options.watchlist } : {}),
+    ...(options.pull !== undefined ? { pull: sanitizePullInterval(options.pull) } : {}),
   });
+  if (options.pull !== undefined) await syncPullAlarm();
+}
+
+export const TRAKT_PULL_ALARM = "keepshelf-trakt-pull";
+
+/** The repeating check for changes on Trakt: there only while connected and switched on, at the chosen interval. */
+export async function syncPullAlarm(): Promise<void> {
+  const settings = await getSettings();
+  const connected = !!(settings.clientId && (await getAuth()));
+  if (!connected || settings.pull === "off") {
+    await chrome.alarms.clear(TRAKT_PULL_ALARM);
+    return;
+  }
+  const minutes = PULL_MINUTES[settings.pull];
+  const existing = await chrome.alarms.get(TRAKT_PULL_ALARM);
+  if (existing?.periodInMinutes === minutes) return;
+  await chrome.alarms.create(TRAKT_PULL_ALARM, { delayInMinutes: 1, periodInMinutes: minutes });
 }
 
 /** Opens Trakt's sign-in window, then swaps the code for tokens. */
@@ -306,6 +344,7 @@ export async function connect(): Promise<string | undefined> {
     /* the name is only for showing */
   }
   if (username) await chrome.storage.local.set({ [AUTH_KEY]: { tokens, username } });
+  await syncPullAlarm();
   return username;
 }
 
@@ -325,6 +364,7 @@ export async function disconnect(): Promise<void> {
     }
   }
   await chrome.storage.local.remove([AUTH_KEY, STATE_KEY]);
+  await chrome.alarms.clear(TRAKT_PULL_ALARM);
   await serial(async () => {
     const items = await getAllItems();
     if (!items.some((i) => i.trakt)) return;
@@ -547,6 +587,9 @@ export async function traktStatus(): Promise<TraktStatus> {
     ready: !!state.ready,
     running: !!running,
     ...(running && state.progress ? { progress: state.progress } : {}),
+    pull: settings.pull,
+    ...(state.pullAt ? { pullAt: state.pullAt } : {}),
+    ...(state.pullMessage ? { pullMessage: state.pullMessage } : {}),
     ...(state.lastRun ? { lastRun: state.lastRun } : {}),
     ...(state.lastMessage ? { lastMessage: state.lastMessage } : {}),
     ...(state.lastError ? { lastError: state.lastError } : {}),
@@ -560,12 +603,13 @@ export async function traktStatus(): Promise<TraktStatus> {
 /* ── Getting from Trakt ──────────────────────────────────── */
 
 /** Your whole Trakt library, read only: watched movies and shows, ratings and the watchlist. */
-async function readLibrary(): Promise<PulledTitle[]> {
+async function readLibrary(items: SavedItem[], since?: number): Promise<PulledTitle[]> {
   const get = (path: string) => api<unknown>(`${path}?extended=full`);
+  const shelfShows = new Set(items.filter((i) => i.tmdb?.kind === "tv").map((i) => i.tmdb!.id));
   return parseTraktLibrary({
     watchedMovies: await get("/sync/watched/movies"),
     // Episodes come from each show's progress page; the full list adds genres and aired counts.
-    watchedShows: await watchedShowsWithEpisodes(() => true),
+    watchedShows: await watchedShowsWithEpisodes((entry) => showChangedSince(entry, since, (tmdb) => shelfShows.has(tmdb))),
     watchedShowsInfo: await get("/sync/watched/shows"),
     ratedMovies: await get("/sync/ratings/movies"),
     ratedShows: await get("/sync/ratings/shows"),
@@ -582,21 +626,36 @@ async function requireConnected(): Promise<void> {
 /** What getting from Trakt would change on the shelf. Reads Trakt; changes nothing. */
 export async function previewPull(): Promise<PullPreview> {
   await requireConnected();
-  return describePull(planPull(await getAllItems(), await readLibrary(), Date.now()));
+  const items = await getAllItems();
+  return describePull(planPull(items, await readLibrary(items), Date.now()));
 }
 
 /**
  * Applies what is on Trakt to the shelf: reads Trakt again (so it matches the shelf as it is now), updates the titles
  * that changed and adds the missing ones, with TMDB info when a token is set. Everything is recorded as already sent.
  */
-export async function applyPull(fetchInfo: (kind: "movie" | "tv", id: number) => Promise<TmdbInfo | undefined>): Promise<{ updated: number; added: number }> {
+export async function applyPull(
+  fetchInfo: (kind: "movie" | "tv", id: number) => Promise<TmdbInfo | undefined>,
+  options: { since?: number; auto?: boolean; fingerprint?: string } = {}
+): Promise<{ updated: number; added: number }> {
   await requireConnected();
   if (running) throw new TraktError("Trakt is busy sending. Try again in a moment.");
   let result = { updated: 0, added: 0 };
   running = (async () => {
     try {
       await setState({ progress: "Reading your Trakt library…" });
-      const plan = planPull(await getAllItems(), await readLibrary(), Date.now());
+      // The automatic check has just read it; a manual Get reads it here.
+      let fingerprint = options.fingerprint;
+      if (fingerprint === undefined) {
+        try {
+          fingerprint = activityFingerprint(await api<unknown>("/sync/last_activities"));
+        } catch {
+          /* only used to skip a later check */
+        }
+      }
+      const startedAt = Date.now();
+      const shelf = await getAllItems();
+      const plan = planPull(shelf, await readLibrary(shelf, options.since), startedAt);
       const patches = new Map(plan.updates.map((u) => [u.id, u.patch]));
       if (patches.size) {
         await serial(async () => {
@@ -620,14 +679,19 @@ export async function applyPull(fetchInfo: (kind: "movie" | "tv", id: number) =>
       let added = 0;
       if (fresh.length) added = await serial(async () => (await importItems(fresh)).added);
       result = { updated: plan.updates.filter((u) => u.parts.length).length, added };
+      const summary = result.updated || result.added ? `${result.updated} updated, ${result.added} added` : "nothing new";
       await setState({
         progress: undefined,
-        lastError: undefined,
-        lastRun: Date.now(),
-        lastMessage: `Got from Trakt: ${result.updated} updated, ${result.added} added.`,
+        pullAt: startedAt,
+        pullFingerprint: fingerprint,
+        pullMessage: `${options.auto ? "Checked Trakt by itself" : "Got from Trakt"}: ${summary}.`,
+        ...(options.auto ? {} : { lastError: undefined }),
       });
     } catch (err) {
-      await setState({ progress: undefined, lastRun: Date.now(), lastError: err instanceof Error ? err.message : "Getting from Trakt failed." });
+      await setState({
+        progress: undefined,
+        pullMessage: `Getting from Trakt failed: ${err instanceof Error ? err.message.replace(/\.$/, "") : "unknown error"}.`,
+      });
       throw err;
     }
   })();
@@ -637,4 +701,20 @@ export async function applyPull(fetchInfo: (kind: "movie" | "tv", id: number) =>
     running = undefined;
   }
   return result;
+}
+
+/**
+ * The automatic check: nothing happens unless connected and switched on, and nothing is read beyond Trakt's last
+ * activities when nothing changed there since the last check. Otherwise it applies the changes, as Get from Trakt does.
+ */
+export async function autoPull(fetchInfo: (kind: "movie" | "tv", id: number) => Promise<TmdbInfo | undefined>): Promise<void> {
+  const settings = await getSettings();
+  if (settings.pull === "off" || !settings.clientId || !(await getAuth()) || running) return;
+  const state = await getState();
+  const fingerprint = activityFingerprint(await api<unknown>("/sync/last_activities"));
+  if (fingerprint && state.pullFingerprint === fingerprint) {
+    await setState({ pullAt: Date.now() });
+    return;
+  }
+  await applyPull(fetchInfo, { since: state.pullAt, auto: true, ...(fingerprint ? { fingerprint } : {}) });
 }

@@ -2933,6 +2933,7 @@ const traktLastEl = document.getElementById("trakt-last")!;
 const traktSummaryEl = document.getElementById("trakt-summary")!;
 const prefTraktAutoEl = document.getElementById("pref-trakt-auto") as HTMLInputElement;
 const prefTraktWatchlistEl = document.getElementById("pref-trakt-watchlist") as HTMLInputElement;
+const prefTraktPullEl = document.getElementById("pref-trakt-pull") as HTMLSelectElement;
 const traktProblemsEl = document.getElementById("trakt-problems") as HTMLDetailsElement;
 const traktProblemsSummaryEl = document.getElementById("trakt-problems-summary")!;
 const traktProblemsListEl = document.getElementById("trakt-problems-list")!;
@@ -2991,6 +2992,8 @@ function renderTrakt(): void {
   prefTraktAutoEl.checked = t?.auto !== false;
   prefTraktWatchlistEl.checked = !!t?.watchlist;
   prefTraktAutoEl.disabled = prefTraktWatchlistEl.disabled = !connected;
+  prefTraktPullEl.value = t?.pull ?? "off";
+  prefTraktPullEl.disabled = !connected;
   traktSummaryEl.textContent = connected ? (t?.username ? `@${t.username}` : "Connected") : hasId ? "Not connected" : "Not set";
   traktSummaryEl.classList.toggle("is-ok", connected);
 
@@ -3000,6 +3003,7 @@ function renderTrakt(): void {
   else if (t?.lastError) lines.push(t.lastError);
   else if (t?.lastMessage && t.lastRun) lines.push(`${t.lastMessage} (${whenText(t.lastRun)})`);
   if (connected && t?.ready && t.pending > 0) lines.push(`${t.pending} title${t.pending === 1 ? "" : "s"} waiting to be sent.`);
+  if (connected && t?.pullMessage) lines.push(`${t.pullMessage}${t.pullAt ? ` (${whenText(t.pullAt)})` : ""}`);
   traktLastEl.textContent = lines.join(" ");
   traktLastEl.classList.toggle("is-error", !!t?.lastError);
 
@@ -3222,6 +3226,10 @@ traktPullApplyEl.addEventListener("click", async () => {
 prefTraktAutoEl.addEventListener("change", () =>
   void traktAsk({ action: "traktSetOptions", auto: prefTraktAutoEl.checked }, prefTraktAutoEl.checked ? "Changes will be sent automatically." : "Automatic sending is off.")
 );
+prefTraktPullEl.addEventListener("change", () => {
+  const labels: Record<string, string> = { off: "Automatic checks are off.", "1h": "KeepShelf will check Trakt every hour.", "6h": "KeepShelf will check Trakt every 6 hours.", "24h": "KeepShelf will check Trakt once a day." };
+  void traktAsk({ action: "traktSetOptions", pull: prefTraktPullEl.value }, labels[prefTraktPullEl.value]);
+});
 prefTraktWatchlistEl.addEventListener("change", () =>
   void traktAsk({ action: "traktSetOptions", watchlist: prefTraktWatchlistEl.checked }, prefTraktWatchlistEl.checked ? "Your To watch list will go to the Trakt watchlist." : "Watchlist sync is off.")
 );

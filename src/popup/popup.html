@@ -553,6 +553,18 @@
                 <span class="switch-track"></span>
               </label>
             </div>
+            <div class="pref-select">
+              <label for="pref-trakt-pull">
+                <strong>Get changes from Trakt</strong>
+                <span>Brings what you mark on Trakt (in its app, say) onto your shelf by itself, with the same rules as Get from Trakt.</span>
+              </label>
+              <select id="pref-trakt-pull" class="view-select">
+                <option value="off">Off</option>
+                <option value="1h">Every hour</option>
+                <option value="6h">Every 6 hours</option>
+                <option value="24h">Once a day</option>
+              </select>
+            </div>
             <details class="up-nodate" id="trakt-problems" hidden>
               <summary id="trakt-problems-summary">Not matched on Trakt</summary>
               <ul class="trakt-problems" id="trakt-problems-list"></ul>

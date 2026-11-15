@@ -187,7 +187,7 @@ export type MessageAction =
   | { action: "getLastKeepResult" }
   | { action: "traktStatus" }
   | { action: "traktSetClientId"; clientId: string }
-  | { action: "traktSetOptions"; auto?: boolean; watchlist?: boolean }
+  | { action: "traktSetOptions"; auto?: boolean; watchlist?: boolean; pull?: string }
   | { action: "traktConnect" }
   | { action: "traktDisconnect" }
   | { action: "traktSync" }

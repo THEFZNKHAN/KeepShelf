@@ -389,3 +389,48 @@ export function describePull(plan: PullPlan): PullPreview {
     unchanged: plan.unchanged + plan.updates.filter((u) => !u.parts.length).length,
   };
 }
+
+/** How often to get changes from Trakt by itself. */
+export const PULL_INTERVALS = ["off", "1h", "6h", "24h"] as const;
+export type PullInterval = (typeof PULL_INTERVALS)[number];
+export const PULL_MINUTES: Record<Exclude<PullInterval, "off">, number> = { "1h": 60, "6h": 360, "24h": 1440 };
+
+export function sanitizePullInterval(value: unknown): PullInterval {
+  return (PULL_INTERVALS as readonly unknown[]).includes(value) ? (value as PullInterval) : "off";
+}
+
+/**
+ * A fingerprint of what matters in GET /sync/last_activities: when movies and episodes were last watched, rated or put
+ * on the watchlist. When it hasn't changed since the last check, there is nothing new on Trakt to get.
+ */
+export function activityFingerprint(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, Record<string, unknown> | undefined>;
+  const pick = (group: string, field: string) => {
+    const value = r[group]?.[field];
+    return typeof value === "string" ? value : "";
+  };
+  const parts = [
+    pick("movies", "watched_at"),
+    pick("movies", "rated_at"),
+    pick("movies", "watchlisted_at"),
+    pick("episodes", "watched_at"),
+    pick("shows", "rated_at"),
+    pick("shows", "watchlisted_at"),
+    pick("seasons", "watchlisted_at"),
+  ];
+  return parts.some(Boolean) ? parts.join("|") : undefined;
+}
+
+/**
+ * Whether a show from the watched list needs its progress read on an automatic check: anything not on the shelf, and
+ * anything watched since the last check (with an hour's slack for clocks). Everything else is unchanged on Trakt.
+ */
+export function showChangedSince(entry: unknown, since: number | undefined, onShelf: (tmdb: number) => boolean): boolean {
+  if (since === undefined) return true;
+  const e = entry as { last_watched_at?: unknown; show?: { ids?: { tmdb?: unknown } } } | null;
+  const tmdb = e?.show?.ids?.tmdb;
+  if (typeof tmdb !== "number" || !onShelf(tmdb)) return true;
+  const watched = typeof e?.last_watched_at === "string" ? Date.parse(e.last_watched_at) : NaN;
+  return !Number.isFinite(watched) || watched > since - 60 * 60 * 1000;
+}

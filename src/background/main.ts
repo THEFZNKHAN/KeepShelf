@@ -66,6 +66,9 @@ import {
   previewTrakt,
   previewPull,
   applyPull,
+  autoPull,
+  syncPullAlarm,
+  TRAKT_PULL_ALARM,
   scheduleTraktSync,
   setClientId as setTraktClientId,
   setOptions as setTraktOptions,
@@ -106,6 +109,12 @@ function runSerial<T>(task: () => Promise<T>): Promise<T> {
   const run = queue.then(task, task);
   queue = run.catch(() => undefined);
   return run;
+}
+
+/** TMDB info for a title added from Trakt, when a token is set. */
+async function tmdbInfoFor(kind: "movie" | "tv", id: number) {
+  const client = await tmdbClient();
+  return client ? fetchDetails(client, kind, id) : undefined;
 }
 
 // Trakt sends run outside the queue (they wait on the network) and use it only to record what was sent.
@@ -472,6 +481,7 @@ async function runReminderCheck(now = Date.now()): Promise<number> {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REMINDER_ALARM) void runSerial(() => runReminderCheck()).catch(() => undefined);
   if (alarm.name === TRAKT_ALARM) void syncTrakt("auto").catch(() => undefined);
+  if (alarm.name === TRAKT_PULL_ALARM) void autoPull(tmdbInfoFor).catch(() => undefined);
 });
 
 chrome.notifications.onClicked.addListener((id) => {
@@ -677,7 +687,7 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       await setTraktClientId(message.clientId);
       return { ok: true, trakt: await traktStatus() };
     case "traktSetOptions":
-      await setTraktOptions({ auto: message.auto, watchlist: message.watchlist });
+      await setTraktOptions({ auto: message.auto, watchlist: message.watchlist, pull: message.pull });
       if (message.watchlist !== undefined || message.auto) scheduleTraktSync();
       return { ok: true, trakt: await traktStatus() };
     case "traktConnect":
@@ -691,10 +701,7 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     case "traktPullPreview":
       return { ok: true, traktPull: await previewPull() };
     case "traktPullApply": {
-      const { updated, added } = await applyPull(async (kind, id) => {
-        const client = await tmdbClient();
-        return client ? fetchDetails(client, kind, id) : undefined;
-      });
+      const { updated, added } = await applyPull(tmdbInfoFor);
       return { ok: true, items: await getAllItems(), added, enriched: updated };
     }
     case "traktSync":
@@ -717,11 +724,13 @@ const MENU_SAVE_LINK = "keepshelf-save-link";
 const MENU_SAVE_NOTE = "keepshelf-save-note";
 
 chrome.runtime.onStartup.addListener(() => {
+  void syncPullAlarm().catch(() => undefined);
   void runSerial(refreshStaleTmdb).catch(() => undefined);
   void syncReminderAlarm().catch(() => undefined);
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  void syncPullAlarm().catch(() => undefined);
   void syncReminderAlarm().catch(() => undefined);
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU_SAVE_PAGE, title: "Save page to KeepShelf", contexts: ["page"] });

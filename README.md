@@ -731,6 +731,8 @@ Nothing is ever removed from your Trakt history: unmarking an episode here leave
 - Titles that aren't on the shelf are added (with TMDB info when your token is set): watched ones as Done or In progress, your Trakt watchlist as To watch. Trakt's anime are filed as anime.
 - Everything that came from Trakt is recorded as already sent, so it is never sent back as a second play.
 
+To have this happen by itself, set **Get changes from Trakt** to **Every hour**, **Every 6 hours** or **Once a day** (it's **Off** by default). Each check first asks Trakt when your account last changed; when nothing has, that one request is all it costs. When something has, it applies the changes with the same rules, without a preview, and reads only the shows watched since the last check. The card shows when it last checked and what it found.
+
 **Disconnect** signs KeepShelf out on Trakt too and forgets what was sent, so a different account starts fresh. A free Trakt account has limits (usually the watchlist); when one is full KeepShelf stops and says so.
 
 KeepShelf uses Trakt but is not endorsed or certified by Trakt.
@@ -808,7 +810,7 @@ Uninstalling the extension removes all local shelf data. KeepShelf only ever app
 | `scripting` | Run the Keep append script inside your Keep tab |
 | `debugger` | Send trusted text input so Keep persists list items reliably |
 | `contextMenus` | Add the right-click **Save … to KeepShelf** entries |
-| `alarms` | Run the release-reminder check a few times a day (only active once you turn reminders on) |
+| `alarms` | Run the release-reminder check a few times a day, and the automatic Trakt check (each only active once you turn it on) |
 | `notifications` | Show the release-reminder notification |
 | `identity` | Open Trakt's sign-in window and receive its answer (only when you press Connect) |
 | `google.com` | Parse Google Search knowledge panels |

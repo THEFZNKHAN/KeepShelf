@@ -138,3 +138,30 @@ test("episodes come from the plain watched list; genres and aired counts from th
   assert.equal(naruto.type, "anime");
   assert.equal(naruto.status, "in_progress");
 });
+
+import { activityFingerprint, sanitizePullInterval, showChangedSince } from "../dist-test/trakt-pull.js";
+
+test("the automatic interval is one of the choices, else off", () => {
+  assert.equal(sanitizePullInterval("6h"), "6h");
+  assert.equal(sanitizePullInterval("5m"), "off");
+  assert.equal(sanitizePullInterval(undefined), "off");
+});
+
+test("Trakt's last activities give a fingerprint that changes only when something did", () => {
+  const a = { movies: { watched_at: "2026-11-15T10:00:00.000Z", rated_at: "x" }, episodes: { watched_at: "2026-11-15T11:00:00.000Z" }, comments: { liked_at: "y" } };
+  const same = activityFingerprint(a);
+  assert.equal(activityFingerprint({ ...a, comments: { liked_at: "z" } }), same, "unrelated activity doesn't count");
+  assert.notEqual(activityFingerprint({ ...a, episodes: { watched_at: "2026-11-16T00:00:00.000Z" } }), same);
+  assert.equal(activityFingerprint(null), undefined);
+  assert.equal(activityFingerprint({}), undefined);
+});
+
+test("an automatic check reads only shows that are new to the shelf or watched since the last check", () => {
+  const since = Date.parse("2026-11-15T12:00:00.000Z");
+  const onShelf = (tmdb) => tmdb === 1;
+  const entry = (tmdb, at) => ({ last_watched_at: at, show: { ids: { tmdb } } });
+  assert.equal(showChangedSince(entry(1, "2026-11-10T00:00:00.000Z"), since, onShelf), false);
+  assert.equal(showChangedSince(entry(1, "2026-11-15T13:00:00.000Z"), since, onShelf), true);
+  assert.equal(showChangedSince(entry(2, "2026-11-10T00:00:00.000Z"), since, onShelf), true, "not on the shelf yet");
+  assert.equal(showChangedSince(entry(1, "2026-11-10T00:00:00.000Z"), undefined, onShelf), true, "first check reads everything");
+});

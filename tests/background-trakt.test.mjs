@@ -8,6 +8,8 @@ const REDIRECT = "https://fakeextensionid.chromiumapp.org/trakt";
 const CLIENT = "fakeclientid0123456789abcdef0123456789abcdef0123456789abcdef0123";
 const noop = new Proxy(function () {}, { get: () => noop, apply: () => noop });
 let authCancelled = false;
+const alarms = new Map();
+let activities = { episodes: { watched_at: "2026-11-15T10:00:00.000Z" }, movies: { watched_at: "2026-11-15T10:00:00.000Z" } };
 globalThis.chrome = new Proxy({}, {
   get(_, key) {
     if (key === "storage") {
@@ -21,7 +23,14 @@ globalThis.chrome = new Proxy({}, {
       };
     }
     if (key === "runtime") return { onMessage: { addListener: (fn) => { onMessage = fn; } }, onInstalled: { addListener() {} }, onStartup: { addListener() {} }, getURL: (p) => `chrome-extension://fake/${p}` };
-    if (key === "alarms") return { onAlarm: { addListener: (fn) => { onAlarm = fn; } }, get: async () => undefined, create: () => {}, clear: async () => true };
+    if (key === "alarms") {
+      return {
+        onAlarm: { addListener: (fn) => { onAlarm = fn; } },
+        get: async (name) => alarms.get(name),
+        create: async (name, info) => { alarms.set(name, info); },
+        clear: async (name) => { alarms.delete(name); return true; },
+      };
+    }
     if (key === "identity") {
       return {
         getRedirectURL: (path) => `https://fakeextensionid.chromiumapp.org/${path}`,
@@ -64,6 +73,7 @@ globalThis.fetch = async (url, init = {}) => {
     return json(status, {});
   }
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
+  if (u.pathname === "/sync/last_activities") return json(200, activities);
   if (u.pathname === "/sync/watched/movies") return json(200, watchedMovies);
   if (u.pathname === "/sync/watched/shows") {
     // Like Trakt now: the watched list has no seasons; each show's episodes are on its progress page.
@@ -108,7 +118,7 @@ before(async () => {
   ];
   watchedMovies = [{ movie: { ids: { tmdb: 777 } } }];
   // Trakt already has S1E1 of Dark (an earlier import): it must not be sent again.
-  watchedShows = [{ show: { ids: { tmdb: 70523 } }, seasons: [{ number: 1, episodes: [{ number: 1 }] }] }];
+  watchedShows = [{ show: { ids: { tmdb: 70523 } }, last_watched_at: "2026-01-01T00:00:00.000Z", seasons: [{ number: 1, episodes: [{ number: 1 }] }] }];
   await import("../dist-test/background-main.js");
 });
 
@@ -296,6 +306,52 @@ test("applying adds it as To watch, and the next send doesn't push it back to Tr
   assert.equal(posted.some((r) => JSON.stringify(r.body).includes("46260")), false, "pulled episodes must not be sent back");
 });
 
+const waitForCheck = async (before) => {
+  for (let i = 0; i < 100; i++) {
+    const st = (await send({ action: "traktStatus" })).trakt;
+    if (!st.running && st.pullAt && st.pullAt !== before) return st;
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  throw new Error("the automatic check didn't finish");
+};
+
+test("the automatic check is an alarm that follows the setting", async () => {
+  let res = await send({ action: "traktSetOptions", pull: "6h" });
+  assert.equal(res.trakt.pull, "6h");
+  assert.equal(alarms.get("keepshelf-trakt-pull").periodInMinutes, 360);
+  res = await send({ action: "traktSetOptions", pull: "every minute" });
+  assert.equal(res.trakt.pull, "off", "only the offered choices are accepted");
+  assert.equal(alarms.has("keepshelf-trakt-pull"), false);
+  await send({ action: "traktSetOptions", pull: "1h" });
+  assert.equal(alarms.get("keepshelf-trakt-pull").periodInMinutes, 60);
+});
+
+test("with nothing new on Trakt, a check costs one request", async () => {
+  // The last Get from Trakt recorded Trakt's activity; nothing has happened since.
+  const before = (await send({ action: "traktStatus" })).trakt.pullAt;
+  const count = requests.length;
+  onAlarm({ name: "keepshelf-trakt-pull" });
+  await waitForCheck(before);
+  assert.deepEqual(requests.slice(count).map((r) => r.path), ["/sync/last_activities"]);
+});
+
+test("after something changes on Trakt, the check applies it and reads only what changed", async () => {
+  const naruto = watchedShows.find((e) => e.show.ids.tmdb === 46260);
+  naruto.seasons[0].episodes.push({ number: 4 }, { number: 5 });
+  naruto.last_watched_at = new Date().toISOString();
+  activities = { ...activities, episodes: { watched_at: new Date().toISOString() } };
+  const before = (await send({ action: "traktStatus" })).trakt.pullAt;
+  const count = requests.length;
+  onAlarm({ name: "keepshelf-trakt-pull" });
+  const st = await waitForCheck(before);
+  assert.equal(items().find((i) => i.title === "Naruto").progressCurrent, 5);
+  const progressReads = requests.slice(count).filter((r) => r.path.endsWith("/progress/watched")).map((r) => r.path);
+  assert.deepEqual(progressReads, ["/shows/46260/progress/watched"], "shows unchanged since the last check aren't read again");
+  assert.equal(requests.slice(count).filter((r) => r.path === "/sync/last_activities").length, 1, "Trakt's activity is read once per check");
+  assert.equal(requests.slice(count).some((r) => r.method === "POST"), false, "a check never writes to Trakt");
+  assert.match(st.pullMessage, /by itself: 1 updated/);
+});
+
 test("disconnecting revokes the token and forgets what was sent", async () => {
   const res = await send({ action: "traktDisconnect" });
   assert.equal(res.ok, true);
@@ -304,4 +360,5 @@ test("disconnecting revokes the token and forgets what was sent", async () => {
   assert.equal(revoke.body.client_id, CLIENT);
   assert.ok(revoke.body.token);
   assert.equal(items().some((i) => i.trakt), false);
+  assert.equal(alarms.has("keepshelf-trakt-pull"), false, "no automatic checks once disconnected");
 });
