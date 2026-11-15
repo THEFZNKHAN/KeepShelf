@@ -3983,3 +3983,15 @@ button.er-stat:hover {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Bulk status picker */
+.status-panel .status-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.status-panel .status-option {
+  width: 100%;
+  justify-content: flex-start;
+}

@@ -74,3 +74,16 @@ test("restore is queued with the other writes and doesn't lose a save made at th
   assert.ok(now.some((i) => i.id === victim.id));
   assert.ok(now.some((i) => i.body === "saved while undoing"));
 });
+
+test("setStatus changes the ticked items in one go, and restore puts them back", async () => {
+  store.trackbuddy_items = ["a", "b", "c"].map((id, n) => ({ id, title: id, type: "movie", subtitle: "", googleQuery: id, sourceUrl: "", savedAt: 10 - n, status: "plan" }));
+  const before = await all();
+  const res = await send({ action: "setStatus", ids: ["a", "b"], status: "done" });
+  assert.equal(res.ok, true);
+  assert.equal(res.updated, 2);
+  assert.deepEqual(res.items.map((i) => i.status), ["done", "done", "plan"]);
+  const bad = await send({ action: "setStatus", ids: ["a"], status: "finished" });
+  assert.equal(bad.ok, false);
+  const undone = await send({ action: "restore", items: before.filter((i) => i.id !== "c") });
+  assert.deepEqual(undone.items, before);
+});

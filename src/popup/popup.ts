@@ -230,6 +230,10 @@ const moreFiltersEl = document.getElementById("more-filters")!;
 const toggleFiltersEl = document.getElementById("toggle-filters") as HTMLButtonElement;
 const copyItemsEl = document.getElementById("copy-items") as HTMLButtonElement;
 const deleteSelectedEl = document.getElementById("delete-selected") as HTMLButtonElement;
+const statusSelectedEl = document.getElementById("status-selected") as HTMLButtonElement;
+const statusDialogEl = document.getElementById("status-dialog")!;
+const statusDialogTitleEl = document.getElementById("status-dialog-title")!;
+const statusDialogOptionsEl = document.getElementById("status-dialog-options")!;
 const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
 const tagPicker = createTagPicker(tagFilterEl, (tag) => {
   tagFilter = tag;
@@ -1711,6 +1715,7 @@ function updateSyncButton(): void {
 function updateSelectionUi(): void {
   const selected = getSelectedIds().length;
   deleteSelectedEl.hidden = selected === 0;
+  statusSelectedEl.hidden = selected === 0;
   // One copy button: the ticked rows when there are some, otherwise everything the list shows.
   const label = selected > 0 ? `Copy ${selected} selected` : "Copy everything shown";
   copyItemsEl.title = label;
@@ -4867,6 +4872,84 @@ copyItemsEl.addEventListener("click", () => {
   const ids = new Set(getSelectedIds());
   const shown = filteredItems();
   void copyToClipboard(ids.size > 0 ? shown.filter((i) => ids.has(i.id)) : shown);
+});
+
+/** The statuses to offer for the tab you are on, in the words that tab uses. */
+function bulkStatusChoices(): Array<{ status: ItemStatus; label: string; icon: string }> {
+  if (activeTab === "tabs") {
+    return [
+      { status: "done", label: "Done", icon: "check_circle" },
+      { status: "plan", label: "To do", icon: "radio_button_unchecked" },
+    ];
+  }
+  const books = activeTab === "books";
+  return [
+    { status: "done", label: books ? "Read" : "Watched", icon: "check_circle" },
+    { status: "in_progress", label: books ? "Reading" : "In progress", icon: "play_circle" },
+    { status: "plan", label: books ? "To read" : "To watch", icon: "bookmark" },
+    { status: "dropped", label: "Dropped", icon: "block" },
+  ];
+}
+
+function closeStatusDialog(): void {
+  statusDialogEl.hidden = true;
+}
+
+/** Asks which status, then sets it on every ticked row, with Undo. */
+function openStatusDialog(): void {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  statusDialogTitleEl.textContent = `Set ${ids.length} selected to`;
+  statusDialogOptionsEl.replaceChildren(
+    ...bulkStatusChoices().map(({ status, label, icon }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-outline btn-wide status-option";
+      const glyph = document.createElement("span");
+      glyph.className = "material-symbols-outlined btn-icon";
+      glyph.textContent = icon;
+      button.append(glyph, label);
+      button.addEventListener("click", () => {
+        closeStatusDialog();
+        void setSelectedStatus(ids, status, label);
+      });
+      return button;
+    })
+  );
+  statusDialogEl.hidden = false;
+  statusDialogOptionsEl.querySelector<HTMLButtonElement>("button")?.focus();
+}
+
+async function setSelectedStatus(ids: string[], status: ItemStatus, label: string): Promise<void> {
+  const snapshot = snapshotItems(allItems, ids);
+  try {
+    const response = await sendToBackground({ action: "setStatus", ids, status });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) {
+      allItems = response.items;
+      render();
+      const changed = response.updated ?? 0;
+      if (changed === 0) {
+        showStatus(`They're all ${label.toLowerCase()} already.`);
+        return;
+      }
+      showStatus(`Set ${changed} to ${label.toLowerCase()}.`, false, UNDO_MS, () =>
+        undoRemoval(snapshot, `Put ${snapshot.length} back as they were.`, (msg, err) => showStatus(msg, err))
+      );
+    }
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Couldn't change the status.", true);
+  }
+}
+
+statusSelectedEl.addEventListener("click", openStatusDialog);
+document.getElementById("status-dialog-cancel")!.addEventListener("click", closeStatusDialog);
+statusDialogEl.querySelector("[data-status-dismiss]")!.addEventListener("click", closeStatusDialog);
+statusDialogEl.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    closeStatusDialog();
+  }
 });
 
 document.getElementById("delete-selected")!.addEventListener("click", async () => {

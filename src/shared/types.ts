@@ -185,6 +185,7 @@ export type MessageAction =
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
   | { action: "testKeepAppend"; target: KeepTarget }
   | { action: "getLastKeepResult" }
+  | { action: "setStatus"; ids: string[]; status: ItemStatus }
   | { action: "traktStatus" }
   | { action: "traktSetClientId"; clientId: string }
   | { action: "traktSetOptions"; auto?: boolean; watchlist?: boolean; pull?: string }
@@ -206,6 +207,7 @@ export type MessageResponse =
       skipped?: number;
       enriched?: number;
       unmatched?: number;
+      updated?: number;
     }
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; episodeRatings: EpisodeRatings }

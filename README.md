@@ -254,6 +254,10 @@ Connect your own Trakt account and KeepShelf sends what you watch, episode progr
 
 Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. You can also export for Letterboxd or Trakt. See [Backup and import](#backup-and-import).
 
+### Change many at once
+
+Tick some rows and the **done-all** button appears next to the copy button. It sets every ticked title to **Watched**, **In progress**, **To watch** or **Dropped** (on Books: Read, Reading, To read, Dropped; on Tabs: Done or To do) in one go, the same as changing each card: finish dates are kept or set, and a show marked Watched remembers its season count for new-season reminders. **Undo** puts them back. With Trakt sync on, the change is sent like any other.
+
 ### Clipboard export
 
 The **copy icon** next to the search box copies every item the list is showing as plain text, one line each. Tick some rows first and it copies only those (hover it to see "Copy 3 selected").

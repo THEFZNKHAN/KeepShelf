@@ -47,7 +47,7 @@ import {
 } from "../shared/tmdb-search.js";
 import { TRAILER_LANGUAGES, pickTrailer } from "../shared/trailer.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
-import { buildUserPatch } from "../shared/user-data.js";
+import { applyStatus, buildUserPatch, isItemStatus } from "../shared/user-data.js";
 import {
   getNotified,
   isNewSeasonRemindersEnabled,
@@ -83,6 +83,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "saveTab",
   "delete",
   "update",
+  "setStatus",
   "syncKeep",
   "import",
   "merge",
@@ -121,7 +122,7 @@ async function tmdbInfoFor(kind: "movie" | "tv", id: number) {
 useSerialQueue(runSerial);
 
 /** Changes to the shelf that may have something to send to Trakt. */
-const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "import", "merge", "restore", "addFromTmdb", "enrich"]);
+const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "setStatus", "import", "merge", "restore", "addFromTmdb", "enrich"]);
 
 chrome.runtime.onMessage.addListener(
   (
@@ -559,6 +560,12 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       if (!item) return { ok: false, error: "That item no longer exists." };
       const items = await updateItem(message.id, cleanChanges(item, message.changes));
       return { ok: true, items };
+    }
+    case "setStatus": {
+      if (!isItemStatus(message.status) || !Array.isArray(message.ids)) return { ok: false, error: "Unknown status." };
+      const { items, changed } = applyStatus(await getAllItems(), message.ids, message.status);
+      if (changed) await chrome.storage.local.set({ [STORAGE_KEY]: items });
+      return { ok: true, items, updated: changed };
     }
     case "syncKeep": {
       let synced = 0;
