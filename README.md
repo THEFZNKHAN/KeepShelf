@@ -87,6 +87,7 @@
 - [Installation](#installation)
 - [Usage guide](#usage-guide)
 - [Google Keep sync](#google-keep-sync)
+- [Trakt sync](#trakt-sync)
 - [Backup and import](#backup-and-import)
 - [Privacy and data](#privacy-and-data)
 - [Permissions explained](#permissions-explained)
@@ -245,6 +246,10 @@ Turn on book info and your books get page counts, genres, covers, descriptions a
 
 Optionally append every save to your own Google Keep checklists. No Google Cloud project or OAuth app. See [Google Keep sync](#google-keep-sync).
 
+### Sync to Trakt
+
+Connect your own Trakt account and KeepShelf sends what you watch, episode progress, your ratings and (if you like) your To watch list, as you make changes. See [Trakt sync](#trakt-sync).
+
 ### Backup, import and export
 
 Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. You can also export for Letterboxd or Trakt. See [Backup and import](#backup-and-import).
@@ -255,7 +260,7 @@ The **copy icon** next to the search box copies every item the list is showing a
 
 ### Privacy first
 
-Everything stays on your device unless you turn on an optional feature: Keep sync, TMDB lookups, or book info from Open Library. No analytics and no third-party data collection.
+Everything stays on your device unless you turn on an optional feature: Keep sync, Trakt sync, TMDB lookups, or book info from Open Library. No analytics and no third-party data collection.
 
 ---
 
@@ -694,6 +699,46 @@ Google Keep only persists list items entered through trusted browser input. Keep
 
 ---
 
+## Trakt sync
+
+Send your watching to your own [Trakt](https://trakt.tv) account. It's off until you connect.
+
+### Set it up (once)
+
+1. At **developer.trakt.tv**, sign in and open **My Apps → Create app**. Keep it a **Development** app (only you and up to 16 people you invite can sign in, which is all KeepShelf needs). Trakt gives it a **Client ID** and no client secret: it signs in with PKCE, so none is needed.
+2. In KeepShelf, open **Settings → Trakt**, paste the Client ID and press **Save**.
+3. Copy the **Redirect URI** shown there (it looks like `https://<your extension id>.chromiumapp.org/trakt`) and add it to your app's Redirect URIs on Trakt. It must match exactly. It depends on your install, so copy it from Settings rather than from here.
+4. Press **Connect to Trakt** and approve KeepShelf in the Trakt window. Trakt always shows its sign-in page, so check the account name before approving. Reopen Settings if the popup closed meanwhile.
+5. Press **Preview what will be sent**. It only reads from Trakt and lists every title that would go, with its episodes, rating and watchlist change. Nothing is written.
+6. Press **Send everything now** once.
+
+### What is sent
+
+- **Movies** you mark finished, and **episodes** you have watched (from season progress, or every episode of the seasons a show had when you marked it finished). Episodes need TMDB info for their counts; titles without TMDB info aren't sent.
+- **Ratings** (the same 1 to 10 scale), including changes and removals.
+- **To watch** titles go to your Trakt watchlist if you switch on **Sync my To watch list**, and come off it when you start them or drop them.
+
+The first **Send everything** reads what Trakt already has, so nothing already in your history is sent a second time (Trakt records every play it is sent). A title you have already rated on Trakt keeps Trakt's rating; only titles without one get your KeepShelf rating, and the preview lists any that differ. Past watches are dated by each episode's air date, and a movie by the day you marked it finished here. After that, with **Send changes automatically** on, each change goes within a few seconds and is dated now.
+
+Nothing is ever removed from your Trakt history: unmarking an episode here leaves Trakt as it is, and marking it again doesn't add a second play. Titles Trakt couldn't match are listed under **Not matched on Trakt**. Long anime are sometimes numbered differently on TMDB and Trakt; when Trakt already has at least as many episodes of a show, KeepShelf leaves it alone rather than guess.
+
+### Get from Trakt
+
+**Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings and your watchlist. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.
+
+- The side with more watched wins: progress only moves forward, a movie watched on Trakt becomes Done, a show watched to the end becomes Done, and a finished show with a newer season started on Trakt goes back to In progress.
+- A rating you set in KeepShelf is kept; Trakt's fills in where you have none.
+- Titles that aren't on the shelf are added (with TMDB info when your token is set): watched ones as Done or In progress, your Trakt watchlist as To watch. Trakt's anime are filed as anime.
+- Everything that came from Trakt is recorded as already sent, so it is never sent back as a second play.
+
+To have this happen by itself, set **Get changes from Trakt** to **Every hour**, **Every 6 hours** or **Once a day** (it's **Off** by default). Each check first asks Trakt when your account last changed; when nothing has, that one request is all it costs. When something has, it applies the changes with the same rules, without a preview, and reads only the shows watched since the last check. The card shows when it last checked and what it found.
+
+**Disconnect** signs KeepShelf out on Trakt too and forgets what was sent, so a different account starts fresh. A free Trakt account has limits (usually the watchlist); when one is full KeepShelf stops and says so.
+
+KeepShelf uses Trakt but is not endorsed or certified by Trakt.
+
+---
+
 ## Backup and import
 
 Your shelf lives only in this browser, so export a backup now and then.
@@ -746,9 +791,11 @@ Importing from a file picker opens Settings in a full tab, because Chrome closes
 | Keep list content | Your Google Keep account (only when sync is on) |
 | TMDB token and fetched TMDB info, including season counts and release dates | `chrome.storage.local` (your device only; refreshed or dropped after about 6 months) |
 | Release reminder setting and which releases were already announced | `chrome.storage.local` (your device only) |
+| Trakt Client ID, sign-in tokens, and what was already sent per title | `chrome.storage.local` (your device only; Disconnect deletes the tokens and the sent record) |
+| Your watched history, ratings and watchlist | Your Trakt account (only when Trakt sync is connected) |
 | Fetched book info (pages, genres, description, rating) | `chrome.storage.local` (your device only) |
 
-KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, TMDB lookups (including the background date checks for release reminders) send item titles (and IMDb ids) to `api.themoviedb.org` using your own token, and book info sends book titles and authors to `openlibrary.org`. Posters and covers load directly from the source site's, TMDB's or Open Library's image server, without a referrer.
+KeepShelf has no server of its own and does not collect your data. It only talks to services you switch on: Keep sync talks to `keep.google.com` inside your signed-in browser session, TMDB lookups (including the background date checks for release reminders) send item titles (and IMDb ids) to `api.themoviedb.org` using your own token, book info sends book titles and authors to `openlibrary.org`, and Trakt sync sends the TMDB and IMDb ids of titles you watch or rate, with dates and ratings, to `api.trakt.tv` (signing in goes through `auth.trakt.tv`). Posters and covers load directly from the source site's, TMDB's or Open Library's image server, without a referrer.
 
 Uninstalling the extension removes all local shelf data. KeepShelf only ever appends lines to your Keep notes. It never edits or deletes them.
 
@@ -763,8 +810,9 @@ Uninstalling the extension removes all local shelf data. KeepShelf only ever app
 | `scripting` | Run the Keep append script inside your Keep tab |
 | `debugger` | Send trusted text input so Keep persists list items reliably |
 | `contextMenus` | Add the right-click **Save … to KeepShelf** entries |
-| `alarms` | Run the release-reminder check a few times a day (only active once you turn reminders on) |
+| `alarms` | Run the release-reminder check a few times a day, and the automatic Trakt check (each only active once you turn it on) |
 | `notifications` | Show the release-reminder notification |
+| `identity` | Open Trakt's sign-in window and receive its answer (only when you press Connect) |
 | `google.com` | Parse Google Search knowledge panels |
 | `imdb.com` | Parse IMDb title pages |
 | `seriesgraph.com` | Parse Series Graph show pages |
@@ -776,6 +824,7 @@ Uninstalling the extension removes all local shelf data. KeepShelf only ever app
 | `trakt.tv`, `app.trakt.tv` | Parse Trakt movie and show pages |
 | `keep.google.com` | Append lines to your linked Keep notes |
 | `api.themoviedb.org` | Look up genres, ratings and info on TMDB (only used once you add a token) |
+| `api.trakt.tv`, `auth.trakt.tv` | Trakt sync: sign in and send what you watch and rate (only used once you connect) |
 | `openlibrary.org` | Look up book details on Open Library (only used once you turn on book info) |
 
 ---

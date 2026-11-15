@@ -59,6 +59,23 @@ import {
 import { seasonsFinished } from "../shared/seasons.js";
 import { describeReminders, dueReminders, needsSeasonRecord, pruneNotified, selectForRefresh } from "../shared/reminders.js";
 import { flashBadge, startBadgeUpdates } from "./badge.js";
+import {
+  TRAKT_ALARM,
+  connect as connectTrakt,
+  disconnect as disconnectTrakt,
+  previewTrakt,
+  previewPull,
+  applyPull,
+  autoPull,
+  syncPullAlarm,
+  TRAKT_PULL_ALARM,
+  scheduleTraktSync,
+  setClientId as setTraktClientId,
+  setOptions as setTraktOptions,
+  syncTrakt,
+  traktStatus,
+  useSerialQueue,
+} from "./trakt.js";
 
 // Storage writes are read-modify-write and Keep sync drives a single tab, so these must not overlap.
 const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
@@ -94,6 +111,18 @@ function runSerial<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** TMDB info for a title added from Trakt, when a token is set. */
+async function tmdbInfoFor(kind: "movie" | "tv", id: number) {
+  const client = await tmdbClient();
+  return client ? fetchDetails(client, kind, id) : undefined;
+}
+
+// Trakt sends run outside the queue (they wait on the network) and use it only to record what was sent.
+useSerialQueue(runSerial);
+
+/** Changes to the shelf that may have something to send to Trakt. */
+const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "import", "merge", "restore", "addFromTmdb", "enrich"]);
+
 chrome.runtime.onMessage.addListener(
   (
     message: MessageAction,
@@ -102,6 +131,10 @@ chrome.runtime.onMessage.addListener(
   ) => {
     const task = () => handleMessage(message);
     (SERIAL_ACTIONS.has(message.action) ? runSerial(task) : task())
+      .then((response) => {
+        if (response.ok && TRAKT_TRIGGERS.has(message.action)) scheduleTraktSync();
+        return response;
+      })
       .then(sendResponse)
       .catch((err: Error) =>
         sendResponse({ ok: false, error: err.message ?? "Unknown error" })
@@ -447,6 +480,8 @@ async function runReminderCheck(now = Date.now()): Promise<number> {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REMINDER_ALARM) void runSerial(() => runReminderCheck()).catch(() => undefined);
+  if (alarm.name === TRAKT_ALARM) void syncTrakt("auto").catch(() => undefined);
+  if (alarm.name === TRAKT_PULL_ALARM) void autoPull(tmdbInfoFor).catch(() => undefined);
 });
 
 chrome.notifications.onClicked.addListener((id) => {
@@ -646,6 +681,32 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       const keep = await testKeepAppend(message.target);
       return { ok: true, keep };
     }
+    case "traktStatus":
+      return { ok: true, trakt: await traktStatus() };
+    case "traktSetClientId":
+      await setTraktClientId(message.clientId);
+      return { ok: true, trakt: await traktStatus() };
+    case "traktSetOptions":
+      await setTraktOptions({ auto: message.auto, watchlist: message.watchlist, pull: message.pull });
+      if (message.watchlist !== undefined || message.auto) scheduleTraktSync();
+      return { ok: true, trakt: await traktStatus() };
+    case "traktConnect":
+      await connectTrakt();
+      return { ok: true, trakt: await traktStatus() };
+    case "traktDisconnect":
+      await disconnectTrakt();
+      return { ok: true, trakt: await traktStatus() };
+    case "traktPreview":
+      return { ok: true, traktPreview: await previewTrakt() };
+    case "traktPullPreview":
+      return { ok: true, traktPull: await previewPull() };
+    case "traktPullApply": {
+      const { updated, added } = await applyPull(tmdbInfoFor);
+      return { ok: true, items: await getAllItems(), added, enriched: updated };
+    }
+    case "traktSync":
+      await syncTrakt("catchup");
+      return { ok: true, trakt: await traktStatus() };
     case "getLastKeepResult": {
       const lastKeepResult = await getLastKeepResult();
       await clearLastKeepResult();
@@ -663,11 +724,13 @@ const MENU_SAVE_LINK = "keepshelf-save-link";
 const MENU_SAVE_NOTE = "keepshelf-save-note";
 
 chrome.runtime.onStartup.addListener(() => {
+  void syncPullAlarm().catch(() => undefined);
   void runSerial(refreshStaleTmdb).catch(() => undefined);
   void syncReminderAlarm().catch(() => undefined);
 });
 
 chrome.runtime.onInstalled.addListener(() => {
+  void syncPullAlarm().catch(() => undefined);
   void syncReminderAlarm().catch(() => undefined);
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: MENU_SAVE_PAGE, title: "Save page to KeepShelf", contexts: ["page"] });

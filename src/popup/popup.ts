@@ -13,7 +13,9 @@ import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
-import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
+import type { TraktPreview, TraktStatus } from "../shared/trakt-sync.js";
+import type { PullPreview } from "../shared/trakt-pull.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   AUTO_SEARCH_DELAY_MS,
@@ -2917,6 +2919,326 @@ async function enrichShelf(): Promise<void> {
 document.getElementById("tmdb-save")!.addEventListener("click", () => void saveTmdbToken());
 document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
 tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
+
+/* ── Trakt settings ──────────────────────────────────────── */
+
+const traktClientEl = document.getElementById("trakt-client-id") as HTMLInputElement;
+const traktClientStatusEl = document.getElementById("trakt-client-status")!;
+const traktRedirectEl = document.getElementById("trakt-redirect") as HTMLInputElement;
+const traktConnectEl = document.getElementById("trakt-connect") as HTMLButtonElement;
+const traktConnectLabelEl = document.getElementById("trakt-connect-label")!;
+const traktSyncEl = document.getElementById("trakt-sync") as HTMLButtonElement;
+const traktSyncLabelEl = document.getElementById("trakt-sync-label")!;
+const traktLastEl = document.getElementById("trakt-last")!;
+const traktSummaryEl = document.getElementById("trakt-summary")!;
+const prefTraktAutoEl = document.getElementById("pref-trakt-auto") as HTMLInputElement;
+const prefTraktWatchlistEl = document.getElementById("pref-trakt-watchlist") as HTMLInputElement;
+const prefTraktPullEl = document.getElementById("pref-trakt-pull") as HTMLSelectElement;
+const traktProblemsEl = document.getElementById("trakt-problems") as HTMLDetailsElement;
+const traktProblemsSummaryEl = document.getElementById("trakt-problems-summary")!;
+const traktProblemsListEl = document.getElementById("trakt-problems-list")!;
+const traktStatusEl = document.getElementById("trakt-settings-status")!;
+const traktStatusTextEl = document.getElementById("trakt-settings-status-text")!;
+const traktStatusIconEl = document.getElementById("trakt-settings-status-icon")!;
+const traktStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+const traktPreviewEl = document.getElementById("trakt-preview") as HTMLButtonElement;
+const traktPreviewLabelEl = document.getElementById("trakt-preview-label")!;
+const traktPreviewBoxEl = document.getElementById("trakt-preview-box") as HTMLDetailsElement;
+const traktPreviewSummaryEl = document.getElementById("trakt-preview-summary")!;
+const traktPreviewTotalsEl = document.getElementById("trakt-preview-totals")!;
+const traktPreviewListEl = document.getElementById("trakt-preview-list")!;
+const traktPullEl = document.getElementById("trakt-pull") as HTMLButtonElement;
+const traktPullLabelEl = document.getElementById("trakt-pull-label")!;
+const traktPullBoxEl = document.getElementById("trakt-pull-box") as HTMLDetailsElement;
+const traktPullSummaryEl = document.getElementById("trakt-pull-summary")!;
+const traktPullTotalsEl = document.getElementById("trakt-pull-totals")!;
+const traktPullListEl = document.getElementById("trakt-pull-list")!;
+const traktPullApplyEl = document.getElementById("trakt-pull-apply") as HTMLButtonElement;
+/** Rows shown at most; a whole shelf can be hundreds of titles. */
+const PREVIEW_ROWS = 300;
+
+type TraktView = TraktStatus;
+let trakt: TraktView | undefined;
+let traktBusy = false;
+
+function showTraktStatus(msg: string, err = false, ms = 6000): void {
+  showSectionStatus(traktStatusEl, traktStatusTextEl, traktStatusIconEl, traktStatusTimer, msg, err, ms);
+}
+
+function whenText(at: number): string {
+  const minutes = Math.round((Date.now() - at) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : new Date(at).toLocaleDateString();
+}
+
+function renderTrakt(): void {
+  const t = trakt;
+  const hasId = !!t?.clientId;
+  const connected = !!t?.connected;
+  traktClientStatusEl.textContent = hasId ? "Client ID saved" : "Not set";
+  traktClientEl.placeholder = hasId ? "Saved. Paste to replace" : "Client ID";
+  traktRedirectEl.value = t?.redirectUri ?? "";
+  traktConnectLabelEl.textContent = connected ? `Disconnect${t?.username ? ` @${t.username}` : ""}` : "Connect to Trakt";
+  document.getElementById("trakt-connect-icon")!.textContent = connected ? "logout" : "login";
+  traktConnectEl.disabled = traktBusy || !hasId;
+  traktSyncEl.disabled = traktBusy || !connected || !!t?.running;
+  traktPreviewEl.disabled = traktBusy || !connected || !!t?.running;
+  traktPullEl.disabled = traktBusy || !connected || !!t?.running;
+  traktPullApplyEl.disabled = traktBusy || !!t?.running;
+  traktSyncLabelEl.textContent = t?.running ? "Sending…" : t?.ready ? "Send what's waiting now" : "Send everything now";
+  watchTraktProgress(!!t?.running);
+  prefTraktAutoEl.checked = t?.auto !== false;
+  prefTraktWatchlistEl.checked = !!t?.watchlist;
+  prefTraktAutoEl.disabled = prefTraktWatchlistEl.disabled = !connected;
+  prefTraktPullEl.value = t?.pull ?? "off";
+  prefTraktPullEl.disabled = !connected;
+  traktSummaryEl.textContent = connected ? (t?.username ? `@${t.username}` : "Connected") : hasId ? "Not connected" : "Not set";
+  traktSummaryEl.classList.toggle("is-ok", connected);
+
+  const lines: string[] = [];
+  if (connected && !t?.ready) lines.push("Press Send everything once to start. Your past watches go with their air dates, and nothing already on Trakt is sent again. After that, changes go automatically.");
+  if (t?.running && t.progress) lines.push(t.progress);
+  else if (t?.lastError) lines.push(t.lastError);
+  else if (t?.lastMessage && t.lastRun) lines.push(`${t.lastMessage} (${whenText(t.lastRun)})`);
+  if (connected && t?.ready && t.pending > 0) lines.push(`${t.pending} title${t.pending === 1 ? "" : "s"} waiting to be sent.`);
+  if (connected && t?.pullMessage) lines.push(`${t.pullMessage}${t.pullAt ? ` (${whenText(t.pullAt)})` : ""}`);
+  traktLastEl.textContent = lines.join(" ");
+  traktLastEl.classList.toggle("is-error", !!t?.lastError);
+
+  const problems = t?.problems ?? [];
+  traktProblemsEl.hidden = problems.length === 0;
+  traktProblemsSummaryEl.replaceChildren();
+  setSummary(traktProblemsSummaryEl, "Not matched on Trakt", problems.length);
+  traktProblemsListEl.replaceChildren(
+    ...problems.map((p) => {
+      const li = document.createElement("li");
+      const name = document.createElement("strong");
+      name.textContent = p.title;
+      li.append(name, ` — ${p.problem}`);
+      return li;
+    })
+  );
+}
+
+/** While a send runs, check on it every two seconds so the card shows its progress, and its end. */
+let traktPoll: ReturnType<typeof setInterval> | undefined;
+function watchTraktProgress(running: boolean): void {
+  if (running && !traktPoll) {
+    traktPoll = setInterval(async () => {
+      try {
+        const response = await sendToBackground({ action: "traktStatus" });
+        if (response.ok && "trakt" in response) {
+          trakt = traktBusy && !response.trakt.running ? { ...response.trakt, running: true } : response.trakt;
+          renderTrakt();
+        }
+      } catch {
+        /* try again on the next tick */
+      }
+    }, 2000);
+  } else if (!running && traktPoll) {
+    clearInterval(traktPoll);
+    traktPoll = undefined;
+  }
+}
+
+async function traktAsk(message: MessageAction, success?: string): Promise<boolean> {
+  try {
+    const response = await sendToBackground(message);
+    if (!response.ok) throw new Error(response.error);
+    if ("trakt" in response) trakt = response.trakt;
+    if (success) showTraktStatus(success);
+    return true;
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Something went wrong.", true);
+    return false;
+  } finally {
+    renderTrakt();
+  }
+}
+
+async function loadTraktSettings(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "traktStatus" });
+    if (response.ok && "trakt" in response) trakt = response.trakt;
+  } catch {
+    /* shown as not set */
+  }
+  renderTrakt();
+}
+
+document.getElementById("trakt-save")!.addEventListener("click", async () => {
+  const value = traktClientEl.value;
+  if (await traktAsk({ action: "traktSetClientId", clientId: value }, value.trim() ? "Client ID saved. Now add the redirect URI on Trakt, then Connect." : "Client ID removed and signed out.")) {
+    traktClientEl.value = "";
+  }
+});
+
+document.getElementById("trakt-copy-redirect")!.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(traktRedirectEl.value);
+    showTraktStatus("Redirect URI copied.");
+  } catch {
+    traktRedirectEl.select();
+    showTraktStatus("Select the address and copy it.", true);
+  }
+});
+
+traktConnectEl.addEventListener("click", async () => {
+  traktBusy = true;
+  renderTrakt();
+  if (trakt?.connected) {
+    await traktAsk({ action: "traktDisconnect" }, "Disconnected from Trakt.");
+  } else {
+    // The sign-in window may close this popup; the connection finishes in the background either way.
+    showTraktStatus("Opening Trakt sign-in…", false, 60000);
+    await traktAsk({ action: "traktConnect" }, "Connected to Trakt. Press Send everything to start.");
+  }
+  traktBusy = false;
+  renderTrakt();
+});
+
+traktSyncEl.addEventListener("click", async () => {
+  traktBusy = true;
+  traktPreviewBoxEl.hidden = true;
+  if (trakt) trakt = { ...trakt, running: true };
+  renderTrakt();
+  showTraktStatus("Sending to Trakt… this can take a while for a big shelf.", false, 600000);
+  const ok = await traktAsk({ action: "traktSync" });
+  traktBusy = false;
+  if (ok) showTraktStatus(trakt?.lastMessage ?? "Sent.");
+  renderTrakt();
+});
+
+function renderTraktPreview(preview: TraktPreview): void {
+  const count = preview.rows.length;
+  traktPreviewBoxEl.hidden = false;
+  traktPreviewBoxEl.open = true;
+  setSummary(traktPreviewSummaryEl, count ? "Would be sent" : "Nothing to send", count);
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  traktPreviewTotalsEl.textContent = count
+    ? `${plural(preview.movies, "movie")}, ${plural(preview.episodes, "episode")}, ${plural(preview.ratings, "rating")}, ${plural(preview.watchlist, "watchlist change")}. Nothing has been sent yet.`
+    : "Trakt already has everything on your shelf.";
+  const line = (title: string, text: string) => {
+    const li = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = title;
+    li.append(name, ` — ${text}`);
+    return li;
+  };
+  const rows = preview.rows.slice(0, PREVIEW_ROWS).map((r) => line(r.title, r.parts.join("; ")));
+  if (count > PREVIEW_ROWS) {
+    const more = document.createElement("li");
+    more.textContent = `…and ${count - PREVIEW_ROWS} more.`;
+    rows.push(more);
+  }
+  const kept = preview.kept.map((k) => line(k.title, `keeps Trakt's rating ${k.trakt} (yours is ${k.yours}, not sent)`));
+  traktPreviewListEl.replaceChildren(...rows, ...kept);
+}
+
+traktPreviewEl.addEventListener("click", async () => {
+  traktPreviewEl.disabled = true;
+  traktPreviewLabelEl.textContent = "Reading Trakt…";
+  try {
+    const response = await sendToBackground({ action: "traktPreview" });
+    if (!response.ok) throw new Error(response.error);
+    if ("traktPreview" in response) renderTraktPreview(response.traktPreview);
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Couldn't make a preview.", true);
+  } finally {
+    traktPreviewLabelEl.textContent = "Preview what will be sent";
+    renderTrakt();
+  }
+});
+
+function renderTraktPull(pull: PullPreview): void {
+  const count = pull.updates.length + pull.additions.length;
+  traktPullBoxEl.hidden = false;
+  traktPullBoxEl.open = true;
+  setSummary(traktPullSummaryEl, count ? "Would change on your shelf" : "Nothing to get", count);
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  traktPullTotalsEl.textContent = count
+    ? `${plural(pull.updates.length, "title")} updated, ${plural(pull.additions.length, "title")} added, ${pull.unchanged} already the same. Nothing has changed yet.`
+    : `Your shelf already has everything from Trakt (${pull.unchanged} titles match).`;
+  const line = (title: string, text: string) => {
+    const li = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = title;
+    li.append(name, ` — ${text}`);
+    return li;
+  };
+  const rows = [
+    ...pull.updates.map((u) => line(u.title, u.parts.join("; "))),
+    ...pull.additions.map((a) => line(a.title, `new: ${a.parts.join("; ")}`)),
+  ];
+  const shown = rows.slice(0, PREVIEW_ROWS);
+  if (rows.length > PREVIEW_ROWS) {
+    const more = document.createElement("li");
+    more.textContent = `…and ${rows.length - PREVIEW_ROWS} more.`;
+    shown.push(more);
+  }
+  traktPullListEl.replaceChildren(...shown);
+  traktPullApplyEl.hidden = count === 0;
+}
+
+traktPullEl.addEventListener("click", async () => {
+  traktPullEl.disabled = true;
+  traktPullLabelEl.textContent = "Reading Trakt…";
+  try {
+    const response = await sendToBackground({ action: "traktPullPreview" });
+    if (!response.ok) throw new Error(response.error);
+    if ("traktPull" in response) renderTraktPull(response.traktPull);
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Couldn't read Trakt.", true);
+  } finally {
+    traktPullLabelEl.textContent = "Get from Trakt";
+    renderTrakt();
+  }
+});
+
+document.getElementById("trakt-pull-cancel")!.addEventListener("click", () => {
+  traktPullBoxEl.hidden = true;
+});
+
+traktPullApplyEl.addEventListener("click", async () => {
+  traktBusy = true;
+  if (trakt) trakt = { ...trakt, running: true };
+  renderTrakt();
+  showTraktStatus("Getting your Trakt library… adding titles can take a while.", false, 600000);
+  try {
+    const response = await sendToBackground({ action: "traktPullApply" });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) {
+      allItems = response.items;
+      render();
+      showTraktStatus(`Done: ${response.enriched ?? 0} updated, ${response.added ?? 0} added from Trakt.`);
+    }
+    traktPullBoxEl.hidden = true;
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Getting from Trakt failed.", true);
+  } finally {
+    traktBusy = false;
+    await loadTraktSettings();
+  }
+});
+
+prefTraktAutoEl.addEventListener("change", () =>
+  void traktAsk({ action: "traktSetOptions", auto: prefTraktAutoEl.checked }, prefTraktAutoEl.checked ? "Changes will be sent automatically." : "Automatic sending is off.")
+);
+prefTraktPullEl.addEventListener("change", () => {
+  const labels: Record<string, string> = { off: "Automatic checks are off.", "1h": "KeepShelf will check Trakt every hour.", "6h": "KeepShelf will check Trakt every 6 hours.", "24h": "KeepShelf will check Trakt once a day." };
+  void traktAsk({ action: "traktSetOptions", pull: prefTraktPullEl.value }, labels[prefTraktPullEl.value]);
+});
+prefTraktWatchlistEl.addEventListener("change", () =>
+  void traktAsk({ action: "traktSetOptions", watchlist: prefTraktWatchlistEl.checked }, prefTraktWatchlistEl.checked ? "Your To watch list will go to the Trakt watchlist." : "Watchlist sync is off.")
+);
+
+// The sign-in finishes in the background, so look again whenever the card is opened.
+document.getElementById("card-trakt")!.addEventListener("toggle", (e) => {
+  if ((e.currentTarget as HTMLDetailsElement).open) void loadTraktSettings();
+});
+void loadTraktSettings();
 
 /* ── Settings cards: one open at a time ──────────────────── */
 

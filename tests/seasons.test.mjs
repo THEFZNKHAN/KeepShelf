@@ -252,3 +252,10 @@ test("upToStep on a show finished before its newest season starts that season", 
   assert.deepEqual(step.changes, { seasonProgress: [10, 8, 3], status: "in_progress" });
   assert.equal(step.unwatched, false);
 });
+
+test("a film filed as anime has no next episode to mark", () => {
+  const film = { status: "plan", tmdb: { id: 1, kind: "movie", genres: [], fetchedAt: 1 } };
+  assert.equal(stepEpisode(film), undefined);
+  assert.equal(stepEpisode(film, 1), undefined);
+  assert.notEqual(stepEpisode({ status: "plan" }), undefined);
+});
