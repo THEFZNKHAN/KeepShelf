@@ -150,6 +150,7 @@ const TYPE_CHIPS: Array<MediaType | "all"> = ["all", "movie", "series", "anime"]
 let allItems: SavedItem[] = [];
 /** The Trakt connection as far as rows and cards need it; filled in when Settings loads it. */
 let traktLink: { connected: boolean; ready: boolean; watchlist: boolean } = { connected: false, ready: false, watchlist: false };
+const traktForYouEl = document.getElementById("trakt-foryou") as HTMLButtonElement;
 /** False until the first load of the shelf finishes. */
 let shelfLoaded = false;
 let activeTab: "media" | "books" | "tabs" = remembering ? storedChoice("keepshelf.tab", ["media", "books", "tabs"], "media") : "media";
@@ -1266,6 +1267,8 @@ function fillOptions(select: HTMLSelectElement, entries: Array<[string, string]>
 
 function render(): void {
   cancelRowHover();
+  // Trakt's picks for you sit beside the dice: media only, and only while connected.
+  traktForYouEl.hidden = !(traktLink.connected && activeTab === "media");
   const items = filteredItems();
   const tabCount = tabItems().length;
 
@@ -1399,7 +1402,7 @@ function render(): void {
 
 interface OnlineSearch {
   /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. "match": picking the right TMDB title for one on your shelf. */
-  kind: "search" | "like" | "match";
+  kind: "search" | "like" | "match" | "foryou";
   /** The words searched for, or (for "like") the title's name. */
   query: string;
   /** For "like": the saved item the recommendations are for. */
@@ -1425,7 +1428,7 @@ function currentOnlineState() {
 /** Shows the Search TMDB row, or the results when they are open. Returns true when the results are on screen. */
 function updateOnlineUi(): boolean {
   // Recommendations for a title don't depend on the search box, so typing and tabs don't decide whether they show.
-  if (online?.kind === "like" || online?.kind === "match") {
+  if (online?.kind === "like" || online?.kind === "match" || online?.kind === "foryou") {
     onlineOffered = undefined;
     onlineSearchEl.hidden = true;
     onlineResultsEl.hidden = false;
@@ -1513,6 +1516,24 @@ async function startMatch(item: SavedItem): Promise<void> {
   } catch (err) {
     if (!current()) return;
     online = { kind: "match", query, sourceId, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
+  }
+  render();
+}
+
+/** Trakt's picks for you from your history, in the results view, each with an Add button. */
+async function startForYou(): Promise<void> {
+  const current = () => online?.kind === "foryou";
+  online = { kind: "foryou", query: "Trakt", status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "traktForYou" });
+    if (!current()) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No recommendations came back.");
+    online = { kind: "foryou", query: "Trakt", status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (!current()) return;
+    online = { kind: "foryou", query: "Trakt", status: "error", results: [], error: err instanceof Error ? err.message : "Couldn't get recommendations from Trakt." };
   }
   render();
 }
@@ -1668,9 +1689,16 @@ function renderOnlineResults(): void {
   if (!online) return;
   const like = online.kind === "like";
   const match = online.kind === "match";
-  onlineTitleEl.textContent = like ? `Like “${online.query}”` : match ? `Pick the right “${online.query}”` : `“${online.query}” on TMDB`;
+  const forYou = online.kind === "foryou";
+  onlineTitleEl.textContent = like
+    ? `Like “${online.query}”`
+    : match
+      ? `Pick the right “${online.query}”`
+      : forYou
+        ? "Recommended for you on Trakt"
+        : `“${online.query}” on TMDB`;
   if (online.status === "loading") {
-    onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : "Searching TMDB…"));
+    onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : forYou ? "Asking Trakt…" : "Searching TMDB…"));
   } else if (online.status === "error") {
     const query = online.query;
     const sourceId = online.sourceId;
@@ -1678,22 +1706,31 @@ function renderOnlineResults(): void {
       const source = sourceId ? allItems.find((i) => i.id === sourceId) : undefined;
       if (like && source) void startSimilar(source);
       else if (match && source) void startMatch(source);
+      else if (forYou) void startForYou();
       else if (!like && !match) void startOnlineSearch(query);
     };
     onlineBodyEl.replaceChildren(onlineMessage(online.error, retry));
   } else if (online.results.length === 0) {
     onlineBodyEl.replaceChildren(
-      onlineMessage(like ? `TMDB has no recommendations for “${online.query}” yet.` : `Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`)
+      onlineMessage(
+        like
+          ? `TMDB has no recommendations for “${online.query}” yet.`
+          : forYou
+            ? "Trakt has no recommendations for you yet. Watch and rate a few more titles there."
+            : `Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`
+      )
     );
   } else {
     const list = document.createElement("ul");
     list.className = "list";
-    // "More like this" leads with the title's own franchise; label it, and the recommendations after it.
-    const hasFranchise = online.kind === "like" && online.results.some((r) => r.group === "franchise");
+    // "More like this" leads with the title's own franchise, then TMDB's suggestions, then Trakt's; with more than one
+    // kind in the list, each gets a heading.
+    const labelOf = (r: TmdbSearchResult) => (r.group === "franchise" ? "Same franchise" : r.group === "trakt" ? "Related on Trakt" : "You might also like");
+    const headed = online.kind === "like" && new Set(online.results.map(labelOf)).size > 1;
     let group: string | undefined;
     for (const result of online.results) {
-      if (hasFranchise) {
-        const next = result.group === "franchise" ? "Same franchise" : "You might also like";
+      if (headed) {
+        const next = labelOf(result);
         if (next !== group) {
           const heading = document.createElement("li");
           heading.className = "online-group";
@@ -3089,6 +3126,7 @@ function renderTrakt(): void {
   traktSyncEl.disabled = traktBusy || !connected || !!t?.running;
   traktPreviewEl.disabled = traktBusy || !connected || !!t?.running;
   traktPullEl.disabled = traktBusy || !connected || !!t?.running;
+
   traktPullApplyEl.disabled = traktBusy || !!t?.running;
   traktSyncLabelEl.textContent = t?.running ? "Sending…" : t?.ready ? "Send what's waiting now" : "Send everything now";
   watchTraktProgress(!!t?.running);
@@ -3298,6 +3336,15 @@ traktPullEl.addEventListener("click", async () => {
     traktPullLabelEl.textContent = "Get from Trakt";
     renderTrakt();
   }
+});
+
+traktForYouEl.addEventListener("click", () => {
+  closePick();
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  if (activeTab !== "media") document.querySelector<HTMLButtonElement>('[data-tab="media"]')?.click();
+  void startForYou();
 });
 
 document.getElementById("trakt-pull-cancel")!.addEventListener("click", () => {

@@ -46,6 +46,8 @@ import {
   sanitizeResult,
 } from "../shared/tmdb-search.js";
 import { TRAILER_LANGUAGES, pickTrailer } from "../shared/trailer.js";
+import { newTitlesOnly, type TraktTitle } from "../shared/trakt-recs.js";
+import type { TmdbSearchResult } from "../shared/tmdb-search.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
 import { applyStatus, buildUserPatch, isItemStatus } from "../shared/user-data.js";
 import {
@@ -67,6 +69,8 @@ import {
   previewPull,
   applyPull,
   communityRating,
+  traktForYou,
+  traktRelated,
   autoPull,
   syncPullAlarm,
   TRAKT_PULL_ALARM,
@@ -246,15 +250,45 @@ async function similarTmdb(id: unknown): Promise<MessageResponse> {
     const err = rec.status === "rejected" ? rec.reason : undefined;
     return { ok: false, error: err instanceof Error ? err.message : "Could not get recommendations." };
   }
-  return {
-    ok: true,
-    tmdbResults: mergeFranchise({
-      self: tmdb,
-      collection: col.status === "fulfilled" ? (col.value as ReturnType<typeof parseResultList>) : [],
-      named: nam.status === "fulfilled" ? (nam.value as ReturnType<typeof parseResultList>) : [],
-      recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
-    }),
-  };
+  const merged = mergeFranchise({
+    self: tmdb,
+    collection: col.status === "fulfilled" ? (col.value as ReturnType<typeof parseResultList>) : [],
+    named: nam.status === "fulfilled" ? (nam.value as ReturnType<typeof parseResultList>) : [],
+    recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
+  });
+  // Trakt's related titles after TMDB's, without repeats. Optional: without a Client ID, or if Trakt fails, TMDB's stand alone.
+  let fromTrakt: TmdbSearchResult[] = [];
+  try {
+    const related = newTitlesOnly(await traktRelated(tmdb), [...merged, { kind: tmdb.kind, id: tmdb.id }]);
+    fromTrakt = await traktResults(related);
+  } catch {
+    /* TMDB's list is enough */
+  }
+  return { ok: true, tmdbResults: [...merged, ...fromTrakt] };
+}
+
+/**
+ * Trakt's titles as result rows: each looked up on TMDB for its poster, overview and score (in parallel); a lookup that
+ * fails still leaves a plain row. Trakt's anime label decides the type, since its genres are better at that than TMDB's.
+ */
+async function traktResults(titles: TraktTitle[]): Promise<TmdbSearchResult[]> {
+  const client = await tmdbClient();
+  const looked = await Promise.allSettled(
+    titles.map((t) => (client ? client.get<unknown>(`/${t.kind}/${t.tmdb}`, { language: "en-US" }) : Promise.reject(new Error("no token"))))
+  );
+  return titles.map((t, i) => {
+    const answer = looked[i];
+    const found = answer.status === "fulfilled" ? parseResultList({ results: [answer.value] }, t.kind)[0] : undefined;
+    const base: TmdbSearchResult = found ?? {
+      id: t.tmdb,
+      kind: t.kind,
+      type: t.kind === "movie" ? "movie" : "series",
+      title: t.title,
+      ...(t.year ? { year: t.year } : {}),
+      ...(t.overview ? { overview: t.overview } : {}),
+    };
+    return { ...base, ...(t.anime ? { type: "anime" as const } : {}), group: "trakt" as const };
+  });
 }
 
 /**
@@ -734,6 +768,8 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       if (!tmdb) return { ok: true, traktRating: null };
       return { ok: true, traktRating: (await communityRating(tmdb)) ?? null };
     }
+    case "traktForYou":
+      return { ok: true, tmdbResults: await traktResults(await traktForYou()) };
     case "traktPullPreview":
       return { ok: true, traktPull: await previewPull() };
     case "traktPullApply": {

@@ -20,8 +20,8 @@ export interface TmdbSearchResult {
   posterPath?: string;
   /** TMDB community score, 0 to 10. */
   rating?: number;
-  /** "franchise": a sequel, remake or part of the same series as the title the list was made for. */
-  group?: "franchise";
+  /** "franchise": a sequel, remake or part of the same series as the title the list was made for. "trakt": suggested by Trakt. */
+  group?: "franchise" | "trakt";
 }
 
 /** How the search box can reach TMDB: a row you tap, the same plus automatic when nothing on the shelf matches, or never. */

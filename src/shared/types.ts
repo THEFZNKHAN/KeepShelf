@@ -189,6 +189,7 @@ export type MessageAction =
   | { action: "getLastKeepResult" }
   | { action: "setStatus"; ids: string[]; status: ItemStatus }
   | { action: "traktRating"; id: string }
+  | { action: "traktForYou" }
   | { action: "traktStatus" }
   | { action: "traktSetClientId"; clientId: string }
   | { action: "traktSetOptions"; auto?: boolean; watchlist?: boolean; pull?: string }

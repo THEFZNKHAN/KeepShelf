@@ -732,6 +732,13 @@ While connected, a title's card shows where it stands with Trakt: **On Trakt**, 
 
 **Fix match** (also **Pick a different match** in Edit, for any title with TMDB info) lists TMDB's titles of that name; **Use this** replaces the match. Before anything is sent for the new match, KeepShelf reads what Trakt already has for it, so a title you fixed by hand on Trakt isn't sent a second time.
 
+### Trakt suggestions
+
+- **More like this** on a card adds **Related on Trakt** after TMDB's suggestions (a Client ID is enough), without repeating any title.
+- **Recommended for you** (the 👍 button beside the dice, on the Media tab once connected) lists Trakt's picks from your own history, shows and movies in turn, leaving out what's already on your Trakt watchlist. Each has **Add**, like a search result.
+
+Trakt's lists carry no posters, so each title is looked up on TMDB (when your token is set) for its poster and description; Trakt's anime label decides whether it's filed as anime.
+
 ### Trakt rating on cards
 
 With a Trakt Client ID saved (signing in isn't needed), a title's card shows Trakt's community rating next to TMDB's, such as **TMDB 8.4 · Trakt 84%**; hover it for the number of votes. It is fetched when you open the card and kept for a day.

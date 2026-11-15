@@ -80,6 +80,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
   if (u.pathname === "/sync/last_activities") return json(200, activities);
   if (u.pathname === "/movies/tt0113277/ratings") return json(200, { rating: 8.4123, votes: 2500 });
+  if (u.pathname === "/recommendations/movies") return json(200, [{ title: "Collateral", year: 2004, ids: { tmdb: 1538 } }]);
+  if (u.pathname === "/recommendations/shows") return json(200, [{ title: "Frieren", year: 2023, ids: { tmdb: 209867 }, genres: ["anime"] }]);
   if (u.pathname === "/search/tmdb/70523") return json(200, [{ type: "show", show: { ids: { trakt: 120, tmdb: 70523 } } }]);
   if (u.pathname === "/shows/120/ratings") return json(200, { rating: 8.9, votes: 900 });
   if (u.pathname === "/sync/watched/movies") return json(200, watchedMovies);
@@ -337,6 +339,14 @@ test("a fixed match reads Trakt for that title again, so nothing is sent twice",
   const fixed = items().find((i) => i.id === "Unknown film");
   assert.equal(fixed.trakt.reseed, undefined);
   assert.equal(fixed.trakt.sent.movie, true);
+});
+
+test("Recommended for you lists Trakt's picks, shows and movies in turn", async () => {
+  const res = await send({ action: "traktForYou" });
+  assert.equal(res.ok, true, res.error);
+  assert.deepEqual(res.tmdbResults.map((r) => [r.title, r.type, r.group]), [["Frieren", "anime", "trakt"], ["Collateral", "movie", "trakt"]]);
+  const asked = requests.filter((r) => r.path.startsWith("/recommendations/"));
+  assert.match(asked[0].headers.Authorization, /^Bearer /, "personal picks need the sign-in");
 });
 
 test("the automatic check is an alarm that follows the setting", async () => {

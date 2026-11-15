@@ -44,6 +44,7 @@ import {
 } from "../shared/trakt-sync.js";
 import { STORAGE_KEY, getAllItems, importItems } from "../shared/storage.js";
 import { parseTraktRating, ratingPath, sanitizeCachedRating, traktIdFromSearch, type TraktRating } from "../shared/trakt-rating.js";
+import { TRAKT_SUGGESTIONS, parseTraktTitles, type TraktTitle } from "../shared/trakt-recs.js";
 import {
   PULL_MINUTES,
   activityFingerprint,
@@ -758,8 +759,7 @@ export async function communityRating(tmdb: { kind: "movie" | "tv"; id: number; 
   } catch {
     /* no session cache; ask Trakt */
   }
-  let id = tmdb.imdbId && /^tt\d{5,10}$/.test(tmdb.imdbId) ? tmdb.imdbId : undefined;
-  if (!id) id = traktIdFromSearch(await publicGet<unknown>(`/search/tmdb/${tmdb.id}?type=${tmdb.kind === "movie" ? "movie" : "show"}`), tmdb.kind);
+  const id = await traktIdFor(tmdb);
   const rating = id ? parseTraktRating(await publicGet<unknown>(ratingPath(tmdb.kind, id))) ?? null : null;
   try {
     await chrome.storage.session.set({ [key]: { at: now, rating } });
@@ -767,4 +767,36 @@ export async function communityRating(tmdb: { kind: "movie" | "tv"; id: number; 
     /* fetched again next time */
   }
   return rating;
+}
+
+/** The id Trakt knows a title by: its IMDb id, or its Trakt id found from TMDB's. */
+async function traktIdFor(tmdb: { kind: "movie" | "tv"; id: number; imdbId?: string }): Promise<string | undefined> {
+  if (tmdb.imdbId && /^tt\d{5,10}$/.test(tmdb.imdbId)) return tmdb.imdbId;
+  return traktIdFromSearch(await publicGet<unknown>(`/search/tmdb/${tmdb.id}?type=${tmdb.kind === "movie" ? "movie" : "show"}`), tmdb.kind);
+}
+
+/* ── Suggestions ─────────────────────────────────────────── */
+
+/** Titles Trakt relates to this one. Public: a Client ID is enough. Empty without one. */
+export async function traktRelated(tmdb: { kind: "movie" | "tv"; id: number; imdbId?: string }): Promise<TraktTitle[]> {
+  if (!(await getSettings()).clientId) return [];
+  const id = await traktIdFor(tmdb);
+  if (!id) return [];
+  const path = `/${tmdb.kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(id)}/related?extended=full&limit=${TRAKT_SUGGESTIONS}`;
+  return parseTraktTitles(await publicGet<unknown>(path), tmdb.kind);
+}
+
+/** Trakt's recommendations from your own history: movies and shows. Needs the sign-in. */
+export async function traktForYou(): Promise<TraktTitle[]> {
+  await requireConnected();
+  const query = `?extended=full&limit=${TRAKT_SUGGESTIONS}&ignore_collected=true&ignore_watchlisted=true`;
+  const movies = parseTraktTitles(await api<unknown>(`/recommendations/movies${query}`), "movie");
+  const shows = parseTraktTitles(await api<unknown>(`/recommendations/shows${query}`), "tv");
+  // Alternate, so neither kind is pushed out of sight.
+  const out: TraktTitle[] = [];
+  for (let i = 0; i < Math.max(movies.length, shows.length); i++) {
+    if (shows[i]) out.push(shows[i]);
+    if (movies[i]) out.push(movies[i]);
+  }
+  return out;
 }
