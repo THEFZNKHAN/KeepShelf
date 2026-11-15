@@ -14,7 +14,7 @@ import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
-import type { TraktStatus } from "../shared/trakt-sync.js";
+import type { TraktPreview, TraktStatus } from "../shared/trakt-sync.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   AUTO_SEARCH_DELAY_MS,
@@ -2939,6 +2939,14 @@ const traktStatusEl = document.getElementById("trakt-settings-status")!;
 const traktStatusTextEl = document.getElementById("trakt-settings-status-text")!;
 const traktStatusIconEl = document.getElementById("trakt-settings-status-icon")!;
 const traktStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+const traktPreviewEl = document.getElementById("trakt-preview") as HTMLButtonElement;
+const traktPreviewLabelEl = document.getElementById("trakt-preview-label")!;
+const traktPreviewBoxEl = document.getElementById("trakt-preview-box") as HTMLDetailsElement;
+const traktPreviewSummaryEl = document.getElementById("trakt-preview-summary")!;
+const traktPreviewTotalsEl = document.getElementById("trakt-preview-totals")!;
+const traktPreviewListEl = document.getElementById("trakt-preview-list")!;
+/** Rows shown at most; a whole shelf can be hundreds of titles. */
+const PREVIEW_ROWS = 300;
 
 type TraktView = TraktStatus;
 let trakt: TraktView | undefined;
@@ -2967,6 +2975,7 @@ function renderTrakt(): void {
   document.getElementById("trakt-connect-icon")!.textContent = connected ? "logout" : "login";
   traktConnectEl.disabled = traktBusy || !hasId;
   traktSyncEl.disabled = traktBusy || !connected || !!t?.running;
+  traktPreviewEl.disabled = traktBusy || !connected || !!t?.running;
   traktSyncLabelEl.textContent = t?.running ? "Sending…" : t?.ready ? "Send what's waiting now" : "Send everything now";
   watchTraktProgress(!!t?.running);
   prefTraktAutoEl.checked = t?.auto !== false;
@@ -3078,6 +3087,7 @@ traktConnectEl.addEventListener("click", async () => {
 
 traktSyncEl.addEventListener("click", async () => {
   traktBusy = true;
+  traktPreviewBoxEl.hidden = true;
   if (trakt) trakt = { ...trakt, running: true };
   renderTrakt();
   showTraktStatus("Sending to Trakt… this can take a while for a big shelf.", false, 600000);
@@ -3085,6 +3095,47 @@ traktSyncEl.addEventListener("click", async () => {
   traktBusy = false;
   if (ok) showTraktStatus(trakt?.lastMessage ?? "Sent.");
   renderTrakt();
+});
+
+function renderTraktPreview(preview: TraktPreview): void {
+  const count = preview.rows.length;
+  traktPreviewBoxEl.hidden = false;
+  traktPreviewBoxEl.open = true;
+  setSummary(traktPreviewSummaryEl, count ? "Would be sent" : "Nothing to send", count);
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  traktPreviewTotalsEl.textContent = count
+    ? `${plural(preview.movies, "movie")}, ${plural(preview.episodes, "episode")}, ${plural(preview.ratings, "rating")}, ${plural(preview.watchlist, "watchlist change")}. Nothing has been sent yet.`
+    : "Trakt already has everything on your shelf.";
+  const line = (title: string, text: string) => {
+    const li = document.createElement("li");
+    const name = document.createElement("strong");
+    name.textContent = title;
+    li.append(name, ` — ${text}`);
+    return li;
+  };
+  const rows = preview.rows.slice(0, PREVIEW_ROWS).map((r) => line(r.title, r.parts.join("; ")));
+  if (count > PREVIEW_ROWS) {
+    const more = document.createElement("li");
+    more.textContent = `…and ${count - PREVIEW_ROWS} more.`;
+    rows.push(more);
+  }
+  const kept = preview.kept.map((k) => line(k.title, `keeps Trakt's rating ${k.trakt} (yours is ${k.yours}, not sent)`));
+  traktPreviewListEl.replaceChildren(...rows, ...kept);
+}
+
+traktPreviewEl.addEventListener("click", async () => {
+  traktPreviewEl.disabled = true;
+  traktPreviewLabelEl.textContent = "Reading Trakt…";
+  try {
+    const response = await sendToBackground({ action: "traktPreview" });
+    if (!response.ok) throw new Error(response.error);
+    if ("traktPreview" in response) renderTraktPreview(response.traktPreview);
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Couldn't make a preview.", true);
+  } finally {
+    traktPreviewLabelEl.textContent = "Preview what will be sent";
+    renderTrakt();
+  }
 });
 
 prefTraktAutoEl.addEventListener("change", () =>

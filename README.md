@@ -708,8 +708,9 @@ Send your watching to your own [Trakt](https://trakt.tv) account. It's off until
 1. At **developer.trakt.tv**, sign in and open **My Apps → Create app**. Keep it a **Development** app (only you and up to 16 people you invite can sign in, which is all KeepShelf needs). Trakt gives it a **Client ID** and no client secret: it signs in with PKCE, so none is needed.
 2. In KeepShelf, open **Settings → Trakt**, paste the Client ID and press **Save**.
 3. Copy the **Redirect URI** shown there (it looks like `https://<your extension id>.chromiumapp.org/trakt`) and add it to your app's Redirect URIs on Trakt. It must match exactly. It depends on your install, so copy it from Settings rather than from here.
-4. Press **Connect to Trakt** and approve KeepShelf in the Trakt window. Reopen Settings if the popup closed meanwhile.
-5. Press **Send everything now** once.
+4. Press **Connect to Trakt** and approve KeepShelf in the Trakt window. Trakt always shows its sign-in page, so check the account name before approving. Reopen Settings if the popup closed meanwhile.
+5. Press **Preview what will be sent**. It only reads from Trakt and lists every title that would go, with its episodes, rating and watchlist change. Nothing is written.
+6. Press **Send everything now** once.
 
 ### What is sent
 
@@ -717,7 +718,7 @@ Send your watching to your own [Trakt](https://trakt.tv) account. It's off until
 - **Ratings** (the same 1 to 10 scale), including changes and removals.
 - **To watch** titles go to your Trakt watchlist if you switch on **Sync my To watch list**, and come off it when you start them or drop them.
 
-The first **Send everything** reads what Trakt already has, so nothing already in your history is sent a second time (Trakt records every play it is sent). Past watches are dated by each episode's air date, and a movie by the day you marked it finished here. After that, with **Send changes automatically** on, each change goes within a few seconds and is dated now.
+The first **Send everything** reads what Trakt already has, so nothing already in your history is sent a second time (Trakt records every play it is sent). A title you have already rated on Trakt keeps Trakt's rating; only titles without one get your KeepShelf rating, and the preview lists any that differ. Past watches are dated by each episode's air date, and a movie by the day you marked it finished here. After that, with **Send changes automatically** on, each change goes within a few seconds and is dated now.
 
 Nothing is ever removed from your Trakt history: unmarking an episode here leaves Trakt as it is, and marking it again doesn't add a second play. Titles Trakt couldn't match are listed under **Not matched on Trakt**. Long anime are sometimes numbered differently on TMDB and Trakt; when Trakt already has at least as many episodes of a show, KeepShelf leaves it alone rather than guess.
 

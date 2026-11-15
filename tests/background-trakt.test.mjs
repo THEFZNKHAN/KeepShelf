@@ -66,6 +66,8 @@ globalThis.fetch = async (url, init = {}) => {
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
   if (u.pathname === "/sync/watched/movies") return json(200, watchedMovies);
   if (u.pathname === "/sync/watched/shows") return json(200, watchedShows);
+  if (u.pathname === "/sync/ratings/movies" && (init.method ?? "GET") === "GET") return json(200, [{ rating: 8, movie: { ids: { tmdb: 777 } } }]);
+  if (u.pathname === "/sync/ratings/shows" && (init.method ?? "GET") === "GET") return json(200, []);
   if (u.pathname.startsWith("/sync/")) return json(201, { added: {}, not_found: { movies: (body?.movies ?? []).filter((m) => m.ids.tmdb === 404).map((m) => ({ ids: m.ids })), shows: [] } });
   return json(404, {});
 };
@@ -88,7 +90,10 @@ before(async () => {
     movie("Heat", 949, { status: "done", done: true, myRating: 8 }),
     movie("Unknown film", 404, { status: "done", done: true }),
     show("Dark", 70523, { status: "in_progress", seasonProgress: [2, 0] }),
+    // Already watched and rated 8 on Trakt: its rating of 6 here must not overwrite Trakt's on the first send.
+    movie("Rated elsewhere", 777, { status: "done", done: true, myRating: 6 }),
   ];
+  watchedMovies = [{ movie: { ids: { tmdb: 777 } } }];
   // Trakt already has S1E1 of Dark (an earlier import): it must not be sent again.
   watchedShows = [{ show: { ids: { tmdb: 70523 } }, seasons: [{ number: 1, episodes: [{ number: 1 }] }] }];
   await import("../dist-test/background-main.js");
@@ -139,6 +144,26 @@ test("nothing is sent automatically before the first Send everything", async () 
   assert.equal(requests.filter((r) => r.path.startsWith("/sync/") && r.method === "POST").length, 0);
 });
 
+test("Preview only reads: it lists what would go and which Trakt ratings are kept", async () => {
+  const before = requests.length;
+  const itemsBefore = JSON.stringify(items());
+  const res = await send({ action: "traktPreview" });
+  assert.equal(res.ok, true, res.error);
+  const made = requests.slice(before);
+  assert.ok(made.length > 0);
+  assert.equal(made.some((r) => r.method !== "GET"), false, "a preview must not write to Trakt");
+  assert.equal(JSON.stringify(items()), itemsBefore, "a preview must not change the shelf");
+  const p = res.traktPreview;
+  const titles = p.rows.map((r) => r.title).sort();
+  assert.deepEqual(titles, ["Dark", "Heat", "Unknown film"]);
+  assert.deepEqual(p.rows.find((r) => r.title === "Dark").parts, ["S1 E2 (1 episode)"]);
+  assert.equal(p.movies, 2);
+  assert.equal(p.episodes, 1);
+  assert.deepEqual(p.kept.map((k) => [k.title, k.trakt, k.yours]), [["Rated elsewhere", 8, 6]]);
+  const status = await send({ action: "traktStatus" });
+  assert.equal(status.trakt.ready, false);
+});
+
 test("Send everything reads Trakt first and sends only what is missing, with air dates", async () => {
   const res = await send({ action: "traktSync" });
   assert.equal(res.ok, true, res.error);
@@ -149,6 +174,8 @@ test("Send everything reads Trakt first and sends only what is missing, with air
   assert.deepEqual(body.movies.map((m) => m.ids.tmdb).sort(), [404, 949]);
   assert.deepEqual(body.shows, [{ ids: { tmdb: 70523 }, seasons: [{ number: 1, episodes: [{ number: 2, watched_at: "released" }] }] }]);
   assert.equal(posts("/sync/ratings")[0].body.movies[0].rating, 9);
+  // The title Trakt had already rated keeps Trakt's rating.
+  assert.equal(posts("/sync/ratings")[0].body.movies.some((m) => m.ids.tmdb === 777), false);
   // Every call carries the key, the version and the token.
   assert.equal(history[0].headers["trakt-api-key"], CLIENT);
   assert.equal(history[0].headers["trakt-api-version"], "2");

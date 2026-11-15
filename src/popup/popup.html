@@ -510,6 +510,15 @@
               <span class="material-symbols-outlined btn-icon">cloud_upload</span>
               <span id="trakt-sync-label">Send everything now</span>
             </button>
+            <button type="button" id="trakt-preview" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon">visibility</span>
+              <span id="trakt-preview-label">Preview what will be sent</span>
+            </button>
+            <details class="up-nodate" id="trakt-preview-box" hidden>
+              <summary id="trakt-preview-summary">Preview</summary>
+              <p class="s-fine" id="trakt-preview-totals"></p>
+              <ul class="trakt-problems" id="trakt-preview-list"></ul>
+            </details>
             <p class="s-fine" id="trakt-last"></p>
             <div class="pref-row is-compact">
               <div class="pref-text">

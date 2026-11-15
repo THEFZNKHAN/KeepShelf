@@ -326,3 +326,91 @@ export interface TraktStatus {
   pending: number;
   problems: Array<{ id: string; title: string; problem: string }>;
 }
+
+interface RatedEntry {
+  rating?: unknown;
+  movie?: { ids?: { tmdb?: unknown; imdb?: unknown } };
+  show?: { ids?: { tmdb?: unknown; imdb?: unknown } };
+}
+
+/** Ratings already on Trakt, from GET /sync/ratings/movies and /sync/ratings/shows, by "movie:tmdb:949" and the like. */
+export function ratingsFrom(ratedMovies: unknown, ratedShows: unknown): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const [list, kind] of [[ratedMovies, "movie"], [ratedShows, "show"]] as const) {
+    for (const entry of Array.isArray(list) ? (list as RatedEntry[]) : []) {
+      const rating = entry?.rating;
+      if (typeof rating !== "number" || !Number.isInteger(rating) || rating < 1 || rating > 10) continue;
+      const ids = (kind === "movie" ? entry.movie : entry.show)?.ids;
+      if (typeof ids?.tmdb === "number") out.set(`${kind}:tmdb:${ids.tmdb}`, rating);
+      if (typeof ids?.imdb === "string") out.set(`${kind}:imdb:${ids.imdb}`, rating);
+    }
+  }
+  return out;
+}
+
+export interface KeptRating {
+  id: string;
+  title: string;
+  /** The rating Trakt has and keeps. */
+  trakt: number;
+  /** The rating on the shelf, which isn't sent. */
+  yours: number;
+}
+
+/**
+ * On the first send, a title already rated on Trakt keeps Trakt's rating: the shelf's isn't sent, so an existing
+ * account's ratings are never overwritten. Later changes on the shelf are sent as usual. Marks those ratings as sent in
+ * `sent` and returns the ones that differ, to show.
+ */
+export function keepTraktRatings(items: SavedItem[], sent: Map<string, TraktSent>, ratings: Map<string, number>): KeptRating[] {
+  const kept: KeptRating[] = [];
+  for (const item of items) {
+    const ids = traktIds(item);
+    if (!ids || item.myRating === undefined) continue;
+    const kind = item.tmdb?.kind === "movie" ? "movie" : "show";
+    const theirs = ratings.get(`${kind}:tmdb:${ids.tmdb}`) ?? (ids.imdb ? ratings.get(`${kind}:imdb:${ids.imdb}`) : undefined);
+    if (theirs === undefined) continue;
+    sent.set(item.id, { ...(sent.get(item.id) ?? item.trakt?.sent ?? {}), rating: item.myRating });
+    if (theirs !== item.myRating) kept.push({ id: item.id, title: item.title, trakt: theirs, yours: item.myRating });
+  }
+  return kept;
+}
+
+const episodeText = (episodes: Array<[number, number, number]>): string =>
+  episodes.map(([season, from, to]) => (from === to ? `S${season} E${from}` : `S${season} E${from}–${to}`)).join(", ");
+
+/** What one title's send would do, in words: "watched", "S1 E1–10, S2 E1–3 (13 episodes)", "rating 9"… */
+export function describeChange(change: TraktChange): string[] {
+  const parts: string[] = [];
+  if (change.movie) parts.push("watched");
+  if (change.episodes?.length) {
+    const count = change.episodes.reduce((sum, [, from, to]) => sum + (to - from + 1), 0);
+    parts.push(`${episodeText(change.episodes)} (${count} episode${count === 1 ? "" : "s"})`);
+  }
+  if (typeof change.rating === "number") parts.push(`rating ${change.rating}`);
+  else if (change.rating === null) parts.push("rating removed");
+  if (change.watchlist === "add") parts.push("added to watchlist");
+  else if (change.watchlist === "remove") parts.push("taken off watchlist");
+  return parts;
+}
+
+export interface TraktPreview {
+  rows: Array<{ title: string; parts: string[] }>;
+  kept: KeptRating[];
+  movies: number;
+  episodes: number;
+  ratings: number;
+  watchlist: number;
+}
+
+/** A read-only summary of a send, for checking before anything is written to Trakt. */
+export function buildPreview(changes: TraktChange[], kept: KeptRating[]): TraktPreview {
+  return {
+    rows: changes.map((c) => ({ title: c.title, parts: describeChange(c) })),
+    kept,
+    movies: changes.filter((c) => c.movie).length,
+    episodes: changes.reduce((sum, c) => sum + (c.episodes ?? []).reduce((n, [, from, to]) => n + (to - from + 1), 0), 0),
+    ratings: changes.filter((c) => c.rating !== undefined).length,
+    watchlist: changes.filter((c) => c.watchlist).length,
+  };
+}

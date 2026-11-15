@@ -95,6 +95,8 @@ type StepItem = Pick<SavedItem, "status" | "done" | "progressCurrent" | "seasonP
 export function stepEpisode(item: StepItem, total?: number): EpisodeStep | undefined {
   const now: ItemStatus = item.status ?? (item.done ? "done" : "plan");
   if (now === "done") return undefined;
+  // A film has no episodes, even when it is filed as anime (an anime movie).
+  if (item.tmdb?.kind === "movie") return undefined;
   const restart = (status: ItemStatus): ItemStatus => (status === "plan" || status === "dropped" ? "in_progress" : status);
 
   const totals = seasonTotals(item);

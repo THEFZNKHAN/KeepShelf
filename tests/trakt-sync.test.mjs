@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { batches, buildBodies, changeKey, notFoundIn, pendingChange, pendingChanges, seedFromWatched, traktIds } from "../dist-test/trakt-sync.js";
+import { batches, buildBodies, buildPreview, changeKey, describeChange, keepTraktRatings, notFoundIn, pendingChange, pendingChanges, ratingsFrom, seedFromWatched, traktIds } from "../dist-test/trakt-sync.js";
 
 const OPTS = { watchlist: false };
 const NOW = Date.UTC(2026, 10, 15, 12, 0, 0);
@@ -126,4 +126,39 @@ test("what is already on Trakt counts as sent, so the first sync adds no second 
   assert.deepEqual(seed.get("s2").seasons, [10, 8]);
   const after = items.map((i) => ({ ...i, trakt: { sent: seed.get(i.id) } }));
   assert.deepEqual(pendingChanges(after, OPTS).map((c) => [c.id, c.episodes]), [["s", [[2, 3, 5]]]]);
+});
+
+test("ratings already on Trakt are read by TMDB and IMDb id", () => {
+  const r = ratingsFrom([{ rating: 8, movie: { ids: { tmdb: 949, imdb: "tt0113277" } } }, { rating: 0, movie: { ids: { tmdb: 1 } } }], [{ rating: 7, show: { ids: { tmdb: 70523 } } }], null);
+  assert.equal(r.get("movie:tmdb:949"), 8);
+  assert.equal(r.get("movie:imdb:tt0113277"), 8);
+  assert.equal(r.get("show:tmdb:70523"), 7);
+  assert.equal(r.has("movie:tmdb:1"), false);
+  assert.equal(ratingsFrom("junk", undefined).size, 0);
+});
+
+test("on the first send a title rated on Trakt keeps Trakt's rating; unrated titles get the shelf's", () => {
+  const items = [movie({ myRating: 6 }), show({ myRating: 9 }), movie({ id: "m2", title: "Other", tmdb: { id: 5, kind: "movie", genres: [], fetchedAt: 1 }, myRating: 7 })];
+  const sent = new Map();
+  const kept = keepTraktRatings(items, sent, new Map([["movie:imdb:tt0113277", 8], ["show:tmdb:70523", 9]]));
+  assert.deepEqual(kept.map((k) => [k.title, k.trakt, k.yours]), [["Heat", 8, 6]]);
+  const after = items.map((i) => ({ ...i, trakt: { sent: sent.get(i.id) } }));
+  const changes = pendingChanges(after, OPTS);
+  assert.deepEqual(changes.map((c) => [c.title, c.rating]), [["Other", 7]]);
+  // A later change on the shelf is sent as usual.
+  assert.equal(pendingChange({ ...after[0], myRating: 10 }, OPTS).rating, 10);
+});
+
+test("a preview describes each title in words and totals it up", () => {
+  const changes = [
+    pendingChange(movie({ status: "done", done: true, myRating: 8 }), OPTS),
+    pendingChange(show({ status: "in_progress", seasonProgress: [10, 3, 0] }), OPTS),
+    pendingChange(movie({ id: "w", status: "plan" }), { watchlist: true }),
+  ];
+  assert.deepEqual(describeChange(changes[0]), ["watched", "rating 8"]);
+  assert.deepEqual(describeChange(changes[1]), ["S1 E1–10, S2 E1–3 (13 episodes)"]);
+  assert.deepEqual(describeChange(changes[2]), ["added to watchlist"]);
+  assert.deepEqual(describeChange({ ...changes[0], movie: false, rating: null }), ["rating removed"]);
+  const p = buildPreview(changes, []);
+  assert.deepEqual([p.movies, p.episodes, p.ratings, p.watchlist, p.rows.length], [1, 13, 1, 1, 3]);
 });

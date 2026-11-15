@@ -63,6 +63,7 @@ import {
   TRAKT_ALARM,
   connect as connectTrakt,
   disconnect as disconnectTrakt,
+  previewTrakt,
   scheduleTraktSync,
   setClientId as setTraktClientId,
   setOptions as setTraktOptions,
@@ -683,6 +684,8 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     case "traktDisconnect":
       await disconnectTrakt();
       return { ok: true, trakt: await traktStatus() };
+    case "traktPreview":
+      return { ok: true, traktPreview: await previewTrakt() };
     case "traktSync":
       await syncTrakt("catchup");
       return { ok: true, trakt: await traktStatus() };

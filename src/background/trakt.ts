@@ -32,6 +32,11 @@ import {
   type TraktItemState,
   type TraktSent,
   type TraktStatus,
+  type TraktPreview,
+  type KeptRating,
+  buildPreview,
+  keepTraktRatings,
+  ratingsFrom,
 } from "../shared/trakt-sync.js";
 import { STORAGE_KEY, getAllItems } from "../shared/storage.js";
 import type { SavedItem } from "../shared/types.js";
@@ -345,15 +350,43 @@ function sentAfter(before: TraktSent, change: TraktChange, parts: { history: boo
   return out;
 }
 
+/**
+ * Reads what Trakt already has (watched movies and shows, and ratings) and works out what counts as sent. Read-only:
+ * nothing is written here, to Trakt or to the shelf.
+ */
+async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ sent: Map<string, TraktSent>; kept: KeptRating[] }> {
+  const movies = await api<unknown>("/sync/watched/movies");
+  const shows = await api<unknown>("/sync/watched/shows");
+  const ratedMovies = await api<unknown>("/sync/ratings/movies");
+  const ratedShows = await api<unknown>("/sync/ratings/shows");
+  const sent = seedFromWatched(items, movies, shows, options);
+  const kept = keepTraktRatings(items, sent, ratingsFrom(ratedMovies, ratedShows));
+  return { sent, kept };
+}
+
 async function seed(options: SyncOptions): Promise<void> {
-  const [movies, shows] = [await api<unknown>("/sync/watched/movies"), await api<unknown>("/sync/watched/shows")];
   const items = await getAllItems();
-  const seeded = seedFromWatched(items, movies, shows, options);
+  const { sent } = await readTrakt(items, options);
   const byId = itemsById(items);
   const states = new Map<string, TraktItemState | undefined>();
-  for (const [id, sent] of seeded) states.set(id, { ...(byId.get(id)?.trakt ?? {}), sent });
+  for (const [id, value] of sent) states.set(id, { ...(byId.get(id)?.trakt ?? {}), sent: value });
   await writeItemStates(states);
   await setState({ seeded: true });
+}
+
+/** What a send would do right now, without sending or saving anything. */
+export async function previewTrakt(): Promise<TraktPreview> {
+  const settings = await getSettings();
+  if (!settings.clientId || !(await getAuth())) throw new TraktError("Connect to Trakt first.");
+  const options: SyncOptions = { watchlist: settings.watchlist };
+  let items = await getAllItems();
+  let kept: KeptRating[] = [];
+  if (!(await getState()).seeded) {
+    const read = await readTrakt(items, options);
+    kept = read.kept;
+    items = items.map((i) => (read.sent.has(i.id) ? { ...i, trakt: { ...(i.trakt ?? {}), sent: read.sent.get(i.id) } } : i));
+  }
+  return buildPreview(pendingChanges(items, options), kept);
 }
 
 async function sendBatch(batch: TraktChange[], mode: "now" | "catchup", label: string): Promise<number> {
