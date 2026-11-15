@@ -478,6 +478,75 @@
             <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
           </div>
         </details>
+        <details class="s-card" id="card-trakt">
+          <summary>
+            <span class="material-symbols-outlined s-card-icon">sync</span>
+            <span class="s-card-title">Trakt</span>
+            <span class="s-card-summary" id="trakt-summary">Not connected</span>
+            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
+          </summary>
+          <div class="s-card-body">
+            <p class="s-hint">
+              Sends what you watch, your ratings and (if you like) your To watch list to your Trakt account. Create a free app at
+              <span class="mono">developer.trakt.tv</span> → My Apps, then paste its <strong>Client ID</strong>. No client secret is needed.
+            </p>
+            <div class="field-input-row">
+              <input type="text" id="trakt-client-id" placeholder="Client ID" autocomplete="off" spellcheck="false" />
+              <button type="button" id="trakt-save" class="btn btn-primary btn-sm">Save</button>
+            </div>
+            <span id="trakt-client-status" class="field-status">Not set</span>
+            <div class="s-sub">Redirect URI</div>
+            <p class="s-fine">Add this exact address to your Trakt app's Redirect URIs.</p>
+            <div class="field-input-row">
+              <input type="text" id="trakt-redirect" readonly spellcheck="false" />
+              <button type="button" id="trakt-copy-redirect" class="btn btn-outline btn-sm">Copy</button>
+            </div>
+            <div class="s-sub">Account</div>
+            <button type="button" id="trakt-connect" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon" id="trakt-connect-icon">login</span>
+              <span id="trakt-connect-label">Connect to Trakt</span>
+            </button>
+            <button type="button" id="trakt-sync" class="btn btn-outline btn-wide">
+              <span class="material-symbols-outlined btn-icon">cloud_upload</span>
+              <span id="trakt-sync-label">Send everything now</span>
+            </button>
+            <p class="s-fine" id="trakt-last"></p>
+            <div class="pref-row is-compact">
+              <div class="pref-text">
+                <strong>Send changes automatically</strong>
+                <span>Marking watched, episode progress and ratings go to Trakt as you make them.</span>
+              </div>
+              <label class="switch" title="Send changes automatically">
+                <input type="checkbox" id="pref-trakt-auto" aria-label="Send changes automatically" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <div class="pref-row is-compact">
+              <div class="pref-text">
+                <strong>Sync my To watch list</strong>
+                <span>Adds them to your Trakt watchlist, and takes them off once you start watching.</span>
+              </div>
+              <label class="switch" title="Sync my To watch list">
+                <input type="checkbox" id="pref-trakt-watchlist" aria-label="Sync my To watch list" />
+                <span class="switch-track"></span>
+              </label>
+            </div>
+            <details class="up-nodate" id="trakt-problems" hidden>
+              <summary id="trakt-problems-summary">Not matched on Trakt</summary>
+              <ul class="trakt-problems" id="trakt-problems-list"></ul>
+            </details>
+            <div id="trakt-settings-status" class="settings-toast" hidden>
+              <div class="settings-toast-content">
+                <span id="trakt-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                <span id="trakt-settings-status-text"></span>
+              </div>
+            </div>
+            <p class="s-fine">
+              Only titles with TMDB info can be sent. Nothing is ever removed from your Trakt history. Your sign-in stays in this
+              browser; Disconnect signs it out on Trakt too. KeepShelf uses Trakt but is not endorsed or certified by Trakt.
+            </p>
+          </div>
+        </details>
         <details class="s-card" id="card-bookinfo">
           <summary>
             <span class="material-symbols-outlined s-card-icon">menu_book</span>

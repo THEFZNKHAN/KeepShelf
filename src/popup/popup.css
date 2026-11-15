@@ -3956,3 +3956,24 @@ button.er-stat:hover {
   color: var(--on-surface-variant);
   list-style: none;
 }
+
+/* Trakt card */
+#trakt-redirect {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+#trakt-last:empty {
+  display: none;
+}
+#trakt-last.is-error {
+  color: var(--error);
+}
+#card-trakt .btn-wide + .btn-wide {
+  margin-top: 6px;
+}
+.trakt-problems {
+  margin: 6px 0 0;
+  padding: 0 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}

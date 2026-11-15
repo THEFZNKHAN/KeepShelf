@@ -13,7 +13,8 @@ import type { KeepSettings, KeepSyncResult } from "../shared/keep-settings.js";
 import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
-import type { EditableFields, ItemStatus, MediaType, SavedItem, UserFields } from "../shared/types.js";
+import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
+import type { TraktStatus } from "../shared/trakt-sync.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   AUTO_SEARCH_DELAY_MS,
@@ -2917,6 +2918,187 @@ async function enrichShelf(): Promise<void> {
 document.getElementById("tmdb-save")!.addEventListener("click", () => void saveTmdbToken());
 document.getElementById("tmdb-test")!.addEventListener("click", () => void testTmdbToken());
 tmdbEnrichAllEl.addEventListener("click", () => void enrichShelf());
+
+/* ── Trakt settings ──────────────────────────────────────── */
+
+const traktClientEl = document.getElementById("trakt-client-id") as HTMLInputElement;
+const traktClientStatusEl = document.getElementById("trakt-client-status")!;
+const traktRedirectEl = document.getElementById("trakt-redirect") as HTMLInputElement;
+const traktConnectEl = document.getElementById("trakt-connect") as HTMLButtonElement;
+const traktConnectLabelEl = document.getElementById("trakt-connect-label")!;
+const traktSyncEl = document.getElementById("trakt-sync") as HTMLButtonElement;
+const traktSyncLabelEl = document.getElementById("trakt-sync-label")!;
+const traktLastEl = document.getElementById("trakt-last")!;
+const traktSummaryEl = document.getElementById("trakt-summary")!;
+const prefTraktAutoEl = document.getElementById("pref-trakt-auto") as HTMLInputElement;
+const prefTraktWatchlistEl = document.getElementById("pref-trakt-watchlist") as HTMLInputElement;
+const traktProblemsEl = document.getElementById("trakt-problems") as HTMLDetailsElement;
+const traktProblemsSummaryEl = document.getElementById("trakt-problems-summary")!;
+const traktProblemsListEl = document.getElementById("trakt-problems-list")!;
+const traktStatusEl = document.getElementById("trakt-settings-status")!;
+const traktStatusTextEl = document.getElementById("trakt-settings-status-text")!;
+const traktStatusIconEl = document.getElementById("trakt-settings-status-icon")!;
+const traktStatusTimer: { value: ReturnType<typeof setTimeout> | undefined } = { value: undefined };
+
+type TraktView = TraktStatus;
+let trakt: TraktView | undefined;
+let traktBusy = false;
+
+function showTraktStatus(msg: string, err = false, ms = 6000): void {
+  showSectionStatus(traktStatusEl, traktStatusTextEl, traktStatusIconEl, traktStatusTimer, msg, err, ms);
+}
+
+function whenText(at: number): string {
+  const minutes = Math.round((Date.now() - at) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : new Date(at).toLocaleDateString();
+}
+
+function renderTrakt(): void {
+  const t = trakt;
+  const hasId = !!t?.clientId;
+  const connected = !!t?.connected;
+  traktClientStatusEl.textContent = hasId ? "Client ID saved" : "Not set";
+  traktClientEl.placeholder = hasId ? "Saved. Paste to replace" : "Client ID";
+  traktRedirectEl.value = t?.redirectUri ?? "";
+  traktConnectLabelEl.textContent = connected ? `Disconnect${t?.username ? ` @${t.username}` : ""}` : "Connect to Trakt";
+  document.getElementById("trakt-connect-icon")!.textContent = connected ? "logout" : "login";
+  traktConnectEl.disabled = traktBusy || !hasId;
+  traktSyncEl.disabled = traktBusy || !connected || !!t?.running;
+  traktSyncLabelEl.textContent = t?.running ? "Sending…" : t?.ready ? "Send what's waiting now" : "Send everything now";
+  watchTraktProgress(!!t?.running);
+  prefTraktAutoEl.checked = t?.auto !== false;
+  prefTraktWatchlistEl.checked = !!t?.watchlist;
+  prefTraktAutoEl.disabled = prefTraktWatchlistEl.disabled = !connected;
+  traktSummaryEl.textContent = connected ? (t?.username ? `@${t.username}` : "Connected") : hasId ? "Not connected" : "Not set";
+  traktSummaryEl.classList.toggle("is-ok", connected);
+
+  const lines: string[] = [];
+  if (connected && !t?.ready) lines.push("Press Send everything once to start. Your past watches go with their air dates, and nothing already on Trakt is sent again. After that, changes go automatically.");
+  if (t?.running && t.progress) lines.push(t.progress);
+  else if (t?.lastError) lines.push(t.lastError);
+  else if (t?.lastMessage && t.lastRun) lines.push(`${t.lastMessage} (${whenText(t.lastRun)})`);
+  if (connected && t?.ready && t.pending > 0) lines.push(`${t.pending} title${t.pending === 1 ? "" : "s"} waiting to be sent.`);
+  traktLastEl.textContent = lines.join(" ");
+  traktLastEl.classList.toggle("is-error", !!t?.lastError);
+
+  const problems = t?.problems ?? [];
+  traktProblemsEl.hidden = problems.length === 0;
+  traktProblemsSummaryEl.replaceChildren();
+  setSummary(traktProblemsSummaryEl, "Not matched on Trakt", problems.length);
+  traktProblemsListEl.replaceChildren(
+    ...problems.map((p) => {
+      const li = document.createElement("li");
+      const name = document.createElement("strong");
+      name.textContent = p.title;
+      li.append(name, ` — ${p.problem}`);
+      return li;
+    })
+  );
+}
+
+/** While a send runs, check on it every two seconds so the card shows its progress, and its end. */
+let traktPoll: ReturnType<typeof setInterval> | undefined;
+function watchTraktProgress(running: boolean): void {
+  if (running && !traktPoll) {
+    traktPoll = setInterval(async () => {
+      try {
+        const response = await sendToBackground({ action: "traktStatus" });
+        if (response.ok && "trakt" in response) {
+          trakt = traktBusy && !response.trakt.running ? { ...response.trakt, running: true } : response.trakt;
+          renderTrakt();
+        }
+      } catch {
+        /* try again on the next tick */
+      }
+    }, 2000);
+  } else if (!running && traktPoll) {
+    clearInterval(traktPoll);
+    traktPoll = undefined;
+  }
+}
+
+async function traktAsk(message: MessageAction, success?: string): Promise<boolean> {
+  try {
+    const response = await sendToBackground(message);
+    if (!response.ok) throw new Error(response.error);
+    if ("trakt" in response) trakt = response.trakt;
+    if (success) showTraktStatus(success);
+    return true;
+  } catch (err) {
+    showTraktStatus(err instanceof Error ? err.message : "Something went wrong.", true);
+    return false;
+  } finally {
+    renderTrakt();
+  }
+}
+
+async function loadTraktSettings(): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "traktStatus" });
+    if (response.ok && "trakt" in response) trakt = response.trakt;
+  } catch {
+    /* shown as not set */
+  }
+  renderTrakt();
+}
+
+document.getElementById("trakt-save")!.addEventListener("click", async () => {
+  const value = traktClientEl.value;
+  if (await traktAsk({ action: "traktSetClientId", clientId: value }, value.trim() ? "Client ID saved. Now add the redirect URI on Trakt, then Connect." : "Client ID removed and signed out.")) {
+    traktClientEl.value = "";
+  }
+});
+
+document.getElementById("trakt-copy-redirect")!.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(traktRedirectEl.value);
+    showTraktStatus("Redirect URI copied.");
+  } catch {
+    traktRedirectEl.select();
+    showTraktStatus("Select the address and copy it.", true);
+  }
+});
+
+traktConnectEl.addEventListener("click", async () => {
+  traktBusy = true;
+  renderTrakt();
+  if (trakt?.connected) {
+    await traktAsk({ action: "traktDisconnect" }, "Disconnected from Trakt.");
+  } else {
+    // The sign-in window may close this popup; the connection finishes in the background either way.
+    showTraktStatus("Opening Trakt sign-in…", false, 60000);
+    await traktAsk({ action: "traktConnect" }, "Connected to Trakt. Press Send everything to start.");
+  }
+  traktBusy = false;
+  renderTrakt();
+});
+
+traktSyncEl.addEventListener("click", async () => {
+  traktBusy = true;
+  if (trakt) trakt = { ...trakt, running: true };
+  renderTrakt();
+  showTraktStatus("Sending to Trakt… this can take a while for a big shelf.", false, 600000);
+  const ok = await traktAsk({ action: "traktSync" });
+  traktBusy = false;
+  if (ok) showTraktStatus(trakt?.lastMessage ?? "Sent.");
+  renderTrakt();
+});
+
+prefTraktAutoEl.addEventListener("change", () =>
+  void traktAsk({ action: "traktSetOptions", auto: prefTraktAutoEl.checked }, prefTraktAutoEl.checked ? "Changes will be sent automatically." : "Automatic sending is off.")
+);
+prefTraktWatchlistEl.addEventListener("change", () =>
+  void traktAsk({ action: "traktSetOptions", watchlist: prefTraktWatchlistEl.checked }, prefTraktWatchlistEl.checked ? "Your To watch list will go to the Trakt watchlist." : "Watchlist sync is off.")
+);
+
+// The sign-in finishes in the background, so look again whenever the card is opened.
+document.getElementById("card-trakt")!.addEventListener("toggle", (e) => {
+  if ((e.currentTarget as HTMLDetailsElement).open) void loadTraktSettings();
+});
+void loadTraktSettings();
 
 /* ── Settings cards: one open at a time ──────────────────── */
 

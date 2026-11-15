@@ -79,7 +79,8 @@ KeepShelf/
 ├── src/
 │   ├── background/
 │   │   ├── main.ts            # Service worker: message routing, storage, Keep sync, context menus, shortcut
-│   │   └── badge.ts           # Toolbar badge: "+" detectable page, "✓" already saved
+│   │   ├── badge.ts           # Toolbar badge: "+" detectable page, "✓" already saved
+│   │   └── trakt.ts           # Trakt connection: PKCE sign-in, token refresh, sending changes, recording what was sent
 │   ├── content/
 │   │   └── main.ts            # Answers getPageData by running the matching site parser on demand
 │   ├── popup/
@@ -108,7 +109,9 @@ KeepShelf/
 │       ├── csv.ts             # Writing CSV: quoting, spreadsheet-formula guard, local dates (pure)
 │       ├── letterboxd-export.ts  # The Letterboxd export: films, watched and watchlist files (pure)
 │       ├── new-seasons.ts     # Finished series with a season you haven't watched: out, airing, dated or announced (pure)
+│       ├── trakt-auth.ts      # Trakt sign-in helpers: PKCE verifier and challenge, URLs, token bodies (pure)
 │       ├── trakt-export.ts    # The Trakt export: films, series and anime by IMDb id (pure)
+│       ├── trakt-sync.ts      # What to send to Trakt per title, without sending anything twice (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
 │       ├── tmdb-settings.ts   # TMDB token storage
@@ -160,7 +163,10 @@ KeepShelf/
 │   ├── csv.test.mjs           # CSV writing and the formula guard
 │   ├── letterboxd-export.test.mjs  # What goes in the Letterboxd files, and what is left out
 │   ├── new-seasons.test.mjs   # Which finished series have an unwatched season, and how they are ordered
+│   ├── trakt-auth.test.mjs    # PKCE values, sign-in answer checks, token parsing
 │   ├── trakt-export.test.mjs  # What goes in the Trakt file, and what is left out
+│   ├── trakt-sync.test.mjs    # What is sent per title, batching, request bodies, reading what Trakt has
+│   ├── background-trakt.test.mjs    # Connect, send, retry and disconnect against a fake Trakt
 │   ├── background-search.test.mjs   # The searchTmdb and addFromTmdb actions
 │   ├── undo.test.mjs
 │   ├── tmdb.test.mjs

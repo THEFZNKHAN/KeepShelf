@@ -3,7 +3,7 @@
   "name": "KeepShelf",
   "version": "1.6.2",
   "description": "Save movies, series, anime, and books to your shelf. Sync to Google Keep.",
-  "permissions": ["storage", "tabs", "scripting", "debugger", "contextMenus", "alarms", "notifications"],
+  "permissions": ["storage", "tabs", "scripting", "debugger", "contextMenus", "alarms", "notifications", "identity"],
   "host_permissions": [
     "https://www.google.com/*",
     "https://www.imdb.com/*",
@@ -17,7 +17,9 @@
     "https://trakt.tv/*",
     "https://api.themoviedb.org/*",
     "https://openlibrary.org/*",
-    "https://app.trakt.tv/*"
+    "https://app.trakt.tv/*",
+    "https://api.trakt.tv/*",
+    "https://auth.trakt.tv/*"
   ],
   "action": {
     "default_popup": "dist/popup.html",
