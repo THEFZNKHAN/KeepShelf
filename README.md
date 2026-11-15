@@ -726,6 +726,10 @@ The first **Send everything** reads what Trakt already has, so nothing already i
 
 Nothing is ever removed from your Trakt history: unmarking an episode here leaves Trakt as it is, and marking it again doesn't add a second play. Titles Trakt couldn't match are listed under **Not matched on Trakt**. Long anime are sometimes numbered differently on TMDB and Trakt; when Trakt already has at least as many episodes of a show, KeepShelf leaves it alone rather than guess.
 
+### Trakt rating on cards
+
+With a Trakt Client ID saved (signing in isn't needed), a title's card shows Trakt's community rating next to TMDB's, such as **TMDB 8.4 · Trakt 84%**; hover it for the number of votes. It is fetched when you open the card and kept for a day.
+
 ### Get from Trakt
 
 **Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings and your watchlist. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.

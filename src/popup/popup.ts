@@ -16,6 +16,7 @@ import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
 import type { TraktPreview, TraktStatus } from "../shared/trakt-sync.js";
 import type { PullPreview } from "../shared/trakt-pull.js";
+import { ratingText, type TraktRating } from "../shared/trakt-rating.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   AUTO_SEARCH_DELAY_MS,
@@ -1093,10 +1094,11 @@ function createTypeBadge(item: SavedItem): HTMLElement | undefined {
 }
 
 /** Line 2: the facts about the title itself, such as "2h 28m | IMDb 8.8 · TMDB 8.4 · PG-13". Short, so it never needs cropping. */
-function factsText(item: SavedItem): string {
+function factsText(item: SavedItem, trakt?: TraktRating): string {
   const parts = [itemSubtitle(item)];
   if (isTrackable(item)) {
     if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
+    if (trakt) parts.push(ratingText(trakt));
     if (item.tmdb?.certification) parts.push(item.tmdb.certification);
     if (item.bookInfo?.pages) parts.push(`${item.bookInfo.pages} pages`);
     const olRating = bookRating(item.bookInfo);
@@ -3658,6 +3660,20 @@ function detailChips(item: SavedItem): Array<{ text: string; className: string }
   return chips;
 }
 
+/** Adds Trakt's community rating to the open card's facts once it arrives. Quietly does nothing without a Client ID. */
+async function showTraktRating(item: SavedItem): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "traktRating", id: item.id });
+    if (!response.ok || !("traktRating" in response) || !response.traktRating) return;
+    // Only if the same card is still open.
+    if (pickedId !== item.id || pickDialogEl.hidden) return;
+    pickDetailEl.textContent = [factsText(item, response.traktRating), genreParts(item).join("")].filter(Boolean).join("\n");
+    pickDetailEl.title = `Trakt: ${response.traktRating.percent}% from ${response.traktRating.votes.toLocaleString()} votes`;
+  } catch {
+    /* the card is fine without it */
+  }
+}
+
 function showDetails(item: SavedItem, mode: DetailMode): void {
   cancelRowHover();
   pickedId = item.id;
@@ -3677,6 +3693,8 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickTitleEl.textContent = itemTitle(item);
   pickTitleEl.title = itemTitle(item);
   pickDetailEl.textContent = [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n");
+  pickDetailEl.removeAttribute("title");
+  if (info && item.tmdb) void showTraktRating(item);
   const overview = item.tmdb?.overview ?? item.bookInfo?.description;
   pickOverviewEl.textContent = overview ?? "";
   pickOverviewEl.hidden = !overview;

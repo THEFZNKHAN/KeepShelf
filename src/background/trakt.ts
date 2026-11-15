@@ -42,6 +42,7 @@ import {
   traktShowId,
 } from "../shared/trakt-sync.js";
 import { STORAGE_KEY, getAllItems, importItems } from "../shared/storage.js";
+import { parseTraktRating, ratingPath, sanitizeCachedRating, traktIdFromSearch, type TraktRating } from "../shared/trakt-rating.js";
 import {
   PULL_MINUTES,
   activityFingerprint,
@@ -717,4 +718,40 @@ export async function autoPull(fetchInfo: (kind: "movie" | "tv", id: number) => 
     return;
   }
   await applyPull(fetchInfo, { since: state.pullAt, auto: true, ...(fingerprint ? { fingerprint } : {}) });
+}
+
+/* ── Community rating ────────────────────────────────────── */
+
+/** A public read: the Client ID is enough, so this works before connecting. */
+async function publicGet<T>(path: string): Promise<T | undefined> {
+  const { clientId } = await getSettings();
+  if (!clientId) return undefined;
+  const response = await timedFetch(`${TRAKT_API_BASE}${path}`, { method: "GET", headers: apiHeaders(clientId) });
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new TraktError(`Trakt answered ${response.status}.`);
+  return (await response.json()) as T;
+}
+
+const RATING_CACHE = "keepshelf_trakt_rating_";
+
+/** Trakt's rating for a TMDB title, from a day's cache in session storage when there is one. Undefined without a Client ID. */
+export async function communityRating(tmdb: { kind: "movie" | "tv"; id: number; imdbId?: string }): Promise<TraktRating | null | undefined> {
+  if (!(await getSettings()).clientId) return undefined;
+  const key = `${RATING_CACHE}${tmdb.kind}:${tmdb.id}`;
+  const now = Date.now();
+  try {
+    const cached = sanitizeCachedRating((await chrome.storage.session.get(key))[key], now);
+    if (cached) return cached.rating;
+  } catch {
+    /* no session cache; ask Trakt */
+  }
+  let id = tmdb.imdbId && /^tt\d{5,10}$/.test(tmdb.imdbId) ? tmdb.imdbId : undefined;
+  if (!id) id = traktIdFromSearch(await publicGet<unknown>(`/search/tmdb/${tmdb.id}?type=${tmdb.kind === "movie" ? "movie" : "show"}`), tmdb.kind);
+  const rating = id ? parseTraktRating(await publicGet<unknown>(ratingPath(tmdb.kind, id))) ?? null : null;
+  try {
+    await chrome.storage.session.set({ [key]: { at: now, rating } });
+  } catch {
+    /* fetched again next time */
+  }
+  return rating;
 }

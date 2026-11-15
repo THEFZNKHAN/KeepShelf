@@ -66,6 +66,7 @@ import {
   previewTrakt,
   previewPull,
   applyPull,
+  communityRating,
   autoPull,
   syncPullAlarm,
   TRAKT_PULL_ALARM,
@@ -705,6 +706,11 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       return { ok: true, trakt: await traktStatus() };
     case "traktPreview":
       return { ok: true, traktPreview: await previewTrakt() };
+    case "traktRating": {
+      const tmdb = (await getAllItems()).find((i) => i.id === message.id)?.tmdb;
+      if (!tmdb) return { ok: true, traktRating: null };
+      return { ok: true, traktRating: (await communityRating(tmdb)) ?? null };
+    }
     case "traktPullPreview":
       return { ok: true, traktPull: await previewPull() };
     case "traktPullApply": {

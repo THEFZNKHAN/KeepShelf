@@ -1,6 +1,7 @@
 import type { EpisodeRatings } from "./episode-ratings.js";
 import type { TraktItemState, TraktPreview, TraktStatus } from "./trakt-sync.js";
 import type { PullPreview } from "./trakt-pull.js";
+import type { TraktRating } from "./trakt-rating.js";
 import type { TmdbSearchResult } from "./tmdb-search.js";
 import type { KeepSettings, KeepSyncResult, KeepTarget } from "./keep-settings.js";
 
@@ -186,6 +187,7 @@ export type MessageAction =
   | { action: "testKeepAppend"; target: KeepTarget }
   | { action: "getLastKeepResult" }
   | { action: "setStatus"; ids: string[]; status: ItemStatus }
+  | { action: "traktRating"; id: string }
   | { action: "traktStatus" }
   | { action: "traktSetClientId"; clientId: string }
   | { action: "traktSetOptions"; auto?: boolean; watchlist?: boolean; pull?: string }
@@ -219,6 +221,7 @@ export type MessageResponse =
   | { ok: true; trakt: TraktStatus }
   | { ok: true; traktPreview: TraktPreview }
   | { ok: true; traktPull: PullPreview }
+  | { ok: true; traktRating: TraktRating | null }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }
   | { ok: true; lastKeepResult: { message: string; isError: boolean; at: number } | null }

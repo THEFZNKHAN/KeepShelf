@@ -113,6 +113,7 @@ KeepShelf/
 │       ├── trakt-export.ts    # The Trakt export: films, series and anime by IMDb id (pure)
 │       ├── trakt-sync.ts      # What to send to Trakt per title, without sending anything twice (pure)
 │       ├── trakt-pull.ts      # Getting the Trakt library onto the shelf: matching, merging, adding (pure)
+│       ├── trakt-rating.ts    # Trakt's community rating for a card: parsing, ids, a day's cache (pure)
 │       ├── reminders-settings.ts # Reminder on/off and "already announced" records
 │       ├── tmdb.ts            # TMDB client, matching, season counts, air dates, retention
 │       ├── tmdb-settings.ts   # TMDB token storage
@@ -168,6 +169,7 @@ KeepShelf/
 │   ├── trakt-export.test.mjs  # What goes in the Trakt file, and what is left out
 │   ├── trakt-sync.test.mjs    # What is sent per title, batching, request bodies, reading what Trakt has
 │   ├── trakt-pull.test.mjs    # Matching Trakt titles, progress only forward, ratings kept, nothing sent back
+│   ├── trakt-rating.test.mjs  # Trakt rating as a percentage, lookup ids, cache freshness
 │   ├── background-trakt.test.mjs    # Connect, send, retry and disconnect against a fake Trakt
 │   ├── background-search.test.mjs   # The searchTmdb and addFromTmdb actions
 │   ├── undo.test.mjs

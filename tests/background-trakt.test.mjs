@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 // A fake chrome with real storage and a fake Trakt. Fake values only.
 const store = {};
+const session = {};
 let onMessage, onAlarm;
 const REDIRECT = "https://fakeextensionid.chromiumapp.org/trakt";
 const CLIENT = "fakeclientid0123456789abcdef0123456789abcdef0123456789abcdef0123";
@@ -18,6 +19,10 @@ globalThis.chrome = new Proxy({}, {
           get: async (k) => (typeof k === "string" ? { [k]: store[k] } : { ...store }),
           set: async (v) => { Object.assign(store, JSON.parse(JSON.stringify(v))); },
           remove: async (k) => { for (const one of [k].flat()) delete store[one]; },
+        },
+        session: {
+          get: async (k) => ({ [k]: session[k] }),
+          set: async (v) => { Object.assign(session, JSON.parse(JSON.stringify(v))); },
         },
         onChanged: { addListener() {} },
       };
@@ -74,6 +79,9 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
   if (u.pathname === "/sync/last_activities") return json(200, activities);
+  if (u.pathname === "/movies/tt0113277/ratings") return json(200, { rating: 8.4123, votes: 2500 });
+  if (u.pathname === "/search/tmdb/70523") return json(200, [{ type: "show", show: { ids: { trakt: 120, tmdb: 70523 } } }]);
+  if (u.pathname === "/shows/120/ratings") return json(200, { rating: 8.9, votes: 900 });
   if (u.pathname === "/sync/watched/movies") return json(200, watchedMovies);
   if (u.pathname === "/sync/watched/shows") {
     // Like Trakt now: the watched list has no seasons; each show's episodes are on its progress page.
@@ -361,4 +369,19 @@ test("disconnecting revokes the token and forgets what was sent", async () => {
   assert.ok(revoke.body.token);
   assert.equal(items().some((i) => i.trakt), false);
   assert.equal(alarms.has("keepshelf-trakt-pull"), false, "no automatic checks once disconnected");
+});
+
+test("a card's Trakt rating needs only the Client ID, and is kept for a day", async () => {
+  // Disconnected by now: ratings are public.
+  store.trackbuddy_items.find((i) => i.id === "Heat").tmdb.imdbId = "tt0113277";
+  const res = await send({ action: "traktRating", id: "Heat" });
+  assert.deepEqual(res.traktRating, { percent: 84, votes: 2500 });
+  const sent = requests.filter((r) => r.path === "/movies/tt0113277/ratings");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].headers.Authorization, undefined, "no sign-in is sent for a public read");
+  await send({ action: "traktRating", id: "Heat" });
+  assert.equal(requests.filter((r) => r.path === "/movies/tt0113277/ratings").length, 1, "the second card open uses the cache");
+  // Without an IMDb id, the Trakt id is found from TMDB's.
+  const dark = await send({ action: "traktRating", id: "Dark" });
+  assert.deepEqual(dark.traktRating, { percent: 89, votes: 900 });
 });
