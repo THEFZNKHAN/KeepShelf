@@ -229,6 +229,32 @@ async function timedFetch(url: string, init: RequestInit): Promise<Response> {
 
 /** An API call with the token, retrying on a short rate limit and once after refreshing an expired token. */
 async function api<T>(path: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<T> {
+  return (await request<T>(path, method, body)).data;
+}
+
+/** Items per page when reading a long list, and a ceiling on pages (100 × 100 is far beyond any real library). */
+const PAGE_LIMIT = 100;
+const MAX_PAGES = 100;
+
+/**
+ * Every item of a list Trakt sends in pages (watched movies and shows, ratings, the watchlist, lists). Follows
+ * X-Pagination-Page-Count; without that header, keeps going while pages come back full, so a long list is never cut
+ * short at its first page.
+ */
+async function apiAll(path: string): Promise<unknown[]> {
+  const out: unknown[] = [];
+  const sep = path.includes("?") ? "&" : "?";
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const { data, headers } = await request<unknown>(`${path}${sep}page=${page}&limit=${PAGE_LIMIT}`, "GET");
+    if (!Array.isArray(data)) break;
+    out.push(...data);
+    const count = Number(headers.get("X-Pagination-Page-Count"));
+    if (Number.isFinite(count) && count > 0 ? page >= count : data.length < PAGE_LIMIT) break;
+  }
+  return out;
+}
+
+async function request<T>(path: string, method: "GET" | "POST" = "GET", body?: unknown): Promise<{ data: T; headers: Headers }> {
   const { clientId } = await getSettings();
   if (!clientId) throw new TraktError("Add your Trakt Client ID in Settings first.");
   let tokens = await freshTokens(clientId);
@@ -271,7 +297,7 @@ async function api<T>(path: string, method: "GET" | "POST" = "GET", body?: unkno
     if (!response.ok) throw new TraktError(`Trakt answered ${response.status}. Try again later.`);
     const text = await response.text();
     try {
-      return (text ? JSON.parse(text) : null) as T;
+      return { data: (text ? JSON.parse(text) : null) as T, headers: response.headers };
     } catch {
       throw new TraktError("Trakt sent an answer KeepShelf couldn't read.");
     }
@@ -441,7 +467,7 @@ const progressCache = new Map<string, { lastWatched: string; at: number; seasons
 const READ_GAP_MS = 250;
 
 async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Promise<unknown[]> {
-  const raw = await api<unknown>("/sync/watched/shows");
+  const raw = await apiAll("/sync/watched/shows");
   const list = Array.isArray(raw) ? raw : [];
   const out: unknown[] = [];
   for (const [index, entry] of list.entries()) {
@@ -472,15 +498,15 @@ async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Pr
  * nothing is written here, to Trakt or to the shelf.
  */
 async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ sent: Map<string, TraktSent>; kept: KeptRating[] }> {
-  const movies = await api<unknown>("/sync/watched/movies");
+  const movies = await apiAll("/sync/watched/movies");
   // Only the shows among these items are worth a request each.
   const shelfShows = new Set(items.filter((i) => i.tmdb?.kind === "tv").map((i) => i.tmdb!.id));
   const shows = await watchedShowsWithEpisodes((entry) => {
     const tmdb = entryTmdb(entry);
     return tmdb === undefined || shelfShows.has(tmdb);
   });
-  const ratedMovies = await api<unknown>("/sync/ratings/movies");
-  const ratedShows = await api<unknown>("/sync/ratings/shows");
+  const ratedMovies = await apiAll("/sync/ratings/movies");
+  const ratedShows = await apiAll("/sync/ratings/shows");
   const sent = seedFromWatched(items, movies, shows, options);
   const kept = keepTraktRatings(items, sent, ratingsFrom(ratedMovies, ratedShows));
   return { sent, kept };
@@ -673,7 +699,7 @@ export async function traktStatus(): Promise<TraktStatus> {
 
 /** Your whole Trakt library, read only: watched movies and shows, ratings and the watchlist. */
 async function readLibrary(items: SavedItem[], since?: number): Promise<PulledTitle[]> {
-  const get = (path: string) => api<unknown>(`${path}?extended=full`);
+  const get = (path: string) => apiAll(`${path}?extended=full`);
   const shelfShows = new Set(items.filter((i) => i.tmdb?.kind === "tv").map((i) => i.tmdb!.id));
   return parseTraktLibrary({
     watchedMovies: await get("/sync/watched/movies"),
@@ -690,14 +716,14 @@ async function readLibrary(items: SavedItem[], since?: number): Promise<PulledTi
 
 /** Your personal lists with their items, for tags. A few dozen at most; each is one request. */
 async function personalLists(): Promise<Array<{ name: string; items: unknown }>> {
-  const raw = await api<unknown>("/users/me/lists");
+  const raw = await apiAll("/users/me/lists");
   const lists = (Array.isArray(raw) ? raw : []) as Array<{ name?: unknown; ids?: { trakt?: unknown; slug?: unknown } }>;
   const out: Array<{ name: string; items: unknown }> = [];
   for (const entry of lists.slice(0, 30)) {
     const id = typeof entry?.ids?.trakt === "number" ? String(entry.ids.trakt) : typeof entry?.ids?.slug === "string" ? entry.ids.slug : undefined;
     if (typeof entry?.name !== "string" || !id || !/^[\w-]{1,120}$/.test(id)) continue;
     await setState({ progress: `Reading your list “${entry.name.slice(0, 40)}”…` });
-    out.push({ name: entry.name, items: await api<unknown>(`/users/me/lists/${encodeURIComponent(id)}/items?extended=full`) });
+    out.push({ name: entry.name, items: await apiAll(`/users/me/lists/${encodeURIComponent(id)}/items?extended=full`) });
   }
   return out;
 }
