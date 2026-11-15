@@ -159,3 +159,19 @@ export function sanitizeImportedUserData(raw: Record<string, unknown>): Partial<
   }
   return out;
 }
+
+/**
+ * Sets one status on many items at once, the way changing it on each card would (done dates, the season count kept for
+ * new-season reminders). Items that already have that status are left as they are. Returns the new list and how many
+ * changed.
+ */
+export function applyStatus(items: SavedItem[], ids: string[], status: ItemStatus, now = Date.now()): { items: SavedItem[]; changed: number } {
+  const chosen = new Set(ids);
+  let changed = 0;
+  const next = items.map((item) => {
+    if (!chosen.has(item.id) || statusOf(item) === status) return item;
+    changed++;
+    return { ...item, ...buildUserPatch(item, { status }, now) };
+  });
+  return { items: next, changed };
+}

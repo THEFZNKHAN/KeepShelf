@@ -11,7 +11,7 @@ import { normalizeTitle } from "./fuzzy.js";
 import { distributeProgress, nextToWatch, seasonTotals, seasonsFinished, sumProgress, watchedProgress } from "./seasons.js";
 import type { TraktSent } from "./trakt-sync.js";
 import type { ItemStatus, MediaType, SavedItem, TmdbInfo } from "./types.js";
-import { statusOf } from "./user-data.js";
+import { normalizeTags, statusOf } from "./user-data.js";
 
 export interface PulledTitle {
   kind: "movie" | "show";
@@ -33,6 +33,8 @@ export interface PulledTitle {
   aired?: number;
   rating?: number;
   watchlist?: boolean;
+  /** Tags from the Trakt lists it is on, such as "trakt: favourites". */
+  tags?: string[];
 }
 
 type Ids = { tmdb?: unknown; imdb?: unknown };
@@ -87,6 +89,8 @@ export function parseTraktLibrary(raw: {
   ratedShows?: unknown;
   watchlistMovies?: unknown;
   watchlistShows?: unknown;
+  /** Your personal lists: GET /users/me/lists, and each list's GET …/items. */
+  lists?: Array<{ name: string; items: unknown }>;
 }): PulledTitle[] {
   const byKey = new Map<string, PulledTitle>();
   const take = (kind: "movie" | "show", media: Media | undefined): PulledTitle | undefined => {
@@ -142,7 +146,23 @@ export function parseTraktLibrary(raw: {
       if (t) t.watchlist = true;
     }
   }
+  for (const traktList of raw.lists ?? []) {
+    const tag = listTag(traktList.name);
+    if (!tag) continue;
+    for (const e of list(traktList.items) as Array<Entry & { type?: unknown }>) {
+      // A season or episode on a list stands for its show.
+      const kind = e.type === "movie" ? "movie" : e.show ? "show" : undefined;
+      const t = kind ? take(kind, kind === "movie" ? e.movie : e.show) : undefined;
+      if (t && !(t.tags ?? []).includes(tag)) t.tags = [...(t.tags ?? []), tag];
+    }
+  }
   return [...byKey.values()];
+}
+
+/** The tag for a Trakt list: "trakt: " and the list's name, cut to fit a tag. Undefined for a name with nothing in it. */
+export function listTag(name: unknown): string | undefined {
+  if (typeof name !== "string" || !name.trim()) return undefined;
+  return normalizeTags([`trakt: ${name}`])[0];
 }
 
 /** The shelf item a Trakt title is: same TMDB id, else same IMDb id, else the same name and year. */
@@ -192,6 +212,7 @@ export interface PullAddition {
   status: ItemStatus;
   doneAt?: number;
   myRating?: number;
+  tags?: string[];
   /** Shows: Trakt's episodes per season and in all, placed on TMDB's seasons once TMDB info is fetched. */
   traktSeasons?: number[];
   episodes?: number;
@@ -287,6 +308,12 @@ export function planPull(items: SavedItem[], pulled: PulledTitle[], now: number)
     }
     if (t.watchlist) sent.watchlist = true;
 
+    const missingTags = (t.tags ?? []).filter((tag) => !(item.tags ?? []).includes(tag));
+    if (missingTags.length) {
+      patch.tags = normalizeTags([...(item.tags ?? []), ...missingTags]);
+      parts.push(`tagged ${missingTags.join(", ")}`);
+    }
+
     const sentChanged = JSON.stringify(sent) !== JSON.stringify(sentBefore);
     if (sentChanged) patch.trakt = { ...(item.trakt ?? {}), sent };
     if (parts.length) updates.push({ id: item.id, title: item.title, patch, parts });
@@ -308,13 +335,15 @@ function additionFor(t: PulledTitle, now: number): PullAddition | undefined {
     ...(t.tmdb ? { tmdb: t.tmdb } : {}),
     ...(t.imdb ? { imdb: t.imdb } : {}),
     ...(t.rating ? { myRating: t.rating } : {}),
+    ...(t.tags?.length ? { tags: t.tags } : {}),
   };
   const sent: TraktSent = { ...(t.rating ? { rating: t.rating } : {}), ...(t.watchlist ? { watchlist: true } : {}) };
-  const rated = t.rating ? [`rating ${t.rating}`] : [];
+  const rated = [...(t.rating ? [`rating ${t.rating}`] : []), ...(t.tags?.length ? [`tagged ${t.tags.join(", ")}`] : [])];
   if (t.kind === "movie") {
     if (t.watched) return { ...base, status: "done", doneAt: whenMs(t.watchedAt, now), sent: { ...sent, movie: true }, parts: ["watched", ...rated] };
     if (t.watchlist) return { ...base, status: "plan", sent, parts: ["to watch", ...rated] };
     if (t.rating) return { ...base, status: "done", doneAt: now, sent, parts: rated };
+    if (t.tags?.length) return { ...base, status: "plan", sent, parts: ["to watch", ...rated] };
     return undefined;
   }
   const episodes = t.episodes ?? 0;
@@ -332,6 +361,7 @@ function additionFor(t: PulledTitle, now: number): PullAddition | undefined {
   }
   if (t.watchlist) return { ...base, status: "plan", sent, parts: ["to watch", ...rated] };
   if (t.rating) return { ...base, status: "done", doneAt: now, sent, parts: rated };
+  if (t.tags?.length) return { ...base, status: "plan", sent, parts: ["to watch", ...rated] };
   return undefined;
 }
 
@@ -346,6 +376,7 @@ export function itemForAddition(a: PullAddition, info: TmdbInfo | undefined): Om
     done: a.status === "done",
     ...(a.doneAt ? { doneAt: a.doneAt } : {}),
     ...(a.myRating ? { myRating: a.myRating } : {}),
+    ...(a.tags?.length ? { tags: a.tags } : {}),
   };
   const totals = info?.kind === "tv" ? info.seasonEpisodes : undefined;
   if (a.kind === "tv" && (a.episodes ?? 0) > 0) {
@@ -418,6 +449,7 @@ export function activityFingerprint(raw: unknown): string | undefined {
     pick("shows", "rated_at"),
     pick("shows", "watchlisted_at"),
     pick("seasons", "watchlisted_at"),
+    pick("lists", "updated_at"),
   ];
   return parts.some(Boolean) ? parts.join("|") : undefined;
 }

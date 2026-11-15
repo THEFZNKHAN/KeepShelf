@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 
 // A fake chrome with real storage and a fake Trakt. Fake values only.
 const store = {};
+const session = {};
+let traktLists = [];
 let onMessage, onAlarm;
 const REDIRECT = "https://fakeextensionid.chromiumapp.org/trakt";
 const CLIENT = "fakeclientid0123456789abcdef0123456789abcdef0123456789abcdef0123";
@@ -18,6 +20,10 @@ globalThis.chrome = new Proxy({}, {
           get: async (k) => (typeof k === "string" ? { [k]: store[k] } : { ...store }),
           set: async (v) => { Object.assign(store, JSON.parse(JSON.stringify(v))); },
           remove: async (k) => { for (const one of [k].flat()) delete store[one]; },
+        },
+        session: {
+          get: async (k) => ({ [k]: session[k] }),
+          set: async (v) => { Object.assign(session, JSON.parse(JSON.stringify(v))); },
         },
         onChanged: { addListener() {} },
       };
@@ -74,6 +80,14 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (u.pathname === "/users/settings") return json(200, { user: { username: "fakeuser" } });
   if (u.pathname === "/sync/last_activities") return json(200, activities);
+  if (u.pathname === "/users/me/lists") return json(200, traktLists.map((l) => ({ name: l.name, ids: { trakt: l.id } })));
+  const listItems = /^\/users\/me\/lists\/(\d+)\/items$/.exec(u.pathname);
+  if (listItems) return json(200, traktLists.find((l) => String(l.id) === listItems[1])?.items ?? []);
+  if (u.pathname === "/movies/tt0113277/ratings") return json(200, { rating: 8.4123, votes: 2500 });
+  if (u.pathname === "/recommendations/movies") return json(200, [{ title: "Collateral", year: 2004, ids: { tmdb: 1538 } }]);
+  if (u.pathname === "/recommendations/shows") return json(200, [{ title: "Frieren", year: 2023, ids: { tmdb: 209867 }, genres: ["anime"] }]);
+  if (u.pathname === "/search/tmdb/70523") return json(200, [{ type: "show", show: { ids: { trakt: 120, tmdb: 70523 } } }]);
+  if (u.pathname === "/shows/120/ratings") return json(200, { rating: 8.9, votes: 900 });
   if (u.pathname === "/sync/watched/movies") return json(200, watchedMovies);
   if (u.pathname === "/sync/watched/shows") {
     // Like Trakt now: the watched list has no seasons; each show's episodes are on its progress page.
@@ -315,6 +329,49 @@ const waitForCheck = async (before) => {
   throw new Error("the automatic check didn't finish");
 };
 
+test("a fixed match reads Trakt for that title again, so nothing is sent twice", async () => {
+  // Pretend "Unknown film" (not found on Trakt) is matched to Heat's TMDB entry, which Trakt already has watched.
+  const item = store.trackbuddy_items.find((i) => i.id === "Unknown film");
+  item.tmdb = { id: 777, kind: "movie", genres: [], fetchedAt: Date.now() };
+  item.trakt = { reseed: true };
+  const before = requests.length;
+  const res = await send({ action: "traktSync" });
+  assert.equal(res.ok, true, res.error);
+  const after = requests.slice(before);
+  assert.ok(after.some((r) => r.path === "/sync/watched/movies"), "Trakt is read for the new match");
+  assert.equal(after.some((r) => r.method === "POST" && JSON.stringify(r.body).includes("777")), false, "Trakt already had it");
+  const fixed = items().find((i) => i.id === "Unknown film");
+  assert.equal(fixed.trakt.reseed, undefined);
+  assert.equal(fixed.trakt.sent.movie, true);
+});
+
+test("Trakt lists come in as tags, and a listed title not on the shelf is added as To watch", async () => {
+  traktLists = [{ id: 7, name: "Favourites", items: [
+    { type: "movie", movie: { title: "Heat", year: 1995, ids: { tmdb: 949 } } },
+    { type: "show", show: { title: "Mindhunter", year: 2017, ids: { tmdb: 67744 } } },
+    { type: "episode", show: { title: "Dark", year: 2017, ids: { tmdb: 70523 } }, episode: { season: 1, number: 1 } },
+  ] }];
+  const preview = await send({ action: "traktPullPreview" });
+  assert.equal(preview.ok, true, preview.error);
+  assert.ok(preview.traktPull.updates.some((u) => u.title === "Heat" && u.parts.includes("tagged trakt: favourites")));
+  assert.ok(preview.traktPull.updates.some((u) => u.title === "Dark" && u.parts.includes("tagged trakt: favourites")), "an episode on a list tags its show");
+  const added = preview.traktPull.additions.find((a) => a.title.startsWith("Mindhunter"));
+  assert.deepEqual(added.parts, ["series", "to watch", "tagged trakt: favourites"]);
+  const res = await send({ action: "traktPullApply" });
+  assert.equal(res.ok, true, res.error);
+  assert.ok(items().find((i) => i.id === "Heat").tags.includes("trakt: favourites"));
+  assert.equal(items().find((i) => i.title === "Mindhunter").status, "plan");
+  traktLists = [];
+});
+
+test("Recommended for you lists Trakt's picks, shows and movies in turn", async () => {
+  const res = await send({ action: "traktForYou" });
+  assert.equal(res.ok, true, res.error);
+  assert.deepEqual(res.tmdbResults.map((r) => [r.title, r.type, r.group]), [["Frieren", "anime", "trakt"], ["Collateral", "movie", "trakt"]]);
+  const asked = requests.filter((r) => r.path.startsWith("/recommendations/"));
+  assert.match(asked[0].headers.Authorization, /^Bearer /, "personal picks need the sign-in");
+});
+
 test("the automatic check is an alarm that follows the setting", async () => {
   let res = await send({ action: "traktSetOptions", pull: "6h" });
   assert.equal(res.trakt.pull, "6h");
@@ -361,4 +418,19 @@ test("disconnecting revokes the token and forgets what was sent", async () => {
   assert.ok(revoke.body.token);
   assert.equal(items().some((i) => i.trakt), false);
   assert.equal(alarms.has("keepshelf-trakt-pull"), false, "no automatic checks once disconnected");
+});
+
+test("a card's Trakt rating needs only the Client ID, and is kept for a day", async () => {
+  // Disconnected by now: ratings are public.
+  store.trackbuddy_items.find((i) => i.id === "Heat").tmdb.imdbId = "tt0113277";
+  const res = await send({ action: "traktRating", id: "Heat" });
+  assert.deepEqual(res.traktRating, { percent: 84, votes: 2500 });
+  const sent = requests.filter((r) => r.path === "/movies/tt0113277/ratings");
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].headers.Authorization, undefined, "no sign-in is sent for a public read");
+  await send({ action: "traktRating", id: "Heat" });
+  assert.equal(requests.filter((r) => r.path === "/movies/tt0113277/ratings").length, 1, "the second card open uses the cache");
+  // Without an IMDb id, the Trakt id is found from TMDB's.
+  const dark = await send({ action: "traktRating", id: "Dark" });
+  assert.deepEqual(dark.traktRating, { percent: 89, votes: 900 });
 });

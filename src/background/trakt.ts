@@ -40,8 +40,11 @@ import {
   entryTmdb,
   seasonsFromProgress,
   traktShowId,
+  reseedIds,
 } from "../shared/trakt-sync.js";
 import { STORAGE_KEY, getAllItems, importItems } from "../shared/storage.js";
+import { parseTraktRating, ratingPath, sanitizeCachedRating, traktIdFromSearch, type TraktRating } from "../shared/trakt-rating.js";
+import { TRAKT_SUGGESTIONS, parseTraktTitles, type TraktTitle } from "../shared/trakt-recs.js";
 import {
   PULL_MINUTES,
   activityFingerprint,
@@ -424,7 +427,7 @@ async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Pr
  */
 async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ sent: Map<string, TraktSent>; kept: KeptRating[] }> {
   const movies = await api<unknown>("/sync/watched/movies");
-  // Only the shows on the shelf with episodes to compare are worth a request each.
+  // Only the shows among these items are worth a request each.
   const shelfShows = new Set(items.filter((i) => i.tmdb?.kind === "tv").map((i) => i.tmdb!.id));
   const shows = await watchedShowsWithEpisodes((entry) => {
     const tmdb = entryTmdb(entry);
@@ -437,14 +440,23 @@ async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ se
   return { sent, kept };
 }
 
-async function seed(options: SyncOptions): Promise<void> {
-  const items = await getAllItems();
+/**
+ * Reads what Trakt already has and records it as sent. With `onlyReseed`, just the titles matched to a different title
+ * since (their old record no longer applies); otherwise the whole shelf, before the first send.
+ */
+async function seed(options: SyncOptions, onlyReseed = false): Promise<void> {
+  const all = await getAllItems();
+  const items = onlyReseed ? all.filter((i) => i.trakt?.reseed) : all;
+  if (items.length === 0) return;
   const { sent } = await readTrakt(items, options);
-  const byId = itemsById(items);
+  const byId = itemsById(all);
   const states = new Map<string, TraktItemState | undefined>();
-  for (const [id, value] of sent) states.set(id, { ...(byId.get(id)?.trakt ?? {}), sent: value });
+  for (const item of items) {
+    const { reseed: _r, ...rest } = byId.get(item.id)?.trakt ?? {};
+    states.set(item.id, { ...rest, sent: sent.get(item.id) ?? {} });
+  }
   await writeItemStates(states);
-  await setState({ seeded: true });
+  if (!onlyReseed) await setState({ seeded: true });
 }
 
 /** What a send would do right now, without sending or saving anything. */
@@ -529,6 +541,9 @@ export async function syncTrakt(mode: "auto" | "catchup"): Promise<void> {
       if (!state.seeded) {
         await setState({ progress: "Reading what Trakt already has…" });
         await seed(options);
+      } else if (reseedIds(await getAllItems()).size) {
+        await setState({ progress: "Reading the re-matched titles on Trakt…" });
+        await seed(options, true);
       }
       const changes = pendingChanges(await getAllItems(), options);
       const parts = batches(changes);
@@ -615,7 +630,22 @@ async function readLibrary(items: SavedItem[], since?: number): Promise<PulledTi
     ratedShows: await get("/sync/ratings/shows"),
     watchlistMovies: await get("/sync/watchlist/movies"),
     watchlistShows: await get("/sync/watchlist/shows"),
+    lists: await personalLists(),
   });
+}
+
+/** Your personal lists with their items, for tags. A few dozen at most; each is one request. */
+async function personalLists(): Promise<Array<{ name: string; items: unknown }>> {
+  const raw = await api<unknown>("/users/me/lists");
+  const lists = (Array.isArray(raw) ? raw : []) as Array<{ name?: unknown; ids?: { trakt?: unknown; slug?: unknown } }>;
+  const out: Array<{ name: string; items: unknown }> = [];
+  for (const entry of lists.slice(0, 30)) {
+    const id = typeof entry?.ids?.trakt === "number" ? String(entry.ids.trakt) : typeof entry?.ids?.slug === "string" ? entry.ids.slug : undefined;
+    if (typeof entry?.name !== "string" || !id || !/^[\w-]{1,120}$/.test(id)) continue;
+    await setState({ progress: `Reading your list “${entry.name.slice(0, 40)}”…` });
+    out.push({ name: entry.name, items: await api<unknown>(`/users/me/lists/${encodeURIComponent(id)}/items?extended=full`) });
+  }
+  return out;
 }
 
 async function requireConnected(): Promise<void> {
@@ -717,4 +747,71 @@ export async function autoPull(fetchInfo: (kind: "movie" | "tv", id: number) => 
     return;
   }
   await applyPull(fetchInfo, { since: state.pullAt, auto: true, ...(fingerprint ? { fingerprint } : {}) });
+}
+
+/* ── Community rating ────────────────────────────────────── */
+
+/** A public read: the Client ID is enough, so this works before connecting. */
+async function publicGet<T>(path: string): Promise<T | undefined> {
+  const { clientId } = await getSettings();
+  if (!clientId) return undefined;
+  const response = await timedFetch(`${TRAKT_API_BASE}${path}`, { method: "GET", headers: apiHeaders(clientId) });
+  if (response.status === 404) return undefined;
+  if (!response.ok) throw new TraktError(`Trakt answered ${response.status}.`);
+  return (await response.json()) as T;
+}
+
+const RATING_CACHE = "keepshelf_trakt_rating_";
+
+/** Trakt's rating for a TMDB title, from a day's cache in session storage when there is one. Undefined without a Client ID. */
+export async function communityRating(tmdb: { kind: "movie" | "tv"; id: number; imdbId?: string }): Promise<TraktRating | null | undefined> {
+  if (!(await getSettings()).clientId) return undefined;
+  const key = `${RATING_CACHE}${tmdb.kind}:${tmdb.id}`;
+  const now = Date.now();
+  try {
+    const cached = sanitizeCachedRating((await chrome.storage.session.get(key))[key], now);
+    if (cached) return cached.rating;
+  } catch {
+    /* no session cache; ask Trakt */
+  }
+  const id = await traktIdFor(tmdb);
+  const rating = id ? parseTraktRating(await publicGet<unknown>(ratingPath(tmdb.kind, id))) ?? null : null;
+  try {
+    await chrome.storage.session.set({ [key]: { at: now, rating } });
+  } catch {
+    /* fetched again next time */
+  }
+  return rating;
+}
+
+/** The id Trakt knows a title by: its IMDb id, or its Trakt id found from TMDB's. */
+async function traktIdFor(tmdb: { kind: "movie" | "tv"; id: number; imdbId?: string }): Promise<string | undefined> {
+  if (tmdb.imdbId && /^tt\d{5,10}$/.test(tmdb.imdbId)) return tmdb.imdbId;
+  return traktIdFromSearch(await publicGet<unknown>(`/search/tmdb/${tmdb.id}?type=${tmdb.kind === "movie" ? "movie" : "show"}`), tmdb.kind);
+}
+
+/* ── Suggestions ─────────────────────────────────────────── */
+
+/** Titles Trakt relates to this one. Public: a Client ID is enough. Empty without one. */
+export async function traktRelated(tmdb: { kind: "movie" | "tv"; id: number; imdbId?: string }): Promise<TraktTitle[]> {
+  if (!(await getSettings()).clientId) return [];
+  const id = await traktIdFor(tmdb);
+  if (!id) return [];
+  const path = `/${tmdb.kind === "movie" ? "movies" : "shows"}/${encodeURIComponent(id)}/related?extended=full&limit=${TRAKT_SUGGESTIONS}`;
+  return parseTraktTitles(await publicGet<unknown>(path), tmdb.kind);
+}
+
+/** Trakt's recommendations from your own history: movies and shows. Needs the sign-in. */
+export async function traktForYou(): Promise<TraktTitle[]> {
+  await requireConnected();
+  const query = `?extended=full&limit=${TRAKT_SUGGESTIONS}&ignore_collected=true&ignore_watchlisted=true`;
+  const movies = parseTraktTitles(await api<unknown>(`/recommendations/movies${query}`), "movie");
+  const shows = parseTraktTitles(await api<unknown>(`/recommendations/shows${query}`), "tv");
+  // Alternate, so neither kind is pushed out of sight.
+  const out: TraktTitle[] = [];
+  for (let i = 0; i < Math.max(movies.length, shows.length); i++) {
+    if (shows[i]) out.push(shows[i]);
+    if (movies[i]) out.push(movies[i]);
+  }
+  return out;
 }

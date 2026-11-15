@@ -117,3 +117,19 @@ test("the new-season switch travels with a backup, and only as a real yes or no"
   assert.equal(collectSettings({ newSeasonReminders: true }, { includeToken: false }).newSeasonReminders, true);
   assert.ok(describeSettings({ newSeasonReminders: true }).includes("your switches and preferences"));
 });
+
+const FAKE_CLIENT = "fakeclientid0123456789abcdef0123456789abcdef0123456789abcdef0123";
+
+test("the Trakt app and its switches travel with a backup, but never the sign-in", () => {
+  const s = collectSettings({ trakt: { clientId: FAKE_CLIENT, auto: true, watchlist: false, pull: "6h", tokens: { accessToken: "x" } } }, { includeToken: false });
+  assert.deepEqual(s.trakt, { clientId: FAKE_CLIENT, auto: true, watchlist: false, pull: "6h" });
+  assert.equal(JSON.stringify(s).includes("accessToken"), false);
+  assert.deepEqual(describeSettings(s), ["your Trakt app (connect again afterwards)"]);
+});
+
+test("Trakt settings are checked when read back", () => {
+  const s = sanitizeSettings({ trakt: { clientId: FAKE_CLIENT, auto: "yes", pull: "every minute", watchlist: true } });
+  assert.deepEqual(s.trakt, { clientId: FAKE_CLIENT, watchlist: true });
+  assert.equal(sanitizeSettings({ trakt: { clientId: "bad id!", auto: true } }), undefined, "switches without a valid app are dropped");
+  assert.equal(sanitizeSettings({ trakt: "x" }), undefined);
+});

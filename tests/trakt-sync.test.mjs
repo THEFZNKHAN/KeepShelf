@@ -182,3 +182,22 @@ test("shows are asked about by Trakt id or slug", () => {
   assert.equal(traktShowId({ show: { ids: { slug: "../evil" } } }), undefined);
   assert.equal(entryTmdb({ show: { ids: { tmdb: 1396 } } }), 1396);
 });
+
+import { reseedIds, traktBadge } from "../dist-test/trakt-sync.js";
+
+test("a title's Trakt badge says where it stands", () => {
+  const link = { connected: true, ready: true, watchlist: false };
+  assert.equal(traktBadge(movie({ status: "done", done: true }), { ...link, connected: false }), undefined, "nothing when not connected");
+  assert.equal(traktBadge({ ...movie(), type: "book" }, link), undefined);
+  assert.equal(traktBadge({ ...movie(), tmdb: undefined }, link).state, "no-info");
+  assert.equal(traktBadge(movie({ status: "done", done: true, trakt: { problem: "Not found on Trakt", sent: { movie: true } } }), link).state, "problem");
+  assert.equal(traktBadge(movie({ status: "done", done: true }), link).state, "waiting");
+  assert.equal(traktBadge(movie({ status: "done", done: true, trakt: { sent: { movie: true } } }), link).state, "synced");
+  assert.equal(traktBadge(movie({ status: "done", done: true, trakt: { sent: { movie: true } } }), { ...link, ready: false }).state, "waiting", "before the first send");
+  assert.equal(traktBadge(movie({ status: "done", done: true, trakt: { reseed: true } }), link).state, "waiting", "a new match is checked first");
+  assert.equal(traktBadge(movie({ status: "plan" }), link), undefined, "nothing to send yet");
+});
+
+test("re-matched titles are the ones read again", () => {
+  assert.deepEqual([...reseedIds([movie({ trakt: { reseed: true } }), show()])], [949]);
+});

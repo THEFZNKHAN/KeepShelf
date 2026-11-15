@@ -3983,3 +3983,39 @@ button.er-stat:hover {
   gap: 8px;
   margin-top: 8px;
 }
+
+/* Bulk status picker */
+.status-panel .status-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.status-panel .status-option {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+/* Trakt state on rows and cards */
+.trakt-mark {
+  font-size: 16px;
+  color: var(--error);
+  flex: none;
+}
+/* Same size and alignment as the other chips with an icon ("More like this"). */
+.pick-chip-trakt {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 8px 1px 5px;
+}
+.pick-chip-trakt .material-symbols-outlined {
+  font-size: 13px;
+}
+.pick-chip-trakt.is-synced .material-symbols-outlined {
+  color: #2e7d32;
+}
+.pick-chip-trakt.is-problem,
+.pick-chip-trakt.is-problem .material-symbols-outlined {
+  color: var(--error);
+}

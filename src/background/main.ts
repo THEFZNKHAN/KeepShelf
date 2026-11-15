@@ -46,8 +46,10 @@ import {
   sanitizeResult,
 } from "../shared/tmdb-search.js";
 import { TRAILER_LANGUAGES, pickTrailer } from "../shared/trailer.js";
+import { newTitlesOnly, type TraktTitle } from "../shared/trakt-recs.js";
+import type { TmdbSearchResult } from "../shared/tmdb-search.js";
 import { findNearDuplicates } from "../shared/fuzzy.js";
-import { buildUserPatch } from "../shared/user-data.js";
+import { applyStatus, buildUserPatch, isItemStatus } from "../shared/user-data.js";
 import {
   getNotified,
   isNewSeasonRemindersEnabled,
@@ -66,6 +68,9 @@ import {
   previewTrakt,
   previewPull,
   applyPull,
+  communityRating,
+  traktForYou,
+  traktRelated,
   autoPull,
   syncPullAlarm,
   TRAKT_PULL_ALARM,
@@ -83,6 +88,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "saveTab",
   "delete",
   "update",
+  "setStatus",
   "syncKeep",
   "import",
   "merge",
@@ -96,6 +102,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "removeBookMatch",
   "enrich",
   "removeTmdbMatch",
+  "setTmdbMatch",
   "refreshStaleTmdb",
   "refreshDates",
   "clear",
@@ -121,7 +128,7 @@ async function tmdbInfoFor(kind: "movie" | "tv", id: number) {
 useSerialQueue(runSerial);
 
 /** Changes to the shelf that may have something to send to Trakt. */
-const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "import", "merge", "restore", "addFromTmdb", "enrich"]);
+const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "setStatus", "setTmdbMatch", "import", "merge", "restore", "addFromTmdb", "enrich"]);
 
 chrome.runtime.onMessage.addListener(
   (
@@ -243,15 +250,45 @@ async function similarTmdb(id: unknown): Promise<MessageResponse> {
     const err = rec.status === "rejected" ? rec.reason : undefined;
     return { ok: false, error: err instanceof Error ? err.message : "Could not get recommendations." };
   }
-  return {
-    ok: true,
-    tmdbResults: mergeFranchise({
-      self: tmdb,
-      collection: col.status === "fulfilled" ? (col.value as ReturnType<typeof parseResultList>) : [],
-      named: nam.status === "fulfilled" ? (nam.value as ReturnType<typeof parseResultList>) : [],
-      recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
-    }),
-  };
+  const merged = mergeFranchise({
+    self: tmdb,
+    collection: col.status === "fulfilled" ? (col.value as ReturnType<typeof parseResultList>) : [],
+    named: nam.status === "fulfilled" ? (nam.value as ReturnType<typeof parseResultList>) : [],
+    recommended: rec.status === "fulfilled" ? parseResultList(rec.value, tmdb.kind) : [],
+  });
+  // Trakt's related titles after TMDB's, without repeats. Optional: without a Client ID, or if Trakt fails, TMDB's stand alone.
+  let fromTrakt: TmdbSearchResult[] = [];
+  try {
+    const related = newTitlesOnly(await traktRelated(tmdb), [...merged, { kind: tmdb.kind, id: tmdb.id }]);
+    fromTrakt = await traktResults(related);
+  } catch {
+    /* TMDB's list is enough */
+  }
+  return { ok: true, tmdbResults: [...merged, ...fromTrakt] };
+}
+
+/**
+ * Trakt's titles as result rows: each looked up on TMDB for its poster, overview and score (in parallel); a lookup that
+ * fails still leaves a plain row. Trakt's anime label decides the type, since its genres are better at that than TMDB's.
+ */
+async function traktResults(titles: TraktTitle[]): Promise<TmdbSearchResult[]> {
+  const client = await tmdbClient();
+  const looked = await Promise.allSettled(
+    titles.map((t) => (client ? client.get<unknown>(`/${t.kind}/${t.tmdb}`, { language: "en-US" }) : Promise.reject(new Error("no token"))))
+  );
+  return titles.map((t, i) => {
+    const answer = looked[i];
+    const found = answer.status === "fulfilled" ? parseResultList({ results: [answer.value] }, t.kind)[0] : undefined;
+    const base: TmdbSearchResult = found ?? {
+      id: t.tmdb,
+      kind: t.kind,
+      type: t.kind === "movie" ? "movie" : "series",
+      title: t.title,
+      ...(t.year ? { year: t.year } : {}),
+      ...(t.overview ? { overview: t.overview } : {}),
+    };
+    return { ...base, ...(t.anime ? { type: "anime" as const } : {}), group: "trakt" as const };
+  });
 }
 
 /**
@@ -270,6 +307,25 @@ async function trailerFor(id: unknown): Promise<MessageResponse> {
     return { ok: true, trailer: trailer ?? null };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not look for a trailer." };
+  }
+}
+
+/**
+ * Replaces a title's TMDB match with the one picked from a search ("Fix match"). Its Trakt record belonged to the old
+ * match, so it is read again from Trakt before anything is sent for the new one.
+ */
+async function setTmdbMatch(id: unknown, raw: unknown): Promise<MessageResponse> {
+  const result = sanitizeResult(raw);
+  const item = typeof id === "string" ? (await getAllItems()).find((i) => i.id === id) : undefined;
+  if (!result || !item) return { ok: false, error: "That match isn't valid." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const info = await fetchDetails(client, result.kind, result.id);
+    const items = await updateItem(item.id, { tmdb: info, tmdbOptOut: undefined, trakt: { reseed: true } });
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not use that match." };
   }
 }
 
@@ -560,6 +616,12 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       const items = await updateItem(message.id, cleanChanges(item, message.changes));
       return { ok: true, items };
     }
+    case "setStatus": {
+      if (!isItemStatus(message.status) || !Array.isArray(message.ids)) return { ok: false, error: "Unknown status." };
+      const { items, changed } = applyStatus(await getAllItems(), message.ids, message.status);
+      if (changed) await chrome.storage.local.set({ [STORAGE_KEY]: items });
+      return { ok: true, items, updated: changed };
+    }
     case "syncKeep": {
       let synced = 0;
       let failed = 0;
@@ -656,6 +718,9 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     case "similarTmdb": {
       return similarTmdb(message.id);
     }
+    case "setTmdbMatch": {
+      return setTmdbMatch(message.id, message.result);
+    }
     case "addFromTmdb": {
       return addFromTmdb(message.result);
     }
@@ -698,6 +763,13 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
       return { ok: true, trakt: await traktStatus() };
     case "traktPreview":
       return { ok: true, traktPreview: await previewTrakt() };
+    case "traktRating": {
+      const tmdb = (await getAllItems()).find((i) => i.id === message.id)?.tmdb;
+      if (!tmdb) return { ok: true, traktRating: null };
+      return { ok: true, traktRating: (await communityRating(tmdb)) ?? null };
+    }
+    case "traktForYou":
+      return { ok: true, tmdbResults: await traktResults(await traktForYou()) };
     case "traktPullPreview":
       return { ok: true, traktPull: await previewPull() };
     case "traktPullApply": {

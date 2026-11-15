@@ -1,6 +1,7 @@
 import type { EpisodeRatings } from "./episode-ratings.js";
 import type { TraktItemState, TraktPreview, TraktStatus } from "./trakt-sync.js";
 import type { PullPreview } from "./trakt-pull.js";
+import type { TraktRating } from "./trakt-rating.js";
 import type { TmdbSearchResult } from "./tmdb-search.js";
 import type { KeepSettings, KeepSyncResult, KeepTarget } from "./keep-settings.js";
 
@@ -180,11 +181,15 @@ export type MessageAction =
   | { action: "similarTmdb"; id: string }
   | { action: "trailerFor"; id: string }
   | { action: "addFromTmdb"; result: TmdbSearchResult }
+  | { action: "setTmdbMatch"; id: string; result: TmdbSearchResult }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }
   | { action: "testKeepAppend"; target: KeepTarget }
   | { action: "getLastKeepResult" }
+  | { action: "setStatus"; ids: string[]; status: ItemStatus }
+  | { action: "traktRating"; id: string }
+  | { action: "traktForYou" }
   | { action: "traktStatus" }
   | { action: "traktSetClientId"; clientId: string }
   | { action: "traktSetOptions"; auto?: boolean; watchlist?: boolean; pull?: string }
@@ -206,6 +211,7 @@ export type MessageResponse =
       skipped?: number;
       enriched?: number;
       unmatched?: number;
+      updated?: number;
     }
   | { ok: true; tmdb: { configured: boolean } }
   | { ok: true; episodeRatings: EpisodeRatings }
@@ -217,6 +223,7 @@ export type MessageResponse =
   | { ok: true; trakt: TraktStatus }
   | { ok: true; traktPreview: TraktPreview }
   | { ok: true; traktPull: PullPreview }
+  | { ok: true; traktRating: TraktRating | null }
   | { ok: true; settings: KeepSettings }
   | { ok: true; keep: KeepSyncResult }
   | { ok: true; lastKeepResult: { message: string; isError: boolean; at: number } | null }

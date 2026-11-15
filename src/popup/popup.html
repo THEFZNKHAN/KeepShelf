@@ -112,8 +112,14 @@
           <button type="button" id="pick-random" class="icon-btn" aria-label="Pick something for me" title="Pick something for me">
             <span class="material-symbols-outlined">casino</span>
           </button>
+          <button type="button" id="trakt-foryou" class="icon-btn" aria-label="Recommended for you on Trakt" title="Recommended for you on Trakt" hidden>
+            <span class="material-symbols-outlined">recommend</span>
+          </button>
           <button type="button" id="copy-items" class="icon-btn" aria-label="Copy" title="Copy">
             <span class="material-symbols-outlined">content_copy</span>
+          </button>
+          <button type="button" id="status-selected" class="icon-btn" aria-label="Set status of selected" title="Set status of selected" hidden>
+            <span class="material-symbols-outlined">done_all</span>
           </button>
           <button type="button" id="sync-selected" class="icon-btn" aria-label="Sync selected to Keep" title="Sync selected to Keep">
             <span class="material-symbols-outlined">cloud_upload</span>
@@ -702,7 +708,7 @@
             <div class="pref-row">
               <div class="pref-text">
                 <strong>Include my settings</strong>
-                <span>Saves your TMDB token too, so keep the file private.</span>
+                <span>Saves your TMDB token and Trakt app too, so keep the file private.</span>
               </div>
               <label class="switch" title="Include my settings in the backup">
                 <input type="checkbox" id="backup-include-settings" aria-label="Include my settings in the backup" checked />
@@ -793,6 +799,17 @@
             <div id="duplicates-result" class="dup-result"></div>
           </div>
         </details>
+      </div>
+    </div>
+
+    <div id="status-dialog" class="confirm-dialog" hidden>
+      <div class="confirm-backdrop" data-status-dismiss></div>
+      <div class="confirm-panel status-panel" role="dialog" aria-modal="true" aria-labelledby="status-dialog-title">
+        <h2 id="status-dialog-title" class="confirm-title">Set 3 selected to</h2>
+        <div id="status-dialog-options" class="status-options"></div>
+        <div class="confirm-actions">
+          <button type="button" id="status-dialog-cancel" class="btn btn-outline">Cancel</button>
+        </div>
       </div>
     </div>
 

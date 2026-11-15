@@ -168,3 +168,26 @@ test("a backup keeps the season record, and a damaged one is dropped", () => {
   const bad = parseImportFile(JSON.stringify({ items: [{ ...item, seasonsAtFinish: "lots" }] }), "backup.json").items[0];
   assert.equal("seasonsAtFinish" in bad, false);
 });
+
+import { applyStatus } from "../dist-test/user-data.js";
+
+test("applyStatus sets one status on the chosen items, like changing each card", () => {
+  const show = (id, extra = {}) => ({ id, title: id, type: "series", subtitle: "", googleQuery: "", sourceUrl: "", savedAt: 1, ...extra });
+  const items = [
+    show("a", { status: "in_progress", tmdb: { id: 1, kind: "tv", genres: [], fetchedAt: 1, seasons: 3, seasonEpisodes: [8, 8, 8] } }),
+    show("b", { status: "done", done: true, doneAt: 5 }),
+    show("c", { status: "plan" }),
+  ];
+  const { items: next, changed } = applyStatus(items, ["a", "b"], "done", 1000);
+  assert.equal(changed, 1, "b was done already");
+  const a = next.find((i) => i.id === "a");
+  assert.equal(a.status, "done");
+  assert.equal(a.done, true);
+  assert.equal(a.doneAt, 1000);
+  assert.equal(a.seasonsAtFinish, 3, "the season count is kept for new-season reminders");
+  assert.equal(next.find((i) => i.id === "b").doneAt, 5, "an item already done keeps its date");
+  assert.equal(next.find((i) => i.id === "c").status, "plan", "unticked items are untouched");
+  const back = applyStatus(next, ["a"], "plan", 2000).items.find((i) => i.id === "a");
+  assert.equal(back.done, false);
+  assert.equal(back.doneAt, undefined);
+});

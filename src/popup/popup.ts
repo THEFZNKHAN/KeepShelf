@@ -14,8 +14,9 @@ import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
-import type { TraktPreview, TraktStatus } from "../shared/trakt-sync.js";
+import { traktBadge, type TraktPreview, type TraktStatus } from "../shared/trakt-sync.js";
 import type { PullPreview } from "../shared/trakt-pull.js";
+import { ratingText, type TraktRating } from "../shared/trakt-rating.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
 import {
   AUTO_SEARCH_DELAY_MS,
@@ -147,6 +148,9 @@ const remembering = startMode === "remember";
 const TYPE_CHIPS: Array<MediaType | "all"> = ["all", "movie", "series", "anime"];
 
 let allItems: SavedItem[] = [];
+/** The Trakt connection as far as rows and cards need it; filled in when Settings loads it. */
+let traktLink: { connected: boolean; ready: boolean; watchlist: boolean } = { connected: false, ready: false, watchlist: false };
+const traktForYouEl = document.getElementById("trakt-foryou") as HTMLButtonElement;
 /** False until the first load of the shelf finishes. */
 let shelfLoaded = false;
 let activeTab: "media" | "books" | "tabs" = remembering ? storedChoice("keepshelf.tab", ["media", "books", "tabs"], "media") : "media";
@@ -230,6 +234,10 @@ const moreFiltersEl = document.getElementById("more-filters")!;
 const toggleFiltersEl = document.getElementById("toggle-filters") as HTMLButtonElement;
 const copyItemsEl = document.getElementById("copy-items") as HTMLButtonElement;
 const deleteSelectedEl = document.getElementById("delete-selected") as HTMLButtonElement;
+const statusSelectedEl = document.getElementById("status-selected") as HTMLButtonElement;
+const statusDialogEl = document.getElementById("status-dialog")!;
+const statusDialogTitleEl = document.getElementById("status-dialog-title")!;
+const statusDialogOptionsEl = document.getElementById("status-dialog-options")!;
 const tagFilterEl = document.getElementById("tag-filter") as HTMLButtonElement;
 const tagPicker = createTagPicker(tagFilterEl, (tag) => {
   tagFilter = tag;
@@ -1089,10 +1097,11 @@ function createTypeBadge(item: SavedItem): HTMLElement | undefined {
 }
 
 /** Line 2: the facts about the title itself, such as "2h 28m | IMDb 8.8 · TMDB 8.4 · PG-13". Short, so it never needs cropping. */
-function factsText(item: SavedItem): string {
+function factsText(item: SavedItem, trakt?: TraktRating): string {
   const parts = [itemSubtitle(item)];
   if (isTrackable(item)) {
     if (item.tmdb?.rating) parts.push(`TMDB ${item.tmdb.rating}`);
+    if (trakt) parts.push(ratingText(trakt));
     if (item.tmdb?.certification) parts.push(item.tmdb.certification);
     if (item.bookInfo?.pages) parts.push(`${item.bookInfo.pages} pages`);
     const olRating = bookRating(item.bookInfo);
@@ -1159,6 +1168,15 @@ function createRowShell(item: SavedItem, withBadge = true): { li: HTMLLIElement;
   titleRow.append(title);
   const badge = withBadge ? createTypeBadge(item) : undefined;
   if (badge) titleRow.append(badge);
+  // Rows stay quiet about Trakt unless something is wrong; the card says the rest.
+  if (traktLink.connected && item.trakt?.problem) {
+    const mark = document.createElement("span");
+    mark.className = "material-symbols-outlined trakt-mark";
+    mark.textContent = "sync_problem";
+    mark.title = `${item.trakt.problem}. Open the card to fix the match.`;
+    mark.setAttribute("aria-label", "Not matched on Trakt");
+    titleRow.append(mark);
+  }
   body.append(titleRow);
 
   return { li, typeIconEl, body };
@@ -1249,6 +1267,8 @@ function fillOptions(select: HTMLSelectElement, entries: Array<[string, string]>
 
 function render(): void {
   cancelRowHover();
+  // Trakt's picks for you sit beside the dice: media only, and only while connected.
+  traktForYouEl.hidden = !(traktLink.connected && activeTab === "media");
   const items = filteredItems();
   const tabCount = tabItems().length;
 
@@ -1381,8 +1401,8 @@ function render(): void {
 /* ── Search TMDB from the search box ──────────────────────── */
 
 interface OnlineSearch {
-  /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. */
-  kind: "search" | "like";
+  /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. "match": picking the right TMDB title for one on your shelf. */
+  kind: "search" | "like" | "match" | "foryou";
   /** The words searched for, or (for "like") the title's name. */
   query: string;
   /** For "like": the saved item the recommendations are for. */
@@ -1408,7 +1428,7 @@ function currentOnlineState() {
 /** Shows the Search TMDB row, or the results when they are open. Returns true when the results are on screen. */
 function updateOnlineUi(): boolean {
   // Recommendations for a title don't depend on the search box, so typing and tabs don't decide whether they show.
-  if (online?.kind === "like") {
+  if (online?.kind === "like" || online?.kind === "match" || online?.kind === "foryou") {
     onlineOffered = undefined;
     onlineSearchEl.hidden = true;
     onlineResultsEl.hidden = false;
@@ -1480,6 +1500,75 @@ async function startSimilar(item: SavedItem): Promise<void> {
   render();
 }
 
+/** Searches TMDB for a title's name so the right one can be picked to replace its match. */
+async function startMatch(item: SavedItem): Promise<void> {
+  const sourceId = item.id;
+  const query = [item.title, item.year].filter(Boolean).join(" ");
+  const current = () => online?.kind === "match" && online.sourceId === sourceId;
+  online = { kind: "match", query, sourceId, status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "searchTmdb", query: item.title });
+    if (!current()) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No results came back.");
+    online = { kind: "match", query, sourceId, status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (!current()) return;
+    online = { kind: "match", query, sourceId, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
+  }
+  render();
+}
+
+/** Trakt's picks for you from your history, in the results view, each with an Add button. */
+async function startForYou(): Promise<void> {
+  const current = () => online?.kind === "foryou";
+  online = { kind: "foryou", query: "Trakt", status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "traktForYou" });
+    if (!current()) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No recommendations came back.");
+    online = { kind: "foryou", query: "Trakt", status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (!current()) return;
+    online = { kind: "foryou", query: "Trakt", status: "error", results: [], error: err instanceof Error ? err.message : "Couldn't get recommendations from Trakt." };
+  }
+  render();
+}
+
+/** "Fix match": close the card and list TMDB's titles of that name, each with "Use this". */
+function openFixMatch(item: SavedItem): void {
+  closePick();
+  if (!upcomingView.hidden) closeUpcoming();
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  void startMatch(item);
+}
+
+async function useMatch(result: TmdbSearchResult): Promise<void> {
+  const sourceId = online?.kind === "match" ? online.sourceId : undefined;
+  if (!sourceId) return;
+  const key = `${result.kind}:${result.id}`;
+  adding.add(key);
+  renderOnlineResults();
+  try {
+    const response = await sendToBackground({ action: "setTmdbMatch", id: sourceId, result });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    online = undefined;
+    render();
+    showStatus(`Matched to ${result.title}${result.year ? ` (${result.year})` : ""}.${traktLink.connected ? " Trakt will be checked before it's sent." : ""}`, false, 5000);
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Couldn't use that match.", true, 5000);
+  } finally {
+    adding.delete(key);
+    if (online) renderOnlineResults();
+  }
+}
+
 /** "More like this" on a card: close the card and show the recommendations where the search results go. */
 function openSimilar(item: SavedItem): void {
   closePick();
@@ -1548,7 +1637,21 @@ function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
 
   const key = `${result.kind}:${result.id}`;
   let action: HTMLElement;
-  if (findOnShelf(result, allItems)) {
+  const matching = online?.kind === "match" ? allItems.find((i) => i.id === online!.sourceId) : undefined;
+  if (matching && matching.tmdb?.id === result.id && matching.tmdb.kind === result.kind) {
+    action = document.createElement("span");
+    action.className = "online-done";
+    action.textContent = "Current match";
+  } else if (matching) {
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "btn btn-outline btn-sm online-add";
+    use.disabled = adding.has(key);
+    use.textContent = adding.has(key) ? "Using…" : "Use this";
+    use.setAttribute("aria-label", `Use ${result.title} as the match`);
+    use.addEventListener("click", () => void useMatch(result));
+    action = use;
+  } else if (findOnShelf(result, allItems)) {
     action = document.createElement("span");
     action.className = "online-done";
     const icon = document.createElement("span");
@@ -1585,31 +1688,49 @@ function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
 function renderOnlineResults(): void {
   if (!online) return;
   const like = online.kind === "like";
-  onlineTitleEl.textContent = like ? `Like “${online.query}”` : `“${online.query}” on TMDB`;
+  const match = online.kind === "match";
+  const forYou = online.kind === "foryou";
+  onlineTitleEl.textContent = like
+    ? `Like “${online.query}”`
+    : match
+      ? `Pick the right “${online.query}”`
+      : forYou
+        ? "Recommended for you on Trakt"
+        : `“${online.query}” on TMDB`;
   if (online.status === "loading") {
-    onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : "Searching TMDB…"));
+    onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : forYou ? "Asking Trakt…" : "Searching TMDB…"));
   } else if (online.status === "error") {
     const query = online.query;
     const sourceId = online.sourceId;
     const retry = () => {
       const source = sourceId ? allItems.find((i) => i.id === sourceId) : undefined;
       if (like && source) void startSimilar(source);
-      else if (!like) void startOnlineSearch(query);
+      else if (match && source) void startMatch(source);
+      else if (forYou) void startForYou();
+      else if (!like && !match) void startOnlineSearch(query);
     };
     onlineBodyEl.replaceChildren(onlineMessage(online.error, retry));
   } else if (online.results.length === 0) {
     onlineBodyEl.replaceChildren(
-      onlineMessage(like ? `TMDB has no recommendations for “${online.query}” yet.` : `Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`)
+      onlineMessage(
+        like
+          ? `TMDB has no recommendations for “${online.query}” yet.`
+          : forYou
+            ? "Trakt has no recommendations for you yet. Watch and rate a few more titles there."
+            : `Nothing found on TMDB for “${online.query}”. Check the spelling, or try fewer words.`
+      )
     );
   } else {
     const list = document.createElement("ul");
     list.className = "list";
-    // "More like this" leads with the title's own franchise; label it, and the recommendations after it.
-    const hasFranchise = online.kind === "like" && online.results.some((r) => r.group === "franchise");
+    // "More like this" leads with the title's own franchise, then TMDB's suggestions, then Trakt's; with more than one
+    // kind in the list, each gets a heading.
+    const labelOf = (r: TmdbSearchResult) => (r.group === "franchise" ? "Same franchise" : r.group === "trakt" ? "Related on Trakt" : "You might also like");
+    const headed = online.kind === "like" && new Set(online.results.map(labelOf)).size > 1;
     let group: string | undefined;
     for (const result of online.results) {
-      if (hasFranchise) {
-        const next = result.group === "franchise" ? "Same franchise" : "You might also like";
+      if (headed) {
+        const next = labelOf(result);
         if (next !== group) {
           const heading = document.createElement("li");
           heading.className = "online-group";
@@ -1711,6 +1832,7 @@ function updateSyncButton(): void {
 function updateSelectionUi(): void {
   const selected = getSelectedIds().length;
   deleteSelectedEl.hidden = selected === 0;
+  statusSelectedEl.hidden = selected === 0;
   // One copy button: the ticked rows when there are some, otherwise everything the list shows.
   const label = selected > 0 ? `Copy ${selected} selected` : "Copy everything shown";
   copyItemsEl.title = label;
@@ -2465,6 +2587,19 @@ function buildTmdbBlock(itemId: string): HTMLElement {
       });
       actions.append(removeBtn);
     }
+    if (tmdbConfigured) {
+      const pickBtn = document.createElement("button");
+      pickBtn.type = "button";
+      pickBtn.className = "btn btn-outline";
+      pickBtn.textContent = "Pick a different match";
+      pickBtn.addEventListener("click", () => {
+        const current = allItems.find((i) => i.id === itemId);
+        if (!current) return;
+        closeEditDialog();
+        openFixMatch(current);
+      });
+      actions.append(pickBtn);
+    }
     block.append(actions);
   };
 
@@ -2975,6 +3110,11 @@ function whenText(at: number): string {
 
 function renderTrakt(): void {
   const t = trakt;
+  const link = { connected: !!t?.connected, ready: !!t?.ready, watchlist: !!t?.watchlist };
+  if (JSON.stringify(link) !== JSON.stringify(traktLink)) {
+    traktLink = link;
+    render();
+  }
   const hasId = !!t?.clientId;
   const connected = !!t?.connected;
   traktClientStatusEl.textContent = hasId ? "Client ID saved" : "Not set";
@@ -2986,6 +3126,7 @@ function renderTrakt(): void {
   traktSyncEl.disabled = traktBusy || !connected || !!t?.running;
   traktPreviewEl.disabled = traktBusy || !connected || !!t?.running;
   traktPullEl.disabled = traktBusy || !connected || !!t?.running;
+
   traktPullApplyEl.disabled = traktBusy || !!t?.running;
   traktSyncLabelEl.textContent = t?.running ? "Sending…" : t?.ready ? "Send what's waiting now" : "Send everything now";
   watchTraktProgress(!!t?.running);
@@ -3195,6 +3336,15 @@ traktPullEl.addEventListener("click", async () => {
     traktPullLabelEl.textContent = "Get from Trakt";
     renderTrakt();
   }
+});
+
+traktForYouEl.addEventListener("click", () => {
+  closePick();
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  if (activeTab !== "media") document.querySelector<HTMLButtonElement>('[data-tab="media"]')?.click();
+  void startForYou();
 });
 
 document.getElementById("trakt-pull-cancel")!.addEventListener("click", () => {
@@ -3653,6 +3803,20 @@ function detailChips(item: SavedItem): Array<{ text: string; className: string }
   return chips;
 }
 
+/** Adds Trakt's community rating to the open card's facts once it arrives. Quietly does nothing without a Client ID. */
+async function showTraktRating(item: SavedItem): Promise<void> {
+  try {
+    const response = await sendToBackground({ action: "traktRating", id: item.id });
+    if (!response.ok || !("traktRating" in response) || !response.traktRating) return;
+    // Only if the same card is still open.
+    if (pickedId !== item.id || pickDialogEl.hidden) return;
+    pickDetailEl.textContent = [factsText(item, response.traktRating), genreParts(item).join("")].filter(Boolean).join("\n");
+    pickDetailEl.title = `Trakt: ${response.traktRating.percent}% from ${response.traktRating.votes.toLocaleString()} votes`;
+  } catch {
+    /* the card is fine without it */
+  }
+}
+
 function showDetails(item: SavedItem, mode: DetailMode): void {
   cancelRowHover();
   pickedId = item.id;
@@ -3672,6 +3836,8 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickTitleEl.textContent = itemTitle(item);
   pickTitleEl.title = itemTitle(item);
   pickDetailEl.textContent = [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n");
+  pickDetailEl.removeAttribute("title");
+  if (info && item.tmdb) void showTraktRating(item);
   const overview = item.tmdb?.overview ?? item.bookInfo?.description;
   pickOverviewEl.textContent = overview ?? "";
   pickOverviewEl.hidden = !overview;
@@ -3708,6 +3874,23 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
     similar.title = `Find titles similar to ${itemTitle(item)}`;
     similar.addEventListener("click", () => openSimilar(item));
     chipEls.push(similar);
+  }
+  // Where the title stands with Trakt; a title Trakt couldn't match gets a way to fix it.
+  const badge = info ? traktBadge(item, traktLink) : undefined;
+  if (badge) {
+    const icons: Record<string, string> = { synced: "cloud_done", waiting: "cloud_upload", problem: "sync_problem", "no-info": "cloud_off" };
+    const chip = document.createElement(badge.state === "problem" ? "button" : "span");
+    chip.className = `pick-chip pick-chip-trakt is-${badge.state}${badge.state === "problem" ? " pick-chip-link" : ""}`;
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = icons[badge.state];
+    chip.append(icon, document.createTextNode(badge.state === "problem" ? `${badge.label} · Fix match` : badge.label));
+    if (chip instanceof HTMLButtonElement) {
+      chip.type = "button";
+      chip.title = item.trakt?.problem ?? badge.label;
+      chip.addEventListener("click", () => openFixMatch(item));
+    }
+    chipEls.push(chip);
   }
   pickChipsEl.replaceChildren(...chipEls);
   pickChipsEl.hidden = chipEls.length === 0;
@@ -4416,6 +4599,8 @@ const backupIncludeSettingsEl = document.getElementById("backup-include-settings
 async function gatherSettings(): Promise<SettingsBackup | undefined> {
   const stored = await chrome.storage.local.get([TMDB_TOKEN_KEY, WATCH_SITES_KEY, REMINDERS_KEY, NEW_SEASONS_KEY, BOOK_INFO_KEY]);
   const keep = await sendToBackground({ action: "getKeepSettings" });
+  const traktNow = await sendToBackground({ action: "traktStatus" });
+  const t = traktNow.ok && "trakt" in traktNow ? traktNow.trakt : undefined;
   const prefs: Record<string, string | null> = {};
   for (const key of Object.keys(PREF_CHOICES)) prefs[key] = localStorage.getItem(key);
   return collectSettings(
@@ -4427,6 +4612,7 @@ async function gatherSettings(): Promise<SettingsBackup | undefined> {
       newSeasonReminders: stored[NEW_SEASONS_KEY],
       bookInfoEnabled: stored[BOOK_INFO_KEY],
       prefs,
+      trakt: t?.clientId ? { clientId: t.clientId, auto: t.auto, watchlist: t.watchlist, pull: t.pull } : undefined,
     },
     { includeToken: true }
   );
@@ -4450,6 +4636,11 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
   if (settings.remindersEnabled !== undefined) await ask({ action: "setRemindersEnabled", enabled: settings.remindersEnabled });
   if (settings.newSeasonReminders !== undefined) await ask({ action: "setNewSeasonReminders", enabled: settings.newSeasonReminders });
   if (settings.bookInfoEnabled !== undefined) await ask({ action: "setBookInfoEnabled", enabled: settings.bookInfoEnabled });
+  if (settings.trakt?.clientId) {
+    // The same Client ID keeps an existing sign-in; a different one signs out, as typing it in Settings would.
+    await ask({ action: "traktSetClientId", clientId: settings.trakt.clientId });
+    await ask({ action: "traktSetOptions", auto: settings.trakt.auto, watchlist: settings.trakt.watchlist, pull: settings.trakt.pull });
+  }
   for (const [key, value] of Object.entries(settings.prefs ?? {})) {
     try {
       localStorage.setItem(key, value);
@@ -4457,7 +4648,7 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
       /* the preference just won't be restored */
     }
   }
-  await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites()]);
+  await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites(), loadTraktSettings()]);
   renderPrefs();
 }
 
@@ -4867,6 +5058,84 @@ copyItemsEl.addEventListener("click", () => {
   const ids = new Set(getSelectedIds());
   const shown = filteredItems();
   void copyToClipboard(ids.size > 0 ? shown.filter((i) => ids.has(i.id)) : shown);
+});
+
+/** The statuses to offer for the tab you are on, in the words that tab uses. */
+function bulkStatusChoices(): Array<{ status: ItemStatus; label: string; icon: string }> {
+  if (activeTab === "tabs") {
+    return [
+      { status: "done", label: "Done", icon: "check_circle" },
+      { status: "plan", label: "To do", icon: "radio_button_unchecked" },
+    ];
+  }
+  const books = activeTab === "books";
+  return [
+    { status: "done", label: books ? "Read" : "Watched", icon: "check_circle" },
+    { status: "in_progress", label: books ? "Reading" : "In progress", icon: "play_circle" },
+    { status: "plan", label: books ? "To read" : "To watch", icon: "bookmark" },
+    { status: "dropped", label: "Dropped", icon: "block" },
+  ];
+}
+
+function closeStatusDialog(): void {
+  statusDialogEl.hidden = true;
+}
+
+/** Asks which status, then sets it on every ticked row, with Undo. */
+function openStatusDialog(): void {
+  const ids = getSelectedIds();
+  if (ids.length === 0) return;
+  statusDialogTitleEl.textContent = `Set ${ids.length} selected to`;
+  statusDialogOptionsEl.replaceChildren(
+    ...bulkStatusChoices().map(({ status, label, icon }) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-outline btn-wide status-option";
+      const glyph = document.createElement("span");
+      glyph.className = "material-symbols-outlined btn-icon";
+      glyph.textContent = icon;
+      button.append(glyph, label);
+      button.addEventListener("click", () => {
+        closeStatusDialog();
+        void setSelectedStatus(ids, status, label);
+      });
+      return button;
+    })
+  );
+  statusDialogEl.hidden = false;
+  statusDialogOptionsEl.querySelector<HTMLButtonElement>("button")?.focus();
+}
+
+async function setSelectedStatus(ids: string[], status: ItemStatus, label: string): Promise<void> {
+  const snapshot = snapshotItems(allItems, ids);
+  try {
+    const response = await sendToBackground({ action: "setStatus", ids, status });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) {
+      allItems = response.items;
+      render();
+      const changed = response.updated ?? 0;
+      if (changed === 0) {
+        showStatus(`They're all ${label.toLowerCase()} already.`);
+        return;
+      }
+      showStatus(`Set ${changed} to ${label.toLowerCase()}.`, false, UNDO_MS, () =>
+        undoRemoval(snapshot, `Put ${snapshot.length} back as they were.`, (msg, err) => showStatus(msg, err))
+      );
+    }
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Couldn't change the status.", true);
+  }
+}
+
+statusSelectedEl.addEventListener("click", openStatusDialog);
+document.getElementById("status-dialog-cancel")!.addEventListener("click", closeStatusDialog);
+statusDialogEl.querySelector("[data-status-dismiss]")!.addEventListener("click", closeStatusDialog);
+statusDialogEl.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    closeStatusDialog();
+  }
 });
 
 document.getElementById("delete-selected")!.addEventListener("click", async () => {

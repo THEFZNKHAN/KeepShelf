@@ -254,6 +254,10 @@ Connect your own Trakt account and KeepShelf sends what you watch, episode progr
 
 Export your whole shelf as JSON (optionally with your settings), import a KeepShelf backup, or bring in a Letterboxd or Goodreads export. You can also export for Letterboxd or Trakt. See [Backup and import](#backup-and-import).
 
+### Change many at once
+
+Tick some rows and the **done-all** button appears next to the copy button. It sets every ticked title to **Watched**, **In progress**, **To watch** or **Dropped** (on Books: Read, Reading, To read, Dropped; on Tabs: Done or To do) in one go, the same as changing each card: finish dates are kept or set, and a show marked Watched remembers its season count for new-season reminders. **Undo** puts them back. With Trakt sync on, the change is sent like any other.
+
 ### Clipboard export
 
 The **copy icon** next to the search box copies every item the list is showing as plain text, one line each. Tick some rows first and it copies only those (hover it to see "Copy 3 selected").
@@ -722,13 +726,31 @@ The first **Send everything** reads what Trakt already has, so nothing already i
 
 Nothing is ever removed from your Trakt history: unmarking an episode here leaves Trakt as it is, and marking it again doesn't add a second play. Titles Trakt couldn't match are listed under **Not matched on Trakt**. Long anime are sometimes numbered differently on TMDB and Trakt; when Trakt already has at least as many episodes of a show, KeepShelf leaves it alone rather than guess.
 
+### Trakt state on cards, and Fix match
+
+While connected, a title's card shows where it stands with Trakt: **On Trakt**, **Waiting to send**, **Needs TMDB info for Trakt**, or **Not matched on Trakt · Fix match**. The shelf rows stay quiet, except for a small warning mark on a title Trakt couldn't match.
+
+**Fix match** (also **Pick a different match** in Edit, for any title with TMDB info) lists TMDB's titles of that name; **Use this** replaces the match. Before anything is sent for the new match, KeepShelf reads what Trakt already has for it, so a title you fixed by hand on Trakt isn't sent a second time.
+
+### Trakt suggestions
+
+- **More like this** on a card adds **Related on Trakt** after TMDB's suggestions (a Client ID is enough), without repeating any title.
+- **Recommended for you** (the 👍 button beside the dice, on the Media tab once connected) lists Trakt's picks from your own history, shows and movies in turn, leaving out what's already on your Trakt watchlist. Each has **Add**, like a search result.
+
+Trakt's lists carry no posters, so each title is looked up on TMDB (when your token is set) for its poster and description; Trakt's anime label decides whether it's filed as anime.
+
+### Trakt rating on cards
+
+With a Trakt Client ID saved (signing in isn't needed), a title's card shows Trakt's community rating next to TMDB's, such as **TMDB 8.4 · Trakt 84%**; hover it for the number of votes. It is fetched when you open the card and kept for a day.
+
 ### Get from Trakt
 
-**Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings and your watchlist. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.
+**Get from Trakt** brings your Trakt library onto the shelf: watched movies, episode progress, ratings, your watchlist and your lists. It first shows what would change ("2 titles updated, 3 added…"), and only **Apply to my shelf** changes anything.
 
 - The side with more watched wins: progress only moves forward, a movie watched on Trakt becomes Done, a show watched to the end becomes Done, and a finished show with a newer season started on Trakt goes back to In progress.
 - A rating you set in KeepShelf is kept; Trakt's fills in where you have none.
 - Titles that aren't on the shelf are added (with TMDB info when your token is set): watched ones as Done or In progress, your Trakt watchlist as To watch. Trakt's anime are filed as anime.
+- Your personal Trakt lists come in as **tags**: each list becomes a tag such as `trakt: favourites` on the titles in it (an episode or season on a list tags its show), so a title can carry several. A listed title that isn't on the shelf is added as To watch. Tags are only ever added: taking a title off a Trakt list doesn't remove the tag.
 - Everything that came from Trakt is recorded as already sent, so it is never sent back as a second play.
 
 To have this happen by itself, set **Get changes from Trakt** to **Every hour**, **Every 6 hours** or **Once a day** (it's **Off** by default). Each check first asks Trakt when your account last changed; when nothing has, that one request is all it costs. When something has, it applies the changes with the same rules, without a preview, and reads only the shows watched since the last check. The card shows when it last checked and what it found.
@@ -744,7 +766,7 @@ KeepShelf uses Trakt but is not endorsed or certified by Trakt.
 Your shelf lives only in this browser, so export a backup now and then.
 
 - **Export backup** (Settings) downloads everything as JSON, including tags, lists, ratings, reviews, status and progress (per season too).
-- **Include my settings** (on by default, next to the export button) also saves your TMDB token, Keep links, watch sites, the reminders and book-info switches, and your other preferences. **The file then contains your TMDB token, so keep it private**; turn the switch off to export only your shelf.
+- **Include my settings** (on by default, next to the export button) also saves your TMDB token, Keep links, watch sites, your Trakt app (its Client ID and the Trakt switches, but never the sign-in, so you press **Connect** again after restoring), the reminders and book-info switches, and your other preferences. **The file then contains your TMDB token, so keep it private**; turn the switch off to export only your shelf.
 - **Import** accepts:
   - a **KeepShelf backup** (`.json`)
   - a **Letterboxd** export CSV (watchlist, watched, diary or ratings)
