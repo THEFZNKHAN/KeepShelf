@@ -98,6 +98,7 @@ const SERIAL_ACTIONS = new Set<MessageAction["action"]>([
   "removeBookMatch",
   "enrich",
   "removeTmdbMatch",
+  "setTmdbMatch",
   "refreshStaleTmdb",
   "refreshDates",
   "clear",
@@ -123,7 +124,7 @@ async function tmdbInfoFor(kind: "movie" | "tv", id: number) {
 useSerialQueue(runSerial);
 
 /** Changes to the shelf that may have something to send to Trakt. */
-const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "setStatus", "import", "merge", "restore", "addFromTmdb", "enrich"]);
+const TRAKT_TRIGGERS = new Set<MessageAction["action"]>(["save", "update", "setStatus", "setTmdbMatch", "import", "merge", "restore", "addFromTmdb", "enrich"]);
 
 chrome.runtime.onMessage.addListener(
   (
@@ -272,6 +273,25 @@ async function trailerFor(id: unknown): Promise<MessageResponse> {
     return { ok: true, trailer: trailer ?? null };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not look for a trailer." };
+  }
+}
+
+/**
+ * Replaces a title's TMDB match with the one picked from a search ("Fix match"). Its Trakt record belonged to the old
+ * match, so it is read again from Trakt before anything is sent for the new one.
+ */
+async function setTmdbMatch(id: unknown, raw: unknown): Promise<MessageResponse> {
+  const result = sanitizeResult(raw);
+  const item = typeof id === "string" ? (await getAllItems()).find((i) => i.id === id) : undefined;
+  if (!result || !item) return { ok: false, error: "That match isn't valid." };
+  const client = await tmdbClient();
+  if (!client) return { ok: false, error: "Add your TMDB token in Settings first." };
+  try {
+    const info = await fetchDetails(client, result.kind, result.id);
+    const items = await updateItem(item.id, { tmdb: info, tmdbOptOut: undefined, trakt: { reseed: true } });
+    return { ok: true, items };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not use that match." };
   }
 }
 
@@ -663,6 +683,9 @@ async function handleMessage(message: MessageAction): Promise<MessageResponse> {
     }
     case "similarTmdb": {
       return similarTmdb(message.id);
+    }
+    case "setTmdbMatch": {
+      return setTmdbMatch(message.id, message.result);
     }
     case "addFromTmdb": {
       return addFromTmdb(message.result);

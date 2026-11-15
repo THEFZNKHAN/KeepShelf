@@ -181,6 +181,7 @@ export type MessageAction =
   | { action: "similarTmdb"; id: string }
   | { action: "trailerFor"; id: string }
   | { action: "addFromTmdb"; result: TmdbSearchResult }
+  | { action: "setTmdbMatch"; id: string; result: TmdbSearchResult }
   | { action: "clear" }
   | { action: "getKeepSettings" }
   | { action: "setKeepSettings"; settings: Partial<KeepSettings> }

@@ -40,6 +40,7 @@ import {
   entryTmdb,
   seasonsFromProgress,
   traktShowId,
+  reseedIds,
 } from "../shared/trakt-sync.js";
 import { STORAGE_KEY, getAllItems, importItems } from "../shared/storage.js";
 import { parseTraktRating, ratingPath, sanitizeCachedRating, traktIdFromSearch, type TraktRating } from "../shared/trakt-rating.js";
@@ -425,7 +426,7 @@ async function watchedShowsWithEpisodes(wanted: (entry: unknown) => boolean): Pr
  */
 async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ sent: Map<string, TraktSent>; kept: KeptRating[] }> {
   const movies = await api<unknown>("/sync/watched/movies");
-  // Only the shows on the shelf with episodes to compare are worth a request each.
+  // Only the shows among these items are worth a request each.
   const shelfShows = new Set(items.filter((i) => i.tmdb?.kind === "tv").map((i) => i.tmdb!.id));
   const shows = await watchedShowsWithEpisodes((entry) => {
     const tmdb = entryTmdb(entry);
@@ -438,14 +439,23 @@ async function readTrakt(items: SavedItem[], options: SyncOptions): Promise<{ se
   return { sent, kept };
 }
 
-async function seed(options: SyncOptions): Promise<void> {
-  const items = await getAllItems();
+/**
+ * Reads what Trakt already has and records it as sent. With `onlyReseed`, just the titles matched to a different title
+ * since (their old record no longer applies); otherwise the whole shelf, before the first send.
+ */
+async function seed(options: SyncOptions, onlyReseed = false): Promise<void> {
+  const all = await getAllItems();
+  const items = onlyReseed ? all.filter((i) => i.trakt?.reseed) : all;
+  if (items.length === 0) return;
   const { sent } = await readTrakt(items, options);
-  const byId = itemsById(items);
+  const byId = itemsById(all);
   const states = new Map<string, TraktItemState | undefined>();
-  for (const [id, value] of sent) states.set(id, { ...(byId.get(id)?.trakt ?? {}), sent: value });
+  for (const item of items) {
+    const { reseed: _r, ...rest } = byId.get(item.id)?.trakt ?? {};
+    states.set(item.id, { ...rest, sent: sent.get(item.id) ?? {} });
+  }
   await writeItemStates(states);
-  await setState({ seeded: true });
+  if (!onlyReseed) await setState({ seeded: true });
 }
 
 /** What a send would do right now, without sending or saving anything. */
@@ -530,6 +540,9 @@ export async function syncTrakt(mode: "auto" | "catchup"): Promise<void> {
       if (!state.seeded) {
         await setState({ progress: "Reading what Trakt already has…" });
         await seed(options);
+      } else if (reseedIds(await getAllItems()).size) {
+        await setState({ progress: "Reading the re-matched titles on Trakt…" });
+        await seed(options, true);
       }
       const changes = pendingChanges(await getAllItems(), options);
       const parts = batches(changes);

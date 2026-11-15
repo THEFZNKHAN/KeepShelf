@@ -26,6 +26,8 @@ export interface TraktItemState {
   problem?: string;
   /** When it was last sent. */
   at?: number;
+  /** Matched to a different title: read what Trakt has for it before sending, so nothing goes twice. */
+  reseed?: boolean;
 }
 
 export interface TraktIds {
@@ -453,4 +455,26 @@ export function traktShowId(entry: unknown): string | undefined {
 export function entryTmdb(entry: unknown): number | undefined {
   const tmdb = (entry as { show?: { ids?: { tmdb?: unknown } } } | null)?.show?.ids?.tmdb;
   return typeof tmdb === "number" ? tmdb : undefined;
+}
+
+export type TraktBadgeState = "synced" | "waiting" | "problem" | "no-info";
+
+/**
+ * Where a title stands with Trakt, for its card: on Trakt, waiting to be sent, not matched, or not sendable without
+ * TMDB info. Undefined when there is nothing to say (not connected, a book, or nothing to send yet).
+ */
+export function traktBadge(item: SavedItem, options: SyncOptions & { connected: boolean; ready: boolean }): { state: TraktBadgeState; label: string } | undefined {
+  if (!options.connected) return undefined;
+  if (item.type !== "movie" && item.type !== "series" && item.type !== "anime") return undefined;
+  if (!traktIds(item)) return { state: "no-info", label: "Needs TMDB info for Trakt" };
+  if (item.trakt?.problem) return { state: "problem", label: "Not matched on Trakt" };
+  if (!options.ready || item.trakt?.reseed || pendingChange(item, options)) return { state: "waiting", label: "Waiting to send to Trakt" };
+  const sent = item.trakt?.sent;
+  const any = !!sent && (sent.movie || (sent.seasons ?? []).some((n) => n > 0) || sent.rating !== undefined || sent.watchlist);
+  return any ? { state: "synced", label: "On Trakt" } : undefined;
+}
+
+/** The shows a re-match needs read from Trakt again, by TMDB id. */
+export function reseedIds(items: SavedItem[]): Set<number> {
+  return new Set(items.filter((i) => i.trakt?.reseed && i.tmdb).map((i) => i.tmdb!.id));
 }

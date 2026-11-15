@@ -726,6 +726,12 @@ The first **Send everything** reads what Trakt already has, so nothing already i
 
 Nothing is ever removed from your Trakt history: unmarking an episode here leaves Trakt as it is, and marking it again doesn't add a second play. Titles Trakt couldn't match are listed under **Not matched on Trakt**. Long anime are sometimes numbered differently on TMDB and Trakt; when Trakt already has at least as many episodes of a show, KeepShelf leaves it alone rather than guess.
 
+### Trakt state on cards, and Fix match
+
+While connected, a title's card shows where it stands with Trakt: **On Trakt**, **Waiting to send**, **Needs TMDB info for Trakt**, or **Not matched on Trakt · Fix match**. The shelf rows stay quiet, except for a small warning mark on a title Trakt couldn't match.
+
+**Fix match** (also **Pick a different match** in Edit, for any title with TMDB info) lists TMDB's titles of that name; **Use this** replaces the match. Before anything is sent for the new match, KeepShelf reads what Trakt already has for it, so a title you fixed by hand on Trakt isn't sent a second time.
+
 ### Trakt rating on cards
 
 With a Trakt Client ID saved (signing in isn't needed), a title's card shows Trakt's community rating next to TMDB's, such as **TMDB 8.4 · Trakt 84%**; hover it for the number of votes. It is fetched when you open the card and kept for a day.

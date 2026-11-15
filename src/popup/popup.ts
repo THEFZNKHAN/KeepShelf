@@ -14,7 +14,7 @@ import { isKeepOn, isLikelyValidKeepNoteId } from "../shared/keep-settings.js";
 import { sendToBackground } from "../shared/messaging.js";
 import { requestPageData } from "../shared/page-data.js";
 import type { EditableFields, ItemStatus, MediaType, MessageAction, SavedItem, UserFields } from "../shared/types.js";
-import type { TraktPreview, TraktStatus } from "../shared/trakt-sync.js";
+import { traktBadge, type TraktPreview, type TraktStatus } from "../shared/trakt-sync.js";
 import type { PullPreview } from "../shared/trakt-pull.js";
 import { ratingText, type TraktRating } from "../shared/trakt-rating.js";
 import { allTags, durationText, genreTags, genreText, isEnrichable, needsTmdbInfo, tmdbPosterUrl, totalEpisodes, TMDB_IMAGE_BASE, TMDB_NOTICE } from "../shared/tmdb.js";
@@ -148,6 +148,8 @@ const remembering = startMode === "remember";
 const TYPE_CHIPS: Array<MediaType | "all"> = ["all", "movie", "series", "anime"];
 
 let allItems: SavedItem[] = [];
+/** The Trakt connection as far as rows and cards need it; filled in when Settings loads it. */
+let traktLink: { connected: boolean; ready: boolean; watchlist: boolean } = { connected: false, ready: false, watchlist: false };
 /** False until the first load of the shelf finishes. */
 let shelfLoaded = false;
 let activeTab: "media" | "books" | "tabs" = remembering ? storedChoice("keepshelf.tab", ["media", "books", "tabs"], "media") : "media";
@@ -1165,6 +1167,15 @@ function createRowShell(item: SavedItem, withBadge = true): { li: HTMLLIElement;
   titleRow.append(title);
   const badge = withBadge ? createTypeBadge(item) : undefined;
   if (badge) titleRow.append(badge);
+  // Rows stay quiet about Trakt unless something is wrong; the card says the rest.
+  if (traktLink.connected && item.trakt?.problem) {
+    const mark = document.createElement("span");
+    mark.className = "material-symbols-outlined trakt-mark";
+    mark.textContent = "sync_problem";
+    mark.title = `${item.trakt.problem}. Open the card to fix the match.`;
+    mark.setAttribute("aria-label", "Not matched on Trakt");
+    titleRow.append(mark);
+  }
   body.append(titleRow);
 
   return { li, typeIconEl, body };
@@ -1387,8 +1398,8 @@ function render(): void {
 /* ── Search TMDB from the search box ──────────────────────── */
 
 interface OnlineSearch {
-  /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. */
-  kind: "search" | "like";
+  /** "search": what you typed. "like": what TMDB recommends for a title on your shelf. "match": picking the right TMDB title for one on your shelf. */
+  kind: "search" | "like" | "match";
   /** The words searched for, or (for "like") the title's name. */
   query: string;
   /** For "like": the saved item the recommendations are for. */
@@ -1414,7 +1425,7 @@ function currentOnlineState() {
 /** Shows the Search TMDB row, or the results when they are open. Returns true when the results are on screen. */
 function updateOnlineUi(): boolean {
   // Recommendations for a title don't depend on the search box, so typing and tabs don't decide whether they show.
-  if (online?.kind === "like") {
+  if (online?.kind === "like" || online?.kind === "match") {
     onlineOffered = undefined;
     onlineSearchEl.hidden = true;
     onlineResultsEl.hidden = false;
@@ -1486,6 +1497,57 @@ async function startSimilar(item: SavedItem): Promise<void> {
   render();
 }
 
+/** Searches TMDB for a title's name so the right one can be picked to replace its match. */
+async function startMatch(item: SavedItem): Promise<void> {
+  const sourceId = item.id;
+  const query = [item.title, item.year].filter(Boolean).join(" ");
+  const current = () => online?.kind === "match" && online.sourceId === sourceId;
+  online = { kind: "match", query, sourceId, status: "loading", results: [], error: "" };
+  render();
+  try {
+    const response = await sendToBackground({ action: "searchTmdb", query: item.title });
+    if (!current()) return;
+    if (!response.ok) throw new Error(response.error);
+    if (!("tmdbResults" in response)) throw new Error("No results came back.");
+    online = { kind: "match", query, sourceId, status: "done", results: response.tmdbResults, error: "" };
+  } catch (err) {
+    if (!current()) return;
+    online = { kind: "match", query, sourceId, status: "error", results: [], error: err instanceof Error ? err.message : "Could not search TMDB." };
+  }
+  render();
+}
+
+/** "Fix match": close the card and list TMDB's titles of that name, each with "Use this". */
+function openFixMatch(item: SavedItem): void {
+  closePick();
+  if (!upcomingView.hidden) closeUpcoming();
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  void startMatch(item);
+}
+
+async function useMatch(result: TmdbSearchResult): Promise<void> {
+  const sourceId = online?.kind === "match" ? online.sourceId : undefined;
+  if (!sourceId) return;
+  const key = `${result.kind}:${result.id}`;
+  adding.add(key);
+  renderOnlineResults();
+  try {
+    const response = await sendToBackground({ action: "setTmdbMatch", id: sourceId, result });
+    if (!response.ok) throw new Error(response.error);
+    if ("items" in response) allItems = response.items;
+    online = undefined;
+    render();
+    showStatus(`Matched to ${result.title}${result.year ? ` (${result.year})` : ""}.${traktLink.connected ? " Trakt will be checked before it's sent." : ""}`, false, 5000);
+  } catch (err) {
+    showStatus(err instanceof Error ? err.message : "Couldn't use that match.", true, 5000);
+  } finally {
+    adding.delete(key);
+    if (online) renderOnlineResults();
+  }
+}
+
 /** "More like this" on a card: close the card and show the recommendations where the search results go. */
 function openSimilar(item: SavedItem): void {
   closePick();
@@ -1554,7 +1616,21 @@ function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
 
   const key = `${result.kind}:${result.id}`;
   let action: HTMLElement;
-  if (findOnShelf(result, allItems)) {
+  const matching = online?.kind === "match" ? allItems.find((i) => i.id === online!.sourceId) : undefined;
+  if (matching && matching.tmdb?.id === result.id && matching.tmdb.kind === result.kind) {
+    action = document.createElement("span");
+    action.className = "online-done";
+    action.textContent = "Current match";
+  } else if (matching) {
+    const use = document.createElement("button");
+    use.type = "button";
+    use.className = "btn btn-outline btn-sm online-add";
+    use.disabled = adding.has(key);
+    use.textContent = adding.has(key) ? "Using…" : "Use this";
+    use.setAttribute("aria-label", `Use ${result.title} as the match`);
+    use.addEventListener("click", () => void useMatch(result));
+    action = use;
+  } else if (findOnShelf(result, allItems)) {
     action = document.createElement("span");
     action.className = "online-done";
     const icon = document.createElement("span");
@@ -1591,7 +1667,8 @@ function onlineResultRow(result: TmdbSearchResult): HTMLLIElement {
 function renderOnlineResults(): void {
   if (!online) return;
   const like = online.kind === "like";
-  onlineTitleEl.textContent = like ? `Like “${online.query}”` : `“${online.query}” on TMDB`;
+  const match = online.kind === "match";
+  onlineTitleEl.textContent = like ? `Like “${online.query}”` : match ? `Pick the right “${online.query}”` : `“${online.query}” on TMDB`;
   if (online.status === "loading") {
     onlineBodyEl.replaceChildren(onlineMessage(like ? "Finding similar titles…" : "Searching TMDB…"));
   } else if (online.status === "error") {
@@ -1600,7 +1677,8 @@ function renderOnlineResults(): void {
     const retry = () => {
       const source = sourceId ? allItems.find((i) => i.id === sourceId) : undefined;
       if (like && source) void startSimilar(source);
-      else if (!like) void startOnlineSearch(query);
+      else if (match && source) void startMatch(source);
+      else if (!like && !match) void startOnlineSearch(query);
     };
     onlineBodyEl.replaceChildren(onlineMessage(online.error, retry));
   } else if (online.results.length === 0) {
@@ -2472,6 +2550,19 @@ function buildTmdbBlock(itemId: string): HTMLElement {
       });
       actions.append(removeBtn);
     }
+    if (tmdbConfigured) {
+      const pickBtn = document.createElement("button");
+      pickBtn.type = "button";
+      pickBtn.className = "btn btn-outline";
+      pickBtn.textContent = "Pick a different match";
+      pickBtn.addEventListener("click", () => {
+        const current = allItems.find((i) => i.id === itemId);
+        if (!current) return;
+        closeEditDialog();
+        openFixMatch(current);
+      });
+      actions.append(pickBtn);
+    }
     block.append(actions);
   };
 
@@ -2982,6 +3073,11 @@ function whenText(at: number): string {
 
 function renderTrakt(): void {
   const t = trakt;
+  const link = { connected: !!t?.connected, ready: !!t?.ready, watchlist: !!t?.watchlist };
+  if (JSON.stringify(link) !== JSON.stringify(traktLink)) {
+    traktLink = link;
+    render();
+  }
   const hasId = !!t?.clientId;
   const connected = !!t?.connected;
   traktClientStatusEl.textContent = hasId ? "Client ID saved" : "Not set";
@@ -3731,6 +3827,23 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
     similar.title = `Find titles similar to ${itemTitle(item)}`;
     similar.addEventListener("click", () => openSimilar(item));
     chipEls.push(similar);
+  }
+  // Where the title stands with Trakt; a title Trakt couldn't match gets a way to fix it.
+  const badge = info ? traktBadge(item, traktLink) : undefined;
+  if (badge) {
+    const icons: Record<string, string> = { synced: "cloud_done", waiting: "cloud_upload", problem: "sync_problem", "no-info": "cloud_off" };
+    const chip = document.createElement(badge.state === "problem" ? "button" : "span");
+    chip.className = `pick-chip pick-chip-trakt is-${badge.state}${badge.state === "problem" ? " pick-chip-link" : ""}`;
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined";
+    icon.textContent = icons[badge.state];
+    chip.append(icon, document.createTextNode(badge.state === "problem" ? `${badge.label} · Fix match` : badge.label));
+    if (chip instanceof HTMLButtonElement) {
+      chip.type = "button";
+      chip.title = item.trakt?.problem ?? badge.label;
+      chip.addEventListener("click", () => openFixMatch(item));
+    }
+    chipEls.push(chip);
   }
   pickChipsEl.replaceChildren(...chipEls);
   pickChipsEl.hidden = chipEls.length === 0;

@@ -323,6 +323,22 @@ const waitForCheck = async (before) => {
   throw new Error("the automatic check didn't finish");
 };
 
+test("a fixed match reads Trakt for that title again, so nothing is sent twice", async () => {
+  // Pretend "Unknown film" (not found on Trakt) is matched to Heat's TMDB entry, which Trakt already has watched.
+  const item = store.trackbuddy_items.find((i) => i.id === "Unknown film");
+  item.tmdb = { id: 777, kind: "movie", genres: [], fetchedAt: Date.now() };
+  item.trakt = { reseed: true };
+  const before = requests.length;
+  const res = await send({ action: "traktSync" });
+  assert.equal(res.ok, true, res.error);
+  const after = requests.slice(before);
+  assert.ok(after.some((r) => r.path === "/sync/watched/movies"), "Trakt is read for the new match");
+  assert.equal(after.some((r) => r.method === "POST" && JSON.stringify(r.body).includes("777")), false, "Trakt already had it");
+  const fixed = items().find((i) => i.id === "Unknown film");
+  assert.equal(fixed.trakt.reseed, undefined);
+  assert.equal(fixed.trakt.sent.movie, true);
+});
+
 test("the automatic check is an alarm that follows the setting", async () => {
   let res = await send({ action: "traktSetOptions", pull: "6h" });
   assert.equal(res.trakt.pull, "6h");
