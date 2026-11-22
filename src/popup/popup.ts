@@ -105,6 +105,7 @@ import {
   streamingStatuses,
 } from "../shared/coming-up.js";
 import { newSeasonEntries } from "../shared/new-seasons.js";
+import { buildHomeRows, featuredRow, progressFraction, soonText, type HomeRow, type SeeAll } from "../shared/home-rows.js";
 
 type SortBy = "newest" | "oldest" | "title" | "year" | "rating" | "myrating";
 
@@ -192,7 +193,6 @@ const onlineResultsEl = document.getElementById("online-results")!;
 const onlineTitleEl = document.getElementById("online-title")!;
 const onlineBodyEl = document.getElementById("online-body")!;
 const onlineBackEl = document.getElementById("online-back") as HTMLButtonElement;
-const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
 const filtersEl = document.getElementById("filters")!;
@@ -230,7 +230,6 @@ const statusFilterEl = document.getElementById("status-filter") as HTMLSelectEle
 const sortEl = document.getElementById("sort") as HTMLSelectElement;
 const pickRandomBtnEl = document.getElementById("pick-random") as HTMLButtonElement;
 const organiseRowEl = document.getElementById("organise-row")!;
-const moreFiltersEl = document.getElementById("more-filters")!;
 const toggleFiltersEl = document.getElementById("toggle-filters") as HTMLButtonElement;
 const copyItemsEl = document.getElementById("copy-items") as HTMLButtonElement;
 const deleteSelectedEl = document.getElementById("delete-selected") as HTMLButtonElement;
@@ -256,6 +255,26 @@ const backupSettingsStatusIconEl = document.getElementById("backup-settings-stat
 const keepSummaryEl = document.getElementById("keep-summary")!;
 const tmdbSummaryEl = document.getElementById("tmdb-summary")!;
 const animeIconUrl = chrome.runtime.getURL("icons/anime_logo.png");
+const homeEl = document.getElementById("home")!;
+const homeActionsEl = document.getElementById("home-actions")!;
+const gridHeadEl = document.getElementById("grid-head")!;
+const gridTitleEl = document.getElementById("grid-title")!;
+const gridCountEl = document.getElementById("grid-count")!;
+const categoryChipsEl = document.getElementById("category-chips")!;
+const searchBarEl = document.getElementById("search-bar")!;
+const openSearchEl = document.getElementById("open-search") as HTMLButtonElement;
+const bottomNavEl = document.getElementById("bottom-nav")!;
+const selectBarEl = document.getElementById("select-bar")!;
+const selectCountEl = document.getElementById("select-count")!;
+const filterSheetEl = document.getElementById("filter-sheet")!;
+
+/**
+ * The shelf has two faces: "home" shows rows by status (Continue watching, My list, ...), "grid" shows one filtered,
+ * sorted grid of posters. Searching, a tag or list filter, or "See all" shows the grid.
+ */
+let browse: "home" | "grid" = statusFilter !== defaultStatusFilter(defaultView) || listFilter ? "grid" : "home";
+/** While selecting, tapping a poster ticks it instead of opening it, and the bottom bar acts on what is ticked. */
+let selectMode = false;
 
 let confirmResolve: ((value: boolean) => void) | undefined;
 let editingId: string | undefined;
@@ -589,8 +608,24 @@ function openSettings(): void {
   if (mediaStatusTimer.value) clearTimeout(mediaStatusTimer.value);
   if (booksStatusTimer.value) clearTimeout(booksStatusTimer.value);
   if (tabsStatusTimerRef.value) clearTimeout(tabsStatusTimerRef.value);
-  appView.hidden = true;
-  settingsView.hidden = false;
+  showScreen("settings");
+}
+
+type Screen = "home" | "upcoming" | "stats" | "settings";
+
+/** One screen at a time; the bottom bar marks where you are. Leaving the shelf ends selecting. */
+function showScreen(screen: Screen): void {
+  if (screen !== "home" && selectMode) exitSelectMode();
+  appView.hidden = screen !== "home";
+  upcomingView.hidden = screen !== "upcoming";
+  statsView.hidden = screen !== "stats";
+  settingsView.hidden = screen !== "settings";
+  bottomNavEl.querySelectorAll<HTMLElement>(".nav-btn").forEach((btn) => {
+    const on = btn.dataset.screen === screen;
+    btn.classList.toggle("active", on);
+    if (on) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
 }
 
 function openStats(): void {
@@ -598,14 +633,12 @@ function openStats(): void {
     showTooltip: showItemTooltip,
     hideTooltip: hideItemTooltip,
   });
-  appView.hidden = true;
-  statsView.hidden = false;
+  showScreen("stats");
 }
 
 function closeStats(): void {
   hideItemTooltip();
-  statsView.hidden = true;
-  appView.hidden = false;
+  showScreen("home");
 }
 
 /* ── Coming up ───────────────────────────────────────────── */
@@ -838,8 +871,7 @@ async function checkUpcomingDates(): Promise<void> {
 }
 
 function openUpcoming(): void {
-  appView.hidden = true;
-  upcomingView.hidden = false;
+  showScreen("upcoming");
   upcomingNote = "";
   renderUpcoming(tmdbConfigured);
   if (!tmdbConfigured) return;
@@ -856,20 +888,18 @@ function openUpcoming(): void {
 }
 
 function closeUpcoming(): void {
-  upcomingView.hidden = true;
-  appView.hidden = false;
+  showScreen("home");
 }
 
 function closeSettings(): void {
-  settingsView.hidden = true;
-  appView.hidden = false;
+  showScreen("home");
 }
 
 function updateEmptyState(): void {
   if (activeTab === "books") {
     emptyHeadingEl.textContent = "No books saved yet";
     emptyBodyEl.innerHTML =
-      "Open a Goodreads or BookFilter page, then click <strong>Save page</strong> in the toolbar above.";
+      "Open a Goodreads or BookFilter page, then tap <strong>Save book</strong> at the top.";
     emptyHintsEl.innerHTML = `
       <div class="source-chip">
         <span class="material-symbols-outlined">menu_book</span>
@@ -885,9 +915,9 @@ function updateEmptyState(): void {
       </div>
     `;
   } else if (activeTab === "tabs") {
-    emptyHeadingEl.textContent = "No tabs saved yet";
+    emptyHeadingEl.textContent = "No links saved yet";
     emptyBodyEl.innerHTML =
-      "Paste a URL or write a note in the box above, or click <strong>Save tab</strong> at the top to save the current page.";
+      "Paste a link or write a note in the box above, or tap <strong>Save tab</strong> to keep the page you are on.";
     emptyHintsEl.innerHTML = `
       <div class="source-chip">
         <span class="material-symbols-outlined">tab</span>
@@ -905,7 +935,7 @@ function updateEmptyState(): void {
   } else {
     emptyHeadingEl.textContent = "Nothing saved yet";
     emptyBodyEl.innerHTML =
-      "Open a supported page, then click <strong>Save page</strong> in the toolbar above.";
+      "Open a supported page, then tap <strong>Save page</strong> at the top.";
     emptyHintsEl.innerHTML = `
       <div class="source-chip">
         <span class="material-symbols-outlined">travel_explore</span>
@@ -939,8 +969,13 @@ function updateEmptyState(): void {
   }
 }
 
-function createLeadingEl(item: SavedItem, coverSize: "S" | "M" = "S"): HTMLElement {
-  const imageUrl = item.imageUrl ?? tmdbPosterUrl(item) ?? bookCoverUrl(item, coverSize);
+/** The best picture for a title: the page's own image, then TMDB's poster, then the Open Library cover. */
+function posterUrl(item: SavedItem, coverSize: "S" | "M" | "L" = "M", tmdbSize = "w185"): string | undefined {
+  return item.imageUrl ?? tmdbPosterUrl(item, tmdbSize) ?? bookCoverUrl(item, coverSize);
+}
+
+function createLeadingEl(item: SavedItem, coverSize: "S" | "M" | "L" = "S", tmdbSize = "w92"): HTMLElement {
+  const imageUrl = posterUrl(item, coverSize, tmdbSize);
   if (!imageUrl) return createTypeIconEl(item.type);
   const img = document.createElement("img");
   img.className = "item-thumb";
@@ -1265,14 +1300,43 @@ function fillOptions(select: HTMLSelectElement, entries: Array<[string, string]>
   select.value = value;
 }
 
+const COMING_UP_HOME_DAYS = 14;
+
+/** What the status filter is called on the shelf you are on, such as "Not watched" or "To read". */
+function statusWords(): Record<StatusFilter, string> {
+  const labels = doneLabels();
+  return {
+    all: "All",
+    pending: labels.notDone,
+    todo: labels.todo,
+    progress: "In progress",
+    done: labels.done,
+    dropped: "Dropped",
+  };
+}
+
+/** True when the shelf is as it opens: no search, tag, list, other status or sort narrowing it. */
+function atDefaultView(): boolean {
+  return (
+    effectiveStatus() === effectiveStatusFilter(defaultStatusFilter(defaultView), availableStatuses()) &&
+    !tagFilter &&
+    !listFilter &&
+    searchQuery.trim() === ""
+  );
+}
+
 function render(): void {
   cancelRowHover();
+  const onTabs = activeTab === "tabs";
+  const searching = searchQuery.trim() !== "";
+  // Ticked titles stay ticked when the list is drawn again.
+  const ticked = new Set(getSelectedIds());
   // Trakt's picks for you sit beside the dice: media only, and only while connected.
   traktForYouEl.hidden = !(traktLink.connected && activeTab === "media");
   const items = filteredItems();
   const tabCount = tabItems().length;
 
-  // The count lives on each tab, so the header stays free for the actions.
+  // Each category chip says how much is on it when you rest on it.
   const isBook = (i: SavedItem) => i.type === "book";
   const isTabLike = (i: SavedItem) => i.type === "tab" || i.type === "link" || i.type === "note";
   const counts = {
@@ -1284,118 +1348,621 @@ function render(): void {
     const el = shelfTabsEl.querySelector<HTMLElement>(`[data-count="${tab}"]`);
     if (el) el.textContent = n ? String(n) : "";
   }
-  listEl.innerHTML = "";
+  categoryChipsEl.querySelectorAll<HTMLElement>(".cat-chip").forEach((chip) => {
+    const tab = chip.dataset.tab as keyof typeof counts;
+    const type = chip.dataset.filter;
+    const n = tab === "media" && type !== "all" ? allItems.filter((i) => i.type === type).length : counts[tab];
+    chip.title = `${n} saved`;
+  });
+  listEl.replaceChildren();
 
   filtersEl.hidden = activeTab !== "media";
-  tabsInputRowEl.hidden = activeTab !== "tabs";
+  tabsInputRowEl.hidden = !onTabs;
 
-  const labels = doneLabels();
-  const statusText: Record<StatusFilter, string> = {
-    all: "All",
-    pending: labels.notDone,
-    todo: labels.todo,
-    progress: "In progress",
-    done: labels.done,
-    dropped: "Dropped",
-  };
+  const statusText = statusWords();
   // Searching looks at every status, so the box says All and can't be changed until the search is cleared.
-  const searching = searchQuery.trim() !== "";
   fillOptions(statusFilterEl, availableStatuses().map((v) => [v, statusText[v]]), searching ? "all" : effectiveStatus());
   statusFilterEl.disabled = searching;
   statusFilterEl.title = searching ? "Search looks at every status" : "";
   renderOrganiseFilters();
   fillOptions(sortEl, availableSorts().map((v) => [v, SORT_LABELS[v]]), effectiveSort());
   // Picking something to watch or read doesn't apply to bookmarks.
-  pickRandomBtnEl.hidden = activeTab === "tabs";
+  pickRandomBtnEl.hidden = onTabs;
   updateFiltersToggle();
-  updateSelectionUi();
 
   savePageBtnEl.textContent =
     activeTab === "books" ? "Save book" :
-    activeTab === "tabs" ? "Save tab" :
-    "Save media";
+    onTabs ? "Save tab" :
+    "Save page";
 
   // The default view hides watched items, which can leave nothing: say so, and where the rest is.
   const hiddenCount = statusFilter === "pending" ? filteredItems({ ignoreStatus: true }).length - items.length : 0;
   filterEmptyTextEl.textContent =
     items.length === 0 && hiddenCount > 0
-      ? `Nothing left to ${activeTab === "books" ? "read" : activeTab === "tabs" ? "do" : "watch"}. Open the filter button and choose All to see the rest.`
-      : "No items for this filter.";
+      ? `Nothing left to ${activeTab === "books" ? "read" : onTabs ? "do" : "watch"}. Tap the filter button and choose All to see the rest.`
+      : "Nothing here matches.";
 
   const showGlobalEmpty = tabCount === 0;
   const showFilterEmpty = tabCount > 0 && items.length === 0;
-
   updateEmptyState();
-  emptyEl.hidden = !showGlobalEmpty;
-  filterEmptyEl.hidden = !showFilterEmpty;
-  listEl.hidden = items.length === 0;
 
   // With results from TMDB open, they take the place of the shelf until you go back to it.
-  if (updateOnlineUi()) {
-    listEl.hidden = true;
+  updateUpcomingBadge();
+  // Until the shelf has loaded, grey placeholders stand in, rather than a flash of "Nothing saved yet".
+  if (!shelfLoaded) {
     emptyEl.hidden = true;
     filterEmptyEl.hidden = true;
+    gridHeadEl.hidden = true;
+    listEl.hidden = true;
+    homeActionsEl.hidden = true;
+    homeEl.hidden = onTabs;
+    if (!onTabs) renderSkeleton();
+    return;
   }
+
+  const onlineOpen = updateOnlineUi();
+  const showHome = !onTabs && browse === "home" && atDefaultView() && !selectMode && !onlineOpen && !showGlobalEmpty;
+
+  // Pick for me and For you belong to the home rows; the grid keeps to what it lists.
+  homeActionsEl.hidden = !showHome;
+  emptyEl.hidden = !showGlobalEmpty || onlineOpen;
+  homeEl.hidden = !showHome;
+  if (showHome) {
+    gridHeadEl.hidden = true;
+    listEl.hidden = true;
+    filterEmptyEl.hidden = true;
+    renderHome();
+    updateSelectionUi();
+    return;
+  }
+  homeEl.replaceChildren();
+
+  // The grid says what it is showing, with a way back to the home rows.
+  gridHeadEl.hidden = onlineOpen || showGlobalEmpty || (onTabs && atDefaultView() && !selectMode);
+  gridTitleEl.textContent = searching
+    ? `Results for “${searchQuery.trim()}”`
+    : tagFilter
+      ? `#${tagFilter}`
+      : listFilter
+        ? listFilter
+        : effectiveStatus() === "all"
+          ? "Everything"
+          : statusText[effectiveStatus()];
+  gridCountEl.textContent = items.length ? String(items.length) : "";
+
+  filterEmptyEl.hidden = !showFilterEmpty || onlineOpen;
+  listEl.hidden = items.length === 0 || onlineOpen;
+  listEl.classList.toggle("poster-grid", !onTabs);
   // Nothing matched and TMDB is on offer: a short line, with the search right under it, not a tall empty box.
   const compactEmpty = !!onlineOffered && !online && showFilterEmpty;
   filterEmptyEl.classList.toggle("is-compact", compactEmpty);
   if (compactEmpty && hiddenCount <= 0) filterEmptyTextEl.textContent = `Nothing on your shelf matches “${onlineOffered!.query}”.`;
 
-  if (items.length === 0) {
+  for (const item of items) {
+    const el = onTabs ? createListRow(item) : createPosterTile(item);
+    const box = el.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    if (box && selectMode && ticked.has(item.id)) box.checked = true;
+    listEl.append(el);
+  }
+  updateSelectionUi();
+}
+
+/** Opens what a home row's "See all" points at: the grid with that status, or Coming up. */
+function seeAll(target: SeeAll): void {
+  if (target === "upcoming") {
+    openUpcoming();
     return;
   }
+  statusFilter = target;
+  browse = "grid";
+  rememberView();
+  render();
+  mainEl.scrollTop = 0;
+}
 
-  for (const item of items) {
-    const { li, typeIconEl, body } = createRowShell(item);
+/** Back from the grid to the home rows, the way the shelf opens. */
+function goHome(): void {
+  if (selectMode) exitSelectMode();
+  statusFilter = defaultStatusFilter(defaultView);
+  tagFilter = "";
+  listFilter = "";
+  if (online) online = undefined;
+  closeSearch(false);
+  browse = "home";
+  rememberView();
+  render();
+  mainEl.scrollTop = 0;
+}
 
-    const checkbox = document.createElement("input");
-    checkbox.type = "checkbox";
-    checkbox.dataset.id = item.id;
-
-    body.append(...createItemLines(item));
-
-    li.append(typeIconEl, body, createRowActions(item), checkbox);
-
-    // Rest the pointer on a row and it describes itself, so you don't have to open the item.
-    li.addEventListener("mouseenter", () => {
-      clearTimeout(rowHoverTimer);
-      rowHoverTimer = setTimeout(() => {
-        if (anyDialogOpen()) return;
-        const text = hoverText(item, li);
-        if (text) showItemTooltip(text, li);
-      }, HOVER_DELAY_MS);
-    });
-    li.addEventListener("mouseleave", cancelRowHover);
-
-    const isOpenable = (item.type === "tab" || item.type === "link") && !!item.url;
-
-    if (isOpenable) {
-      body.classList.add("item-body-link");
-      body.title = item.url!;
+/** The home screen: a row for each status, plus Coming up and New seasons when TMDB knows the dates. */
+function renderHome(): void {
+  const base = activeTab === "media" && activeFilter !== "all" ? tabItems().filter((i) => i.type === activeFilter) : tabItems();
+  let soonIds: string[] = [];
+  let newSeasonIds: string[] = [];
+  // What each Coming up and New seasons poster says under its title, such as "Tomorrow · S3 E2".
+  const captions = new Map<string, string>();
+  if (activeTab === "media" && tmdbConfigured) {
+    const now = Date.now();
+    const soon = comingUp(allItems, now, COMING_UP_HOME_DAYS, userRegions, { newSeasons: newSeasonReminders });
+    for (const entry of soon) {
+      if (!captions.has(entry.item.id)) captions.set(entry.item.id, soonText(entry.days, entry.label));
     }
-
-    li.addEventListener("click", (e) => {
-      const target = e.target as HTMLElement;
-      if (target.closest('input[type="checkbox"]')) return;
-
-      if (isOpenable && target.closest(".item-body")) {
-        void chrome.tabs.create({ url: item.url });
-        return;
-      }
-
-      // Tapping a row shows everything about it. Only the tick box selects.
-      if (!isOpenable) showDetails(item, "info");
-    });
-    li.tabIndex = 0;
-    li.addEventListener("keydown", (e) => {
-      if (e.target === li && (e.key === "Enter" || e.key === " ") && !isOpenable) {
-        e.preventDefault();
-        showDetails(item, "info");
-      }
-    });
-
-    listEl.append(li);
+    soonIds = soon.map((e) => e.item.id);
+    const fresh = newSeasonReminders ? newSeasonEntries(allItems, now) : [];
+    for (const entry of fresh) captions.set(`new:${entry.item.id}`, entry.label);
+    newSeasonIds = fresh.map((e) => e.item.id);
   }
+  const { rows, links } = buildHomeRows(base, {
+    shelf: activeTab === "books" ? "books" : "media",
+    defaultView,
+    soonIds,
+    newSeasonIds,
+  });
+
+  const feature = featuredRow(rows);
+  const parts: HTMLElement[] = [];
+  // A Coming up title says when it airs; anything else says where you are in it.
+  if (feature) parts.push(billboardEl(feature.items[0], feature.title, feature.key === "soon" ? captions.get(feature.items[0].id) : undefined, feature.key === "soon"));
+  // Pick for me and For you sit right under the billboard.
+  parts.push(homeActionsEl);
+  parts.push(
+    ...rows.map((row) =>
+      homeRowEl(row, (item) =>
+        row.key === "soon" ? captions.get(item.id) : row.key === "new-seasons" ? captions.get(`new:${item.id}`) : undefined
+      )
+    )
+  );
+  if (rows.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "home-empty";
+    const heading = document.createElement("strong");
+    const kind = activeTab === "books" ? "books" : activeFilter === "all" ? "titles" : `${typeLabel(activeFilter as MediaType).toLowerCase()}${activeFilter === "anime" ? "" : "s"}`;
+    heading.textContent = base.length === 0 ? `No ${kind} saved yet` : "You're all caught up";
+    const detail = document.createElement("span");
+    detail.textContent = base.length === 0 ? "Open a page about one and tap Save page." : "Everything here is finished. Nice.";
+    empty.append(heading, detail);
+    parts.push(empty);
+  }
+  if (links.length) {
+    const more = document.createElement("div");
+    more.className = "home-links";
+    for (const link of links) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "home-link";
+      const count = document.createElement("span");
+      count.className = "home-link-count";
+      count.textContent = String(link.count);
+      const chevron = document.createElement("span");
+      chevron.className = "material-symbols-outlined";
+      chevron.textContent = "chevron_right";
+      btn.append(link.label, count, chevron);
+      btn.addEventListener("click", () => seeAll(link.filter));
+      more.append(btn);
+    }
+    parts.push(more);
+  }
+  homeEl.replaceChildren(...parts);
+}
+
+/**
+ * The one thing to do next with a title, for the billboard and the card: watch it where you watch, mark the next
+ * episode, start it, or finish it. Undefined once it is done.
+ */
+function primaryAction(item: SavedItem): { icon: string; label: string; run: () => Promise<void> | void } | undefined {
+  const status = statusOf(item);
+  const link = watchLinks(item, watchSites).find((l) => !l.search);
+  if (link && status !== "done") {
+    return { icon: "play_arrow", label: status === "in_progress" ? "Resume" : "Play", run: () => void chrome.tabs.create({ url: link.url }) };
+  }
+  const step = episodeStep(item);
+  if (step && status !== "done") return { icon: "check", label: `Watched ${step.label}`, run: () => watchedNextEpisode(item) };
+  if (status === "plan" && isTrackable(item)) {
+    return {
+      icon: "play_arrow",
+      label: item.type === "book" ? "Start reading" : "Start watching",
+      run: async () => {
+        const error = await updateItemFields(item.id, { status: "in_progress" });
+        showStatus(error ?? `${item.title}: in progress.`, Boolean(error));
+        refreshOpenCard(item.id);
+      },
+    };
+  }
+  if (status === "in_progress" || status === "dropped") {
+    return { icon: "check", label: doneLabels().markDone, run: () => toggleDone(item) };
+  }
+  return undefined;
+}
+
+/** The big card at the top of home: one title, what it is, and the next step, like a streaming app's billboard. */
+function billboardEl(item: SavedItem, kicker: string, caption?: string, upcoming = false): HTMLElement {
+  const card = document.createElement("article");
+  card.className = "billboard";
+  const art = posterUrl(item, "L", "w342");
+  if (art) {
+    card.classList.add("has-art");
+    card.style.setProperty("--hero", `url(${JSON.stringify(art)})`);
+  }
+
+  const body = document.createElement("div");
+  body.className = "bb-body";
+  const tag = document.createElement("p");
+  tag.className = "bb-kicker";
+  tag.textContent = kicker;
+  const title = document.createElement("h2");
+  title.className = "bb-title";
+  title.textContent = item.title;
+  const sub = document.createElement("p");
+  sub.className = "bb-sub";
+  sub.textContent = caption ?? ([progressText(item), item.year, genreParts(item)[0]?.split(" / ")[0]].filter(Boolean).join(" · ") || typeLabel(item.type));
+  body.append(tag, title, sub);
+
+  if (statusOf(item) === "in_progress") {
+    const total = item.type === "book" ? totalPages(item) : totalEpisodes(item);
+    const fraction = progressFraction(item.progressCurrent, total);
+    if (fraction !== undefined) {
+      const bar = document.createElement("div");
+      bar.className = "bb-progress";
+      const fill = document.createElement("span");
+      fill.style.width = `${Math.round(fraction * 100)}%`;
+      bar.append(fill);
+      body.append(bar);
+    }
+  }
+
+  const buttons = document.createElement("div");
+  buttons.className = "bb-buttons";
+  // A title that isn't out yet can't be started; it only gets Info.
+  const action = upcoming && statusOf(item) === "plan" ? undefined : primaryAction(item);
+  if (action) {
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "btn btn-primary bb-main";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined btn-icon";
+    icon.textContent = action.icon;
+    main.append(icon, action.label);
+    main.addEventListener("click", () => {
+      main.disabled = true;
+      void Promise.resolve(action.run()).finally(() => (main.disabled = false));
+    });
+    buttons.append(main);
+  }
+  const info = document.createElement("button");
+  info.type = "button";
+  info.className = "btn btn-secondary";
+  const infoIcon = document.createElement("span");
+  infoIcon.className = "material-symbols-outlined btn-icon";
+  infoIcon.textContent = "info";
+  info.append(infoIcon, "Info");
+  info.title = "Details, episodes and more";
+  info.addEventListener("click", () => showDetails(item, "info"));
+  buttons.append(info);
+  body.append(buttons);
+
+  const poster = createLeadingEl(item, "L", "w342");
+  poster.classList.add("bb-poster");
+  poster.addEventListener("click", () => showDetails(item, "info"));
+  card.append(body, poster);
+  return card;
+}
+
+/** Grey rows that hold the place of the shelf while it loads. */
+function renderSkeleton(): void {
+  const row = () => {
+    const section = document.createElement("section");
+    section.className = "home-row is-skeleton";
+    section.setAttribute("aria-hidden", "true");
+    const head = document.createElement("div");
+    head.className = "skeleton-line";
+    const list = document.createElement("div");
+    list.className = "home-row-list";
+    for (let i = 0; i < 4; i++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      const poster = document.createElement("div");
+      poster.className = "tile-poster";
+      tile.append(poster);
+      list.append(tile);
+    }
+    section.append(head, list);
+    return section;
+  };
+  const bb = document.createElement("div");
+  bb.className = "billboard is-skeleton";
+  bb.setAttribute("aria-hidden", "true");
+  homeEl.replaceChildren(bb, row(), row());
+}
+
+/** A small number on Coming up in the bottom bar: what airs or comes out in the next week. */
+function updateUpcomingBadge(): void {
+  const btn = document.getElementById("open-upcoming")!;
+  let badge = btn.querySelector<HTMLElement>(".nav-badge");
+  const count = tmdbConfigured ? new Set(comingUp(allItems, Date.now(), 7, userRegions, { newSeasons: newSeasonReminders }).map((e) => e.item.id)).size : 0;
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "nav-badge";
+    btn.append(badge);
+  }
+  badge.textContent = count > 9 ? "9+" : String(count);
+  badge.hidden = count === 0;
+  btn.setAttribute("aria-label", count ? `Coming up, ${count} this week` : "Coming up");
+}
+
+function homeRowEl(row: HomeRow<SavedItem>, caption: (item: SavedItem) => string | undefined = () => undefined): HTMLElement {
+  const section = document.createElement("section");
+  section.className = "home-row";
+  section.setAttribute("aria-label", row.title);
+
+  const head = document.createElement("button");
+  head.type = "button";
+  head.className = "home-row-head";
+  head.title = row.seeAll === "upcoming" ? "Open Coming up" : `See all ${row.total}`;
+  const title = document.createElement("h3");
+  title.textContent = row.title;
+  const more = document.createElement("span");
+  more.className = "home-row-more";
+  more.textContent = row.seeAll === "upcoming" ? "Open" : "See all";
+  const chevron = document.createElement("span");
+  chevron.className = "material-symbols-outlined";
+  chevron.textContent = "chevron_right";
+  more.append(chevron);
+  head.append(title, more);
+  head.addEventListener("click", () => seeAll(row.seeAll));
+
+  const track = document.createElement("div");
+  track.className = "home-row-track";
+  const list = document.createElement("ul");
+  list.className = "home-row-list";
+  list.append(...row.items.map((item) => createPosterTile(item, caption(item))));
+  track.append(list);
+
+  // Arrows at the ends, like a streaming app, for people without a trackpad.
+  for (const dir of [-1, 1] as const) {
+    const arrow = document.createElement("button");
+    arrow.type = "button";
+    arrow.className = `row-arrow ${dir < 0 ? "is-prev" : "is-next"}`;
+    arrow.tabIndex = -1;
+    arrow.setAttribute("aria-hidden", "true");
+    const glyph = document.createElement("span");
+    glyph.className = "material-symbols-outlined";
+    glyph.textContent = dir < 0 ? "chevron_left" : "chevron_right";
+    arrow.append(glyph);
+    arrow.addEventListener("click", () => list.scrollBy({ left: dir * list.clientWidth * 0.85, behavior: "smooth" }));
+    track.append(arrow);
+  }
+  const updateArrows = () => {
+    track.classList.toggle("can-prev", list.scrollLeft > 4);
+    track.classList.toggle("can-next", list.scrollLeft + list.clientWidth < list.scrollWidth - 4);
+  };
+  list.addEventListener("scroll", updateArrows, { passive: true });
+  requestAnimationFrame(updateArrows);
+
+  section.append(head, track);
+  return section;
+}
+
+/** A poster for one title: tap to open it, rest on it for quick actions. In select mode a tap ticks it. */
+function createPosterTile(item: SavedItem, note?: string): HTMLLIElement {
+  const li = document.createElement("li");
+  li.className = "tile";
+  li.classList.toggle("done", Boolean(item.done));
+  li.dataset.id = item.id;
+  li.tabIndex = 0;
+  const name = itemTitle(item);
+  li.setAttribute("aria-label", name);
+
+  const poster = document.createElement("div");
+  poster.className = "tile-poster";
+  const fallback = () => {
+    const art = document.createElement("div");
+    art.className = "tile-fallback";
+    const icon = createTypeIconEl(item.type);
+    const text = document.createElement("span");
+    text.textContent = item.title;
+    art.append(icon, text);
+    poster.prepend(art);
+    poster.classList.add("is-loaded");
+  };
+  const src = posterUrl(item, "M", "w185");
+  if (src) {
+    const img = document.createElement("img");
+    img.className = "tile-img";
+    img.alt = "";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    img.addEventListener("load", () => poster.classList.add("is-loaded"), { once: true });
+    img.addEventListener("error", () => { img.remove(); fallback(); }, { once: true });
+    img.src = src;
+    poster.append(img);
+  } else {
+    fallback();
+  }
+
+  const status = statusOf(item);
+  if (status === "done") poster.append(tileBadge("check", "tile-badge is-done", doneLabels().done));
+  if (item.myRating) {
+    const rating = document.createElement("span");
+    rating.className = "tile-rating";
+    rating.textContent = `★ ${item.myRating}`;
+    rating.title = `Your rating: ${item.myRating}/10`;
+    poster.append(rating);
+  }
+  const keepProblem = item.keepStatus === "failed" || item.keepStatus === "missing_config";
+  const traktProblem = traktLink.connected && Boolean(item.trakt?.problem);
+  if (keepProblem || traktProblem) {
+    poster.append(
+      tileBadge(
+        "sync_problem",
+        "tile-badge is-alert",
+        keepProblem ? `Not in Keep: ${(item.keepError ?? "sync failed").replace(/\.+$/, "")}` : `${item.trakt!.problem}. Open it to fix the match.`
+      )
+    );
+  }
+  if (status === "in_progress") {
+    const total = item.type === "book" ? totalPages(item) : totalEpisodes(item);
+    const fraction = progressFraction(item.progressCurrent, total);
+    if (fraction !== undefined) {
+      const bar = document.createElement("div");
+      bar.className = "tile-progress";
+      bar.title = progressText(item);
+      const fill = document.createElement("span");
+      fill.style.width = `${Math.round(fraction * 100)}%`;
+      bar.append(fill);
+      poster.append(bar);
+    }
+  }
+  poster.append(createTileActions(item));
+
+  const caption = document.createElement("div");
+  caption.className = "tile-caption";
+  const title = document.createElement("span");
+  title.className = "tile-title";
+  title.textContent = item.title;
+  const sub = document.createElement("span");
+  sub.className = note ? "tile-sub is-soon" : "tile-sub";
+  sub.textContent = note ?? tileSubtitle(item);
+  caption.append(title, sub);
+
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.className = "tile-check";
+  box.dataset.id = item.id;
+  box.tabIndex = -1;
+  box.setAttribute("aria-label", `Select ${name}`);
+
+  li.append(poster, caption, box);
+  li.title = [name, progressText(item)].filter(Boolean).join(" · ");
+
+  const open = () => {
+    if (selectMode) {
+      box.checked = !box.checked;
+      updateSelectionUi();
+    } else {
+      showDetails(item, "info");
+    }
+  };
+  li.addEventListener("click", (e) => {
+    if ((e.target as HTMLElement).closest('input[type="checkbox"]')) {
+      updateSelectionUi();
+      return;
+    }
+    open();
+  });
+  li.addEventListener("keydown", (e) => {
+    if (e.target !== li) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      open();
+    }
+  });
+  // Right-click (or a long press on a touch screen) starts selecting with this title ticked.
+  li.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    enterSelectMode(item.id);
+  });
+  return li;
+}
+
+function tileBadge(icon: string, className: string, label: string): HTMLElement {
+  const badge = document.createElement("span");
+  badge.className = `${className} material-symbols-outlined`;
+  badge.textContent = icon;
+  badge.title = label;
+  badge.setAttribute("aria-label", label);
+  return badge;
+}
+
+/** Under the poster: the year and kind, or the author for a book. */
+function tileSubtitle(item: SavedItem): string {
+  if (item.type === "book") return [item.author, item.publishedYear ?? item.year].filter(Boolean).join(" · ");
+  const progress = statusOf(item) === "in_progress" ? progressText(item).replace(/\s*\(.*\)$/, "") : "";
+  return [progress || item.year, activeFilter === "all" ? typeLabel(item.type) : ""].filter(Boolean).join(" · ");
+}
+
+/** The few things worth doing without opening a title: watch it, tick it off, the next episode, edit. */
+function createTileActions(item: SavedItem): HTMLElement {
+  const actions = document.createElement("div");
+  actions.className = "tile-actions";
+  const labels = doneLabels();
+  const link = watchLinks(item, watchSites)[0];
+  if (link) {
+    actions.append(
+      createRowAction(link.search ? "search" : "play_arrow", `${link.search ? "Search" : "Watch"} on ${link.host}`, () => void chrome.tabs.create({ url: link.url }), "is-play")
+    );
+  }
+  if (item.keepStatus === "failed" || item.keepStatus === "missing_config") {
+    actions.append(createRowAction("sync_problem", "Retry sending to Keep", () => void syncToKeep([item.id]), "keep-problem"));
+  }
+  actions.append(
+    createRowAction(item.done ? "undo" : "check", item.done ? labels.markTodo : labels.markDone, () => void toggleDone(item), item.done ? "is-done" : "")
+  );
+  const step = episodeStep(item);
+  if (step) actions.append(createRowAction("exposure_plus_1", `Mark ${step.label} as watched`, () => void watchedNextEpisode(item)));
+  actions.append(createRowAction("edit", "Edit", () => openEditDialog(item)));
+  return actions;
+}
+
+/** A saved tab, link or note: a plain row, since there is no poster. */
+function createListRow(item: SavedItem): HTMLLIElement {
+  const { li, typeIconEl, body } = createRowShell(item);
+
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.dataset.id = item.id;
+  checkbox.setAttribute("aria-label", `Select ${itemTitle(item)}`);
+
+  body.append(...createItemLines(item));
+  li.append(typeIconEl, body, createRowActions(item), checkbox);
+
+  // Rest the pointer on a row and it describes itself, so you don't have to open the item.
+  li.addEventListener("mouseenter", () => {
+    clearTimeout(rowHoverTimer);
+    rowHoverTimer = setTimeout(() => {
+      if (anyDialogOpen()) return;
+      const text = hoverText(item, li);
+      if (text) showItemTooltip(text, li);
+    }, HOVER_DELAY_MS);
+  });
+  li.addEventListener("mouseleave", cancelRowHover);
+
+  const isOpenable = (item.type === "tab" || item.type === "link") && !!item.url;
+  if (isOpenable) {
+    body.classList.add("item-body-link");
+    body.title = item.url!;
+  }
+
+  li.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('input[type="checkbox"]')) return;
+    if (selectMode) {
+      checkbox.checked = !checkbox.checked;
+      updateSelectionUi();
+      return;
+    }
+    if (isOpenable && target.closest(".item-body")) {
+      void chrome.tabs.create({ url: item.url });
+      return;
+    }
+    if (!isOpenable) showDetails(item, "info");
+  });
+  li.tabIndex = 0;
+  li.addEventListener("keydown", (e) => {
+    if (e.target === li && (e.key === "Enter" || e.key === " ")) {
+      e.preventDefault();
+      if (selectMode) {
+        checkbox.checked = !checkbox.checked;
+        updateSelectionUi();
+      } else if (isOpenable) void chrome.tabs.create({ url: item.url });
+      else showDetails(item, "info");
+    }
+  });
+  li.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    enterSelectMode(item.id);
+  });
+  return li;
 }
 
 /* ── Search TMDB from the search box ──────────────────────── */
@@ -1823,21 +2390,48 @@ function linkedText(noteId: string | undefined, noteUrl: string | undefined): st
   return "Not linked";
 }
 
-/** The sync button only appears when the Keep list for the tab you are on is switched on, and something is ticked. */
+/** The sync button is there only when the Keep list for the shelf you are on is switched on. */
 function updateSyncButton(): void {
-  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings) || getSelectedIds().length === 0;
+  syncSelectedEl.hidden = !isKeepOn(activeTab, keepSettings);
+  syncSelectedEl.disabled = getSelectedIds().length === 0;
 }
 
-/** The buttons that act on ticked rows only appear while something is ticked, which keeps the header quiet. */
+/** The select bar says how many are ticked; its buttons wait until something is. */
 function updateSelectionUi(): void {
   const selected = getSelectedIds().length;
-  deleteSelectedEl.hidden = selected === 0;
-  statusSelectedEl.hidden = selected === 0;
-  // One copy button: the ticked rows when there are some, otherwise everything the list shows.
+  deleteSelectedEl.disabled = selected === 0;
+  statusSelectedEl.disabled = selected === 0;
+  selectCountEl.textContent = selected > 0 ? `${selected} selected` : "Tap titles to select";
+  // One copy button: the ticked titles when there are some, otherwise everything the list shows.
   const label = selected > 0 ? `Copy ${selected} selected` : "Copy everything shown";
   copyItemsEl.title = label;
   copyItemsEl.setAttribute("aria-label", label);
   updateSyncButton();
+}
+
+function enterSelectMode(tickId?: string): void {
+  closeFilterSheet();
+  selectMode = true;
+  document.body.classList.add("is-selecting");
+  selectBarEl.hidden = false;
+  bottomNavEl.hidden = true;
+  render();
+  if (tickId) {
+    const box = listEl.querySelector<HTMLInputElement>(`input[type="checkbox"][data-id="${CSS.escape(tickId)}"]`);
+    if (box) box.checked = true;
+  }
+  updateSelectionUi();
+  selectCountEl.focus?.();
+}
+
+function exitSelectMode(): void {
+  if (!selectMode) return;
+  selectMode = false;
+  listEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((box) => (box.checked = false));
+  document.body.classList.remove("is-selecting");
+  selectBarEl.hidden = true;
+  bottomNavEl.hidden = false;
+  render();
 }
 
 /** The filter button shows a dot while the list is narrowed or re-sorted, since the controls are tucked away. */
@@ -2702,7 +3296,7 @@ function renderPrefs(): void {
   const on = askRatingEnabled();
   prefAskRatingEl.checked = on;
   // The collapsed row says which tabs are on the shelf, the one thing here that changes what you see.
-  generalSummaryEl.textContent = ["Media", showBooks ? "Books" : "", showTabs ? "Tabs" : ""].filter(Boolean).join(" · ");
+  generalSummaryEl.textContent = ["Media", showBooks ? "Books" : "", showTabs ? "Links" : ""].filter(Boolean).join(" · ");
 }
 
 const prefStartEl = document.getElementById("pref-start") as HTMLSelectElement;
@@ -2869,6 +3463,7 @@ async function toggleDone(item: SavedItem): Promise<void> {
     showStatus(error, true);
     return;
   }
+  refreshOpenCard(item.id);
   if (finishing) maybeAskRating(item.id);
 }
 
@@ -3786,6 +4381,16 @@ const pickFooterEl = document.getElementById("pick-footer")!;
 const pickAgainEl = document.getElementById("pick-again") as HTMLButtonElement;
 const pickEditEl = document.getElementById("pick-edit") as HTMLButtonElement;
 const pickCloseEl = document.getElementById("pick-close") as HTMLButtonElement;
+const pickDoneEl = document.getElementById("pick-done") as HTMLButtonElement;
+const pickRateEl = document.getElementById("pick-rate") as HTMLButtonElement;
+pickDoneEl.addEventListener("click", () => {
+  const item = allItems.find((i) => i.id === pickedId);
+  if (item) void toggleDone(item);
+});
+pickRateEl.addEventListener("click", () => {
+  const item = allItems.find((i) => i.id === pickedId);
+  if (item) openRateDialog(item);
+});
 
 /** "pick" is the random suggestion; "info" is what opens when you tap a row. Same card, different layout. */
 type DetailMode = "pick" | "info";
@@ -3803,6 +4408,31 @@ function detailChips(item: SavedItem): Array<{ text: string; className: string }
   return chips;
 }
 
+/**
+ * The line under the card's title, the way a streaming app shows it: the score in green, then year, age rating in
+ * a box, length, and the genres on a line of their own.
+ */
+function renderMeta(item: SavedItem, trakt?: TraktRating): void {
+  if (!isTrackable(item) || item.type === "book") {
+    pickDetailEl.textContent = [factsText(item, trakt), genreParts(item).join("")].filter(Boolean).join("\n");
+    return;
+  }
+  const span = (text: string, className = "meta-part") => Object.assign(document.createElement("span"), { className, textContent: text });
+  const line = document.createElement("span");
+  line.className = "meta-line";
+  const score = item.imdbRating ? `IMDb ${item.imdbRating}` : item.tmdb?.rating ? `TMDB ${item.tmdb.rating.toFixed(1)}` : "";
+  if (score) line.append(span(score, "meta-part meta-score"));
+  if (item.year) line.append(span(item.year));
+  if (item.tmdb?.certification) line.append(span(item.tmdb.certification, "meta-part meta-cert"));
+  const duration = durationText(item);
+  if (duration) line.append(span(formatDurationOrSeasons(duration)));
+  if (trakt) line.append(span(ratingText(trakt)));
+  const genres = genreText(item).split(/[,/|]/).map((g) => g.trim()).filter(Boolean).slice(0, 3);
+  const parts: Node[] = [line];
+  if (genres.length) parts.push(span(genres.join(" · "), "meta-genres"));
+  pickDetailEl.replaceChildren(...parts);
+}
+
 /** Adds Trakt's community rating to the open card's facts once it arrives. Quietly does nothing without a Client ID. */
 async function showTraktRating(item: SavedItem): Promise<void> {
   try {
@@ -3810,7 +4440,7 @@ async function showTraktRating(item: SavedItem): Promise<void> {
     if (!response.ok || !("traktRating" in response) || !response.traktRating) return;
     // Only if the same card is still open.
     if (pickedId !== item.id || pickDialogEl.hidden) return;
-    pickDetailEl.textContent = [factsText(item, response.traktRating), genreParts(item).join("")].filter(Boolean).join("\n");
+    renderMeta(item, response.traktRating);
     pickDetailEl.title = `Trakt: ${response.traktRating.percent}% from ${response.traktRating.votes.toLocaleString()} votes`;
   } catch {
     /* the card is fine without it */
@@ -3832,10 +4462,10 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickPanelEl.classList.toggle("is-pick", !info);
   pickTopEl.hidden = info;
   pickKickerEl.textContent = "How about this?";
-  pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
+  setHero(item);
   pickTitleEl.textContent = itemTitle(item);
   pickTitleEl.title = itemTitle(item);
-  pickDetailEl.textContent = [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n");
+  renderMeta(item);
   pickDetailEl.removeAttribute("title");
   if (info && item.tmdb) void showTraktRating(item);
   const overview = item.tmdb?.overview ?? item.bookInfo?.description;
@@ -3843,10 +4473,15 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickOverviewEl.hidden = !overview;
 
   // The suggestion doesn't need your tags and review; the item's own card shows everything.
-  const chips = detailChips(item).filter((chip) => info || !chip.className.includes("pick-chip-tag"));
+  // The card's Rate button shows your rating, so it isn't repeated as a label.
+  const chips = detailChips(item).filter(
+    (chip) => (info || !chip.className.includes("pick-chip-tag")) && !(info && chip.text.startsWith("★"))
+  );
   const chipEls: HTMLElement[] = chips.map(({ text, className }) => textPart(text, className));
   // On the item's own card, a small "+ S2 E4" pill among the chips marks the next episode watched: no extra row.
-  const step = info ? episodeStep(item) : undefined;
+  // Without a site to watch on, the big button already marks the next episode, so the pill would repeat it.
+  const hasWatchLink = watchLinks(item, watchSites).some((l) => !l.search);
+  const step = info && hasWatchLink ? episodeStep(item) : undefined;
   if (step) {
     const add = document.createElement("button");
     add.type = "button";
@@ -3902,31 +4537,57 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickActionsEl.hidden = info;
   pickAgainEl.hidden = info;
   pickEditEl.hidden = !info;
-  pickCloseEl.hidden = false;
-  // On the suggestion, Start watching is the one strong button; on the item's card, Close is.
-  pickCloseEl.className = info ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm";
+  // The card has a close button in its corner; the suggestion also keeps one among its actions.
+  pickCloseEl.hidden = info;
 
   pickWatchEl.classList.add("is-compact");
   pickWatchEl.replaceChildren(
-    // A trailer for any title TMDB knows, ahead of the sites where you watch it.
-    ...(info && item.tmdb ? [trailerButton(item)] : []),
-    ...watchLinks(item, watchSites).map((link) => {
+    // The first place to watch is the big white button; any others and the trailer sit under it.
+    ...watchLinks(item, watchSites).map((link, index) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = info ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm";
+      btn.className = info && index === 0 ? "btn btn-play" : "btn btn-secondary";
       const label = `${link.search ? "Search" : "Watch"} on ${link.host}`;
       btn.title = label;
       // The icon says what it does, so the host is enough text on the compact card.
       const icon = document.createElement("span");
       icon.className = "material-symbols-outlined btn-icon";
-      icon.textContent = link.search ? "search" : "play_circle";
-      btn.append(icon, document.createTextNode(link.host));
+      icon.textContent = link.search ? "search" : "play_arrow";
+      btn.append(icon, document.createTextNode(info && index === 0 ? label : link.host));
       btn.setAttribute("aria-label", label);
       btn.addEventListener("click", () => void chrome.tabs.create({ url: link.url }));
       return btn;
-    })
+    }),
+    // A trailer for any title TMDB knows.
+    ...(info && item.tmdb ? [trailerButton(item)] : [])
   );
+  // With nowhere to watch it, the big button is the next step instead: the next episode, start, or finish.
+  const action = info && !pickWatchEl.querySelector(".btn-play") ? primaryAction(item) : undefined;
+  if (action) {
+    const main = document.createElement("button");
+    main.type = "button";
+    main.className = "btn btn-play";
+    const icon = document.createElement("span");
+    icon.className = "material-symbols-outlined btn-icon";
+    icon.textContent = action.icon;
+    main.append(icon, action.label);
+    main.addEventListener("click", () => {
+      main.disabled = true;
+      void Promise.resolve(action.run()).finally(() => (main.disabled = false));
+    });
+    pickWatchEl.prepend(main);
+  }
   pickWatchEl.hidden = pickWatchEl.childElementCount === 0;
+
+  const done = statusOf(item) === "done";
+  pickDoneEl.hidden = !info || !isTrackable(item);
+  pickDoneEl.classList.toggle("is-on", done);
+  pickDoneEl.querySelector(".material-symbols-outlined")!.textContent = done ? "check_circle" : "check";
+  pickDoneEl.querySelector(".pick-act-label")!.textContent = done ? doneLabels().done : doneLabels().markDone.replace(/^Mark as /, "Mark ");
+  pickDoneEl.title = done ? doneLabels().markTodo : doneLabels().markDone;
+  pickRateEl.hidden = !info || !isTrackable(item);
+  pickRateEl.classList.toggle("is-on", Boolean(item.myRating));
+  pickRateEl.querySelector(".pick-act-label")!.textContent = item.myRating ? `★ ${item.myRating}/10` : "Rate";
 
   pickOpenEl.hidden = !isHttpUrl(item.url ?? item.sourceUrl ?? "");
   pickFooterEl.hidden = false;
@@ -3945,7 +4606,7 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
 function trailerButton(item: SavedItem): HTMLButtonElement {
   const btn = document.createElement("button");
   btn.type = "button";
-  btn.className = "btn btn-outline btn-sm";
+  btn.className = "btn btn-secondary";
   const icon = document.createElement("span");
   icon.className = "material-symbols-outlined btn-icon";
   icon.textContent = "smart_display";
@@ -4047,14 +4708,15 @@ function showPickEmpty(): void {
   pickTopEl.hidden = false;
   pickKickerEl.textContent = "How about this?";
   pickLeadingEl.replaceChildren(createTypeIconEl("movie"));
+  pickLeadingEl.classList.remove("has-art");
+  pickLeadingEl.style.removeProperty("--hero");
   pickTitleEl.textContent = "Nothing matches";
   pickTitleEl.title = "";
   pickDetailEl.textContent = "Try a longer length or another genre, or tap Clear.";
-  for (const el of [pickChipsEl, pickOverviewEl, pickMoreEl, pickReviewEl, pickActionsEl, pickWatchEl, pickOpenEl, pickAgainEl, pickEditEl]) {
+  for (const el of [pickChipsEl, pickOverviewEl, pickMoreEl, pickReviewEl, pickActionsEl, pickWatchEl, pickOpenEl, pickAgainEl, pickEditEl, pickDoneEl, pickRateEl]) {
     el.hidden = true;
   }
   pickCloseEl.hidden = false;
-  pickCloseEl.className = "btn btn-outline btn-sm";
   pickFooterEl.hidden = false;
   pickDialogEl.hidden = false;
 }
@@ -4108,6 +4770,17 @@ pickFilterToggleEl.addEventListener("click", () => {
   pickFilterToggleEl.setAttribute("aria-expanded", String(pickFiltersOpen));
 });
 
+
+/** The top of the card: the poster large and sharp over a blurred, darkened copy of itself. */
+function setHero(item: SavedItem): void {
+  const src = posterUrl(item, "L", "w342");
+  pickLeadingEl.classList.toggle("has-art", Boolean(src));
+  if (src) pickLeadingEl.style.setProperty("--hero", `url(${JSON.stringify(src)})`);
+  else pickLeadingEl.style.removeProperty("--hero");
+  pickLeadingEl.replaceChildren(createLeadingEl(item, "L", "w342"));
+}
+
+document.getElementById("pick-x")!.addEventListener("click", () => closePick());
 
 function closePick(): void {
   closeRatings();
@@ -4954,6 +5627,7 @@ function rememberView(): void {
 
 statusFilterEl.addEventListener("change", () => {
   statusFilter = statusFilterEl.value as StatusFilter;
+  browse = "grid";
   rememberView();
   render();
 });
@@ -4967,6 +5641,7 @@ listFilterEl.addEventListener("change", () => {
 sortEl.addEventListener("change", () => {
   sortBy = sortEl.value as SortBy;
   localStorage.setItem("keepshelf.sort", sortBy);
+  browse = "grid";
   render();
 });
 
@@ -4976,9 +5651,118 @@ listEl.addEventListener("change", (e) => {
   if ((e.target as HTMLElement).matches('input[type="checkbox"]')) updateSelectionUi();
 });
 
-toggleFiltersEl.addEventListener("click", () => {
-  moreFiltersEl.hidden = !moreFiltersEl.hidden;
-  toggleFiltersEl.setAttribute("aria-expanded", String(!moreFiltersEl.hidden));
+function openFilterSheet(): void {
+  filterSheetEl.hidden = false;
+  toggleFiltersEl.setAttribute("aria-expanded", "true");
+  (statusFilterEl.disabled ? sortEl : statusFilterEl).focus();
+}
+
+function closeFilterSheet(): void {
+  if (filterSheetEl.hidden) return;
+  if (tagPicker.isOpen()) tagPicker.close();
+  filterSheetEl.hidden = true;
+  toggleFiltersEl.setAttribute("aria-expanded", "false");
+}
+
+toggleFiltersEl.addEventListener("click", openFilterSheet);
+filterSheetEl.querySelectorAll("[data-filter-dismiss]").forEach((el) => el.addEventListener("click", closeFilterSheet));
+document.getElementById("filter-done")!.addEventListener("click", () => {
+  closeFilterSheet();
+  toggleFiltersEl.focus();
+});
+document.getElementById("filter-reset")!.addEventListener("click", () => {
+  sortBy = "newest";
+  localStorage.setItem("keepshelf.sort", sortBy);
+  closeFilterSheet();
+  goHome();
+});
+document.getElementById("select-start")!.addEventListener("click", () => enterSelectMode());
+document.getElementById("copy-all")!.addEventListener("click", () => {
+  closeFilterSheet();
+  void copyToClipboard(filteredItems());
+});
+document.getElementById("select-cancel")!.addEventListener("click", exitSelectMode);
+document.getElementById("grid-back")!.addEventListener("click", goHome);
+
+function openSearch(): void {
+  searchBarEl.hidden = false;
+  openSearchEl.setAttribute("aria-expanded", "true");
+  searchEl.focus();
+}
+
+/** Clears the search and folds the box away. `redraw` is false when the caller draws the shelf itself. */
+function closeSearch(redraw = true): void {
+  const had = searchEl.value !== "";
+  searchEl.value = "";
+  searchQuery = "";
+  if (autoSearchTimer) clearTimeout(autoSearchTimer);
+  if (online?.kind === "search") online = undefined;
+  searchBarEl.hidden = true;
+  openSearchEl.setAttribute("aria-expanded", "false");
+  if (redraw && had) render();
+}
+
+openSearchEl.addEventListener("click", () => (searchBarEl.hidden ? openSearch() : closeSearch()));
+document.getElementById("close-search")!.addEventListener("click", () => {
+  closeSearch();
+  openSearchEl.focus();
+});
+
+/** A category chip picks the shelf and, on Media, the kind of title. */
+function setCategory(tab: "media" | "books" | "tabs", filter: MediaType | "all"): void {
+  if (tab !== activeTab) {
+    activeTab = tab;
+    tagFilter = "";
+    listFilter = "";
+    tabInputEl.value = "";
+    if (online?.kind === "like") online = undefined;
+    if (selectMode) exitSelectMode();
+  }
+  activeFilter = tab === "media" ? filter : "all";
+  syncShelfUi();
+  rememberView();
+  render();
+  mainEl.scrollTop = 0;
+}
+
+categoryChipsEl.addEventListener("click", (e) => {
+  const chip = (e.target as HTMLElement).closest<HTMLButtonElement>(".cat-chip");
+  if (!chip) return;
+  setCategory(chip.dataset.tab as "media" | "books" | "tabs", (chip.dataset.filter as MediaType | "all") ?? "all");
+});
+
+document.getElementById("nav-home")!.addEventListener("click", () => {
+  // Already home: the tap brings the shelf back to how it opens, at the top.
+  if (!appView.hidden) goHome();
+  else showScreen("home");
+});
+
+/** Arrow keys move between posters: along a row, or across and down the grid. */
+mainEl.addEventListener("keydown", (e) => {
+  const tile = (e.target as HTMLElement).closest<HTMLElement>(".tile");
+  if (!tile || e.target !== tile) return;
+  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+  if (!keys.includes(e.key)) return;
+  const list = tile.parentElement!;
+  const tiles = Array.from(list.querySelectorAll<HTMLElement>(":scope > .tile"));
+  const index = tiles.indexOf(tile);
+  let next: HTMLElement | undefined;
+  if (e.key === "ArrowLeft") next = tiles[index - 1];
+  else if (e.key === "ArrowRight") next = tiles[index + 1];
+  else if (list === listEl) {
+    const columns = Math.max(1, Math.round(list.clientWidth / tile.offsetWidth));
+    next = tiles[index + (e.key === "ArrowDown" ? columns : -columns)];
+  } else {
+    // In the home rows, up and down jump to the row above or below.
+    const rows = Array.from(homeEl.querySelectorAll<HTMLElement>(".home-row-list"));
+    const row = rows[rows.indexOf(list) + (e.key === "ArrowDown" ? 1 : -1)];
+    next = row?.querySelector<HTMLElement>(":scope > .tile") ?? undefined;
+  }
+  if (next) {
+    e.preventDefault();
+    next.focus();
+    next.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 });
 
 shelfTabsEl.addEventListener("click", (e) => {
@@ -5023,6 +5807,9 @@ function applySections(): void {
     t.hidden = !visible[t.dataset.tab ?? ""];
   });
   shelfTabsEl.hidden = !showBooks && !showTabs;
+  categoryChipsEl.querySelectorAll<HTMLElement>(".cat-chip").forEach((chip) => {
+    chip.hidden = !visible[chip.dataset.tab ?? ""];
+  });
   if (!visible[activeTab]) {
     activeTab = "media";
     activeFilter = "all";
@@ -5038,6 +5825,11 @@ function applySections(): void {
 function syncShelfUi(): void {
   shelfTabsEl.querySelectorAll<HTMLElement>(".shelf-tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === activeTab));
   filtersEl.querySelectorAll<HTMLElement>(".filter").forEach((f) => f.classList.toggle("active", f.dataset.filter === activeFilter));
+  categoryChipsEl.querySelectorAll<HTMLElement>(".cat-chip").forEach((chip) => {
+    const on = chip.dataset.tab === activeTab && (activeTab !== "media" || chip.dataset.filter === activeFilter);
+    chip.classList.toggle("active", on);
+    chip.setAttribute("aria-pressed", String(on));
+  });
 }
 
 document.getElementById("save-page")!.addEventListener("click", () => {
@@ -5165,7 +5957,7 @@ document.getElementById("clear-all")!.addEventListener("click", async () => {
   const confirmed = await showConfirm({
     title: "Delete everything?",
     message:
-      "This removes every item from KeepShelf, including Books and Tabs even if they are switched off. Your Google Keep lists are not affected. This can't be undone.",
+      "This removes every item from KeepShelf, including Books and Links even if they are switched off. Your Google Keep lists are not affected. This can't be undone.",
     confirmLabel: "Delete all",
     cancelLabel: "Cancel",
   });
@@ -5198,9 +5990,17 @@ document.addEventListener("keydown", (event) => {
     // Escape steps back from the grid to the card first, and closes the card the next time.
     leaveRatings();
   } else if (!pickDialogEl.hidden) closePick();
+  else if (tagPicker.isOpen()) tagPicker.close();
+  else if (!filterSheetEl.hidden) closeFilterSheet();
+  else if (!statusDialogEl.hidden) closeStatusDialog();
   else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();
-  else if (tagPicker.isOpen()) tagPicker.close();
+  else if (!settingsView.hidden && !isTabView) closeSettings();
+  else if (selectMode) exitSelectMode();
+  else if (!searchBarEl.hidden) {
+    // Escape in a search box with text clears it first; the browser does that, so only close an empty box.
+    if (searchEl.value === "") closeSearch();
+  } else if (browse === "grid" && !atDefaultView()) goHome();
 });
 
 document.getElementById("open-upcoming")!.addEventListener("click", openUpcoming);

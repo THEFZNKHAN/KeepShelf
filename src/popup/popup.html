@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=400, initial-scale=1.0" />
+    <meta name="viewport" content="width=420, initial-scale=1.0" />
     <title>KeepShelf</title>
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
@@ -16,160 +16,112 @@
   </head>
   <body>
     <div id="app-view" class="view">
-      <header class="top-bar">
+      <header class="top-bar app-bar">
         <div class="brand">
-          <span class="material-symbols-outlined brand-icon">bookmark</span>
+          <img class="brand-logo" src="../icons/icon48.png" alt="" width="24" height="24" />
           <h1>KeepShelf</h1>
         </div>
         <div class="top-bar-actions">
+          <button type="button" id="open-search" class="icon-btn" aria-label="Search your shelf" title="Search">
+            <span class="material-symbols-outlined">search</span>
+          </button>
           <button
             type="button"
             id="save-page"
             class="btn btn-save"
-            title="Save current page"
-            aria-label="Save current page"
+            title="Save the page you are on"
+            aria-label="Save the page you are on"
           >
-            <span class="material-symbols-outlined btn-icon">bookmark_add</span>
             Save page
-          </button>
-          <button
-            type="button"
-            id="open-upcoming"
-            class="icon-btn"
-            aria-label="Coming up"
-            title="Coming up"
-          >
-            <span class="material-symbols-outlined">event</span>
-          </button>
-          <button
-            type="button"
-            id="open-stats"
-            class="icon-btn"
-            aria-label="Stats"
-            title="Stats"
-          >
-            <span class="material-symbols-outlined">insights</span>
-          </button>
-          <button
-            type="button"
-            id="open-settings"
-            class="icon-btn"
-            aria-label="Settings"
-            title="Settings"
-          >
-            <span class="material-symbols-outlined">settings</span>
           </button>
         </div>
       </header>
 
-      <nav id="shelf-tabs" class="shelf-tabs">
-        <button type="button" class="shelf-tab active" data-tab="media">Media<span class="shelf-tab-count" data-count="media"></span></button>
-        <button type="button" class="shelf-tab" data-tab="books">Books<span class="shelf-tab-count" data-count="books"></span></button>
-        <button type="button" class="shelf-tab" data-tab="tabs">Tabs<span class="shelf-tab-count" data-count="tabs"></span></button>
-      </nav>
+      <div id="search-bar" class="search-bar" hidden>
+        <div class="search-wrap">
+          <span class="material-symbols-outlined search-icon">search</span>
+          <input
+            type="search"
+            id="search"
+            class="search-input"
+            placeholder="Titles, genres, tags"
+            autocomplete="off"
+            aria-label="Search saved items"
+          />
+        </div>
+        <button type="button" id="close-search" class="text-btn">Cancel</button>
+      </div>
 
-      <div class="toolbar">
+      <div class="cat-row">
+        <nav id="category-chips" class="cat-chips" aria-label="What to show">
+          <button type="button" class="cat-chip active" data-tab="media" data-filter="all">All</button>
+          <button type="button" class="cat-chip" data-tab="media" data-filter="movie">Movies</button>
+          <button type="button" class="cat-chip" data-tab="media" data-filter="series">Series</button>
+          <button type="button" class="cat-chip" data-tab="media" data-filter="anime">Anime</button>
+          <button type="button" class="cat-chip" data-tab="books" data-filter="all">Books</button>
+          <button type="button" class="cat-chip" data-tab="tabs" data-filter="all">Links</button>
+        </nav>
+        <button
+          type="button"
+          id="toggle-filters"
+          class="icon-btn filters-toggle"
+          aria-label="Filter and sort"
+          title="Filter and sort"
+          aria-haspopup="dialog"
+          aria-expanded="false"
+        >
+          <span class="material-symbols-outlined">tune</span>
+        </button>
+      </div>
+
+      <!-- The older shelf tabs and type chips. The category chips above drive them; they stay for the state they hold. -->
+      <div class="legacy-nav" hidden>
+        <nav id="shelf-tabs" class="shelf-tabs">
+          <button type="button" class="shelf-tab active" data-tab="media">Media<span class="shelf-tab-count" data-count="media"></span></button>
+          <button type="button" class="shelf-tab" data-tab="books">Books<span class="shelf-tab-count" data-count="books"></span></button>
+          <button type="button" class="shelf-tab" data-tab="tabs">Tabs<span class="shelf-tab-count" data-count="tabs"></span></button>
+        </nav>
         <div class="filters" id="filters">
           <button type="button" class="filter active" data-filter="all">All</button>
           <button type="button" class="filter" data-filter="movie">Movies</button>
           <button type="button" class="filter" data-filter="series">Series</button>
           <button type="button" class="filter" data-filter="anime">Anime</button>
         </div>
+      </div>
 
+      <main id="main" class="main">
         <div id="tabs-input-row" class="tabs-input-row" hidden>
           <input
             type="text"
             id="tab-input"
             class="tab-input"
-            placeholder="Paste a URL or write a note..."
+            placeholder="Paste a link or write a note"
             autocomplete="off"
           />
-          <button type="button" id="tab-input-save" class="btn btn-primary">Save</button>
+          <button type="button" id="tab-input-save" class="btn btn-primary">Add</button>
         </div>
 
-        <div class="view-row">
-          <div class="search-wrap">
-            <span class="material-symbols-outlined search-icon">search</span>
-            <input
-              type="search"
-              id="search"
-              class="search-input"
-              placeholder="Search"
-              autocomplete="off"
-              aria-label="Search saved items"
-            />
-          </div>
-          <button
-            type="button"
-            id="toggle-filters"
-            class="icon-btn filters-toggle"
-            aria-label="Filters and sorting"
-            title="Filters and sorting"
-            aria-expanded="false"
-          >
-            <span class="material-symbols-outlined">tune</span>
-          </button>
-          <button type="button" id="pick-random" class="icon-btn" aria-label="Pick something for me" title="Pick something for me">
+        <div id="home-actions" class="home-actions">
+          <button type="button" id="pick-random" class="pill-btn" aria-label="Pick something for me" title="Pick something for me">
             <span class="material-symbols-outlined">casino</span>
+            Pick for me
           </button>
-          <button type="button" id="trakt-foryou" class="icon-btn" aria-label="Recommended for you on Trakt" title="Recommended for you on Trakt" hidden>
+          <button type="button" id="trakt-foryou" class="pill-btn" aria-label="Recommended for you on Trakt" title="Recommended for you on Trakt" hidden>
             <span class="material-symbols-outlined">recommend</span>
-          </button>
-          <button type="button" id="copy-items" class="icon-btn" aria-label="Copy" title="Copy">
-            <span class="material-symbols-outlined">content_copy</span>
-          </button>
-          <button type="button" id="status-selected" class="icon-btn" aria-label="Set status of selected" title="Set status of selected" hidden>
-            <span class="material-symbols-outlined">done_all</span>
-          </button>
-          <button type="button" id="sync-selected" class="icon-btn" aria-label="Sync selected to Keep" title="Sync selected to Keep">
-            <span class="material-symbols-outlined">cloud_upload</span>
-          </button>
-          <button type="button" id="delete-selected" class="icon-btn icon-btn-danger" aria-label="Delete selected" title="Delete selected">
-            <span class="material-symbols-outlined">delete</span>
+            For you
           </button>
         </div>
 
-        <div id="more-filters" class="more-filters" hidden>
-        <div class="view-row">
-          <select id="status-filter" class="view-select" aria-label="Status filter">
-            <option value="all">All</option>
-            <option value="pending">Not watched</option>
-            <option value="todo">To watch</option>
-            <option value="progress">In progress</option>
-            <option value="done">Watched</option>
-            <option value="dropped">Dropped</option>
-          </select>
-          <select id="sort" class="view-select" aria-label="Sort">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="title">Title A–Z</option>
-            <option value="year">Year</option>
-            <option value="rating">Rating</option>
-            <option value="myrating">My rating</option>
-          </select>
-        </div>
+        <section id="home" class="home" aria-label="Your shelf" hidden></section>
 
-        <div class="view-row" id="organise-row" hidden>
-          <button type="button" id="tag-filter" class="view-select organise-select tag-button" aria-label="Filter by tag">
-            <span class="tag-button-label">All tags</span>
-            <span class="material-symbols-outlined">expand_more</span>
+        <header id="grid-head" class="grid-head" hidden>
+          <button type="button" id="grid-back" class="icon-btn" aria-label="Back to home" title="Back to home">
+            <span class="material-symbols-outlined">arrow_back</span>
           </button>
-          <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
-        </div>
-        </div>
+          <h2 id="grid-title" class="grid-title">All titles</h2>
+          <span id="grid-count" class="grid-count"></span>
+        </header>
 
-        <div id="status" class="toast" hidden>
-          <div class="toast-content">
-            <span class="material-symbols-outlined toast-icon">check_circle</span>
-            <span id="status-text"></span>
-          </div>
-          <button type="button" id="status-close" class="toast-close" aria-label="Dismiss">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      </div>
-
-      <main id="main" class="main">
         <ul id="list" class="list"></ul>
 
         <div id="empty" class="empty-state" hidden>
@@ -182,7 +134,7 @@
             </div>
             <h2 id="empty-heading">Nothing saved yet</h2>
             <p id="empty-body">
-              Open a supported page, then click <strong>Save page</strong> in the toolbar above.
+              Open a supported page, then tap <strong>Save page</strong> at the top.
             </p>
             <div id="empty-hints" class="source-hints">
               <div class="source-chip">
@@ -243,6 +195,16 @@
           <div id="online-body" class="online-body" aria-live="polite"></div>
         </section>
       </main>
+
+      <div id="status" class="toast" hidden>
+        <div class="toast-content">
+          <span class="material-symbols-outlined toast-icon">check_circle</span>
+          <span id="status-text"></span>
+        </div>
+        <button type="button" id="status-close" class="toast-close" aria-label="Dismiss">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
     </div>
 
     <div id="item-tooltip" class="item-tooltip" role="tooltip" hidden></div>
@@ -290,24 +252,24 @@
             <span class="material-symbols-outlined s-card-chevron">expand_more</span>
           </summary>
           <div class="s-card-body">
-            <div class="s-sub">Tabs on the shelf</div>
+            <div class="s-sub">Shelves to show</div>
             <div class="pref-row is-compact">
               <div class="pref-text">
                 <strong>Books</strong>
                 <span>Hidden, never deleted.</span>
               </div>
-              <label class="switch" title="Show the Books tab">
+              <label class="switch" title="Show the Books shelf">
                 <input type="checkbox" id="pref-show-books" aria-label="Show Books" />
                 <span class="switch-track"></span>
               </label>
             </div>
             <div class="pref-row is-compact">
               <div class="pref-text">
-                <strong>Tabs</strong>
+                <strong>Links</strong>
                 <span>Saved pages, links and notes. Hidden, never deleted.</span>
               </div>
-              <label class="switch" title="Show the Tabs tab">
-                <input type="checkbox" id="pref-show-tabs" aria-label="Show Tabs" />
+              <label class="switch" title="Show the Links shelf">
+                <input type="checkbox" id="pref-show-tabs" aria-label="Show Links" />
                 <span class="switch-track"></span>
               </label>
             </div>
@@ -671,7 +633,7 @@
             </div>
             <div class="keep-row">
               <div class="keep-row-head">
-                <span class="keep-row-title">Tabs <small>tabs, links &amp; notes</small></span>
+                <span class="keep-row-title">Links <small>tabs, links &amp; notes</small></span>
                 <label class="switch" title="Add new saves to this Keep list automatically">
                   <input type="checkbox" id="keep-tabs-enabled" aria-label="Auto-add tabs, links &amp; notes to Keep" />
                   <span class="switch-track"></span>
@@ -802,6 +764,100 @@
       </div>
     </div>
 
+    <nav id="bottom-nav" class="bottom-nav" aria-label="Screens">
+      <button type="button" id="nav-home" class="nav-btn active" data-screen="home" aria-current="page">
+        <span class="material-symbols-outlined">home</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button type="button" id="open-upcoming" class="nav-btn" data-screen="upcoming">
+        <span class="material-symbols-outlined">event_upcoming</span>
+        <span class="nav-label">Coming up</span>
+      </button>
+      <button type="button" id="open-stats" class="nav-btn" data-screen="stats">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="nav-label">Stats</span>
+      </button>
+      <button type="button" id="open-settings" class="nav-btn" data-screen="settings">
+        <span class="material-symbols-outlined">settings</span>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+
+    <div id="select-bar" class="select-bar" role="toolbar" aria-label="Selected items" hidden>
+      <button type="button" id="select-cancel" class="icon-btn" aria-label="Stop selecting" title="Done">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+      <span id="select-count" class="select-count" aria-live="polite">Tap titles to select</span>
+      <button type="button" id="status-selected" class="icon-btn" aria-label="Set status of selected" title="Set status">
+        <span class="material-symbols-outlined">done_all</span>
+      </button>
+      <button type="button" id="sync-selected" class="icon-btn" aria-label="Sync selected to Keep" title="Sync to Keep">
+        <span class="material-symbols-outlined">cloud_upload</span>
+      </button>
+      <button type="button" id="copy-items" class="icon-btn" aria-label="Copy" title="Copy">
+        <span class="material-symbols-outlined">content_copy</span>
+      </button>
+      <button type="button" id="delete-selected" class="icon-btn icon-btn-danger" aria-label="Delete selected" title="Delete">
+        <span class="material-symbols-outlined">delete</span>
+      </button>
+    </div>
+
+    <div id="filter-sheet" class="confirm-dialog sheet" hidden>
+      <div class="confirm-backdrop" data-filter-dismiss></div>
+      <div class="confirm-panel sheet-panel" role="dialog" aria-modal="true" aria-labelledby="filter-sheet-title">
+        <div class="sheet-grip" aria-hidden="true"></div>
+        <h2 id="filter-sheet-title" class="confirm-title">Filter and sort</h2>
+        <div id="more-filters" class="more-filters">
+        <div class="sheet-fields">
+          <label class="sheet-field">
+            <span class="sheet-label">Show</span>
+          <select id="status-filter" class="view-select" aria-label="Status filter">
+            <option value="all">All</option>
+            <option value="pending">Not watched</option>
+            <option value="todo">To watch</option>
+            <option value="progress">In progress</option>
+            <option value="done">Watched</option>
+            <option value="dropped">Dropped</option>
+          </select>
+          </label>
+          <label class="sheet-field">
+            <span class="sheet-label">Sort by</span>
+          <select id="sort" class="view-select" aria-label="Sort">
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="title">Title A–Z</option>
+            <option value="year">Year</option>
+            <option value="rating">Rating</option>
+            <option value="myrating">My rating</option>
+          </select>
+          </label>
+        </div>
+
+        <div class="sheet-fields" id="organise-row" hidden>
+          <button type="button" id="tag-filter" class="view-select organise-select tag-button" aria-label="Filter by tag">
+            <span class="tag-button-label">All tags</span>
+            <span class="material-symbols-outlined">expand_more</span>
+          </button>
+          <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
+        </div>
+        </div>
+        <div class="sheet-tools">
+          <button type="button" id="select-start" class="sheet-tool">
+            <span class="material-symbols-outlined">check_circle</span>
+            Select titles
+          </button>
+          <button type="button" id="copy-all" class="sheet-tool">
+            <span class="material-symbols-outlined">content_copy</span>
+            Copy this list
+          </button>
+        </div>
+        <div class="confirm-actions">
+          <button type="button" id="filter-reset" class="btn btn-outline">Reset</button>
+          <button type="button" id="filter-done" class="btn btn-primary">Show results</button>
+        </div>
+      </div>
+    </div>
+
     <div id="status-dialog" class="confirm-dialog" hidden>
       <div class="confirm-backdrop" data-status-dismiss></div>
       <div class="confirm-panel status-panel" role="dialog" aria-modal="true" aria-labelledby="status-dialog-title">
@@ -842,10 +898,13 @@
 
     <div id="pick-dialog" class="confirm-dialog" hidden>
       <div class="confirm-backdrop" data-pick-dismiss></div>
-      <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-heading">
-        <button type="button" id="pick-graph" class="icon-btn pick-graph" aria-label="Episode ratings" title="Episode ratings" hidden>
-          <span class="material-symbols-outlined">grid_view</span>
-        </button>
+      <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-title">
+        <div class="pick-hero">
+          <div id="pick-leading" class="pick-leading"></div>
+          <button type="button" id="pick-x" class="pick-x" aria-label="Close" title="Close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
         <div class="pick-top" id="pick-top">
           <div class="pick-top-row">
             <p class="pick-kicker" id="pick-heading">How about this?</p>
@@ -861,22 +920,38 @@
             <button type="button" id="pick-f-clear" class="pick-clear">Clear</button>
           </div>
         </div>
-        <div id="pick-leading" class="pick-leading"></div>
         <h2 id="pick-title" class="confirm-title"></h2>
         <p id="pick-detail" class="confirm-message"></p>
-        <div id="pick-chips" class="pick-chips" hidden></div>
-        <p id="pick-overview" class="pick-overview" hidden></p>
-        <button type="button" id="pick-more" class="pick-more" hidden>More</button>
-        <p id="pick-review" class="pick-review" hidden></p>
         <div id="pick-actions" class="confirm-actions">
           <button type="button" id="pick-start" class="btn btn-primary">Start</button>
         </div>
         <div id="pick-watch" class="pick-watch" hidden></div>
+        <p id="pick-overview" class="pick-overview" hidden></p>
+        <button type="button" id="pick-more" class="pick-more" hidden>More</button>
+        <p id="pick-review" class="pick-review" hidden></p>
+        <div id="pick-chips" class="pick-chips" hidden></div>
         <div id="pick-footer" class="pick-footer">
-          <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
-          <button type="button" id="pick-edit" class="btn btn-outline btn-sm" hidden>Edit</button>
-          <button type="button" id="pick-again" class="btn btn-primary btn-sm"><span class="material-symbols-outlined btn-icon">casino</span>Pick another</button>
-          <button type="button" id="pick-close" class="btn btn-primary btn-sm" hidden>Close</button>
+          <button type="button" id="pick-done" class="pick-act" hidden>
+            <span class="material-symbols-outlined">check</span><span class="pick-act-label">Mark watched</span>
+          </button>
+          <button type="button" id="pick-rate" class="pick-act" hidden>
+            <span class="material-symbols-outlined">star</span><span class="pick-act-label">Rate</span>
+          </button>
+          <button type="button" id="pick-edit" class="pick-act" hidden>
+            <span class="material-symbols-outlined">edit</span><span>Edit</span>
+          </button>
+          <button type="button" id="pick-graph" class="pick-act" title="Episode ratings" hidden>
+            <span class="material-symbols-outlined">grid_view</span><span>Episodes</span>
+          </button>
+          <button type="button" id="pick-open" class="pick-act pick-open" hidden>
+            <span class="material-symbols-outlined">open_in_new</span><span>Open page</span>
+          </button>
+          <button type="button" id="pick-again" class="pick-act">
+            <span class="material-symbols-outlined">casino</span><span>Pick another</span>
+          </button>
+          <button type="button" id="pick-close" class="pick-act" hidden>
+            <span class="material-symbols-outlined">close</span><span>Close</span>
+          </button>
         </div>
         <section id="pick-ratings" class="pick-ratings" aria-labelledby="er-title" hidden>
           <header class="er-head">

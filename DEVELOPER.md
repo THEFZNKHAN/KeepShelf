@@ -85,8 +85,8 @@ KeepShelf/
 │   │   └── main.ts            # Answers getPageData by running the matching site parser on demand
 │   ├── popup/
 │   │   ├── popup.html         # Extension popup markup
-│   │   ├── popup.css          # Popup styles (design tokens in :root)
-│   │   ├── popup.ts           # Shelf UI, settings, tab/link/note input, undo toast
+│   │   ├── popup.css          # Popup styles: dark design tokens in :root, redesign layer at the end of the file
+│   │   ├── popup.ts           # Shelf UI (home rows, poster grid, title card), settings, link/note input, undo toast
 │   │   ├── stats-view.ts      # Stats dashboard charts
 │   │   └── tag-picker.ts      # Scrollable tag filter dropdown
 │   └── shared/
@@ -101,6 +101,7 @@ KeepShelf/
 │       ├── undo.ts            # Snapshots of items for the Undo toast
 │       ├── seasons.ts         # Season-by-season progress (pure helpers)
 │       ├── status-view.ts     # Status filters (Not watched, ...), the default view and what it hides (pure)
+│       ├── home-rows.ts       # Home screen rows (Continue watching, My list, ...) and poster progress (pure)
 │       ├── reminders.ts       # Release reminders: due dates, refresh rules, notification text (pure)
 │       ├── coming-up.ts       # Coming up screen: what airs or releases soon, grouped by day (pure)
 │       ├── episode-ratings.ts # Episode ratings grid: cleaning TMDB seasons, rating bands, grid layout, averages (pure)
