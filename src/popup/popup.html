@@ -3,221 +3,151 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=400, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>KeepShelf</title>
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
-      rel="stylesheet"
-    />
+    <link rel="preload" href="fonts/MaterialSymbolsRounded-subset.woff2" as="font" type="font/woff2" crossorigin />
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
+    <!-- Posters from the top of the shelf, blurred behind everything, so the glass takes its colour from what you saved. -->
+    <div id="ambient" class="ambient" aria-hidden="true">
+      <img alt="" referrerpolicy="no-referrer" hidden />
+      <img alt="" referrerpolicy="no-referrer" hidden />
+      <img alt="" referrerpolicy="no-referrer" hidden />
+    </div>
+
     <div id="app-view" class="view">
-      <header class="top-bar">
-        <div class="brand">
-          <span class="material-symbols-outlined brand-icon">bookmark</span>
-          <h1>KeepShelf</h1>
-        </div>
-        <div class="top-bar-actions">
-          <button
-            type="button"
-            id="save-page"
-            class="btn btn-save"
-            title="Save current page"
-            aria-label="Save current page"
-          >
-            <span class="material-symbols-outlined btn-icon">bookmark_add</span>
-            Save page
-          </button>
-          <button
-            type="button"
-            id="open-upcoming"
-            class="icon-btn"
-            aria-label="Coming up"
-            title="Coming up"
-          >
-            <span class="material-symbols-outlined">event</span>
-          </button>
-          <button
-            type="button"
-            id="open-stats"
-            class="icon-btn"
-            aria-label="Stats"
-            title="Stats"
-          >
-            <span class="material-symbols-outlined">insights</span>
-          </button>
-          <button
-            type="button"
-            id="open-settings"
-            class="icon-btn"
-            aria-label="Settings"
-            title="Settings"
-          >
-            <span class="material-symbols-outlined">settings</span>
-          </button>
-        </div>
-      </header>
-
-      <nav id="shelf-tabs" class="shelf-tabs">
-        <button type="button" class="shelf-tab active" data-tab="media">Media<span class="shelf-tab-count" data-count="media"></span></button>
-        <button type="button" class="shelf-tab" data-tab="books">Books<span class="shelf-tab-count" data-count="books"></span></button>
-        <button type="button" class="shelf-tab" data-tab="tabs">Tabs<span class="shelf-tab-count" data-count="tabs"></span></button>
-      </nav>
-
-      <div class="toolbar">
-        <div class="filters" id="filters">
-          <button type="button" class="filter active" data-filter="all">All</button>
-          <button type="button" class="filter" data-filter="movie">Movies</button>
-          <button type="button" class="filter" data-filter="series">Series</button>
-          <button type="button" class="filter" data-filter="anime">Anime</button>
-        </div>
-
-        <div id="tabs-input-row" class="tabs-input-row" hidden>
-          <input
-            type="text"
-            id="tab-input"
-            class="tab-input"
-            placeholder="Paste a URL or write a note..."
-            autocomplete="off"
-          />
-          <button type="button" id="tab-input-save" class="btn btn-primary">Save</button>
-        </div>
-
-        <div class="view-row">
-          <div class="search-wrap">
-            <span class="material-symbols-outlined search-icon">search</span>
-            <input
-              type="search"
-              id="search"
-              class="search-input"
-              placeholder="Search"
-              autocomplete="off"
-              aria-label="Search saved items"
-            />
-          </div>
-          <button
-            type="button"
-            id="toggle-filters"
-            class="icon-btn filters-toggle"
-            aria-label="Filters and sorting"
-            title="Filters and sorting"
-            aria-expanded="false"
-          >
-            <span class="material-symbols-outlined">tune</span>
-          </button>
-          <button type="button" id="pick-random" class="icon-btn" aria-label="Pick something for me" title="Pick something for me">
-            <span class="material-symbols-outlined">casino</span>
-          </button>
-          <button type="button" id="trakt-foryou" class="icon-btn" aria-label="Recommended for you on Trakt" title="Recommended for you on Trakt" hidden>
-            <span class="material-symbols-outlined">recommend</span>
-          </button>
-          <button type="button" id="copy-items" class="icon-btn" aria-label="Copy" title="Copy">
-            <span class="material-symbols-outlined">content_copy</span>
-          </button>
-          <button type="button" id="status-selected" class="icon-btn" aria-label="Set status of selected" title="Set status of selected" hidden>
-            <span class="material-symbols-outlined">done_all</span>
-          </button>
-          <button type="button" id="sync-selected" class="icon-btn" aria-label="Sync selected to Keep" title="Sync selected to Keep">
-            <span class="material-symbols-outlined">cloud_upload</span>
-          </button>
-          <button type="button" id="delete-selected" class="icon-btn icon-btn-danger" aria-label="Delete selected" title="Delete selected">
-            <span class="material-symbols-outlined">delete</span>
-          </button>
-        </div>
-
-        <div id="more-filters" class="more-filters" hidden>
-        <div class="view-row">
-          <select id="status-filter" class="view-select" aria-label="Status filter">
-            <option value="all">All</option>
-            <option value="pending">Not watched</option>
-            <option value="todo">To watch</option>
-            <option value="progress">In progress</option>
-            <option value="done">Watched</option>
-            <option value="dropped">Dropped</option>
-          </select>
-          <select id="sort" class="view-select" aria-label="Sort">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="title">Title A–Z</option>
-            <option value="year">Year</option>
-            <option value="rating">Rating</option>
-            <option value="myrating">My rating</option>
-          </select>
-        </div>
-
-        <div class="view-row" id="organise-row" hidden>
-          <button type="button" id="tag-filter" class="view-select organise-select tag-button" aria-label="Filter by tag">
-            <span class="tag-button-label">All tags</span>
-            <span class="material-symbols-outlined">expand_more</span>
-          </button>
-          <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
-        </div>
-        </div>
-
-        <div id="status" class="toast" hidden>
-          <div class="toast-content">
-            <span class="material-symbols-outlined toast-icon">check_circle</span>
-            <span id="status-text"></span>
-          </div>
-          <button type="button" id="status-close" class="toast-close" aria-label="Dismiss">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      </div>
-
       <main id="main" class="main">
+        <header class="nav-bar">
+          <div class="nav-top">
+            <h1 class="nav-title">Shelf</h1>
+            <nav id="shelf-tabs" class="segmented shelf-tabs" aria-label="Shelves">
+              <span class="seg-thumb" aria-hidden="true"></span>
+              <button type="button" class="shelf-tab active" data-tab="media">Media<span class="shelf-tab-count" data-count="media"></span></button>
+              <button type="button" class="shelf-tab" data-tab="books">Books<span class="shelf-tab-count" data-count="books"></span></button>
+              <button type="button" class="shelf-tab" data-tab="tabs">Tabs<span class="shelf-tab-count" data-count="tabs"></span></button>
+            </nav>
+            <button type="button" id="save-page" class="btn btn-primary btn-save" title="Save the page you're on">
+              <span class="material-symbols-outlined btn-icon">add</span>
+              Save page
+            </button>
+          </div>
+
+          <div class="view-row search-row">
+            <label class="search-wrap">
+              <span class="material-symbols-outlined search-icon">search</span>
+              <input
+                type="search"
+                id="search"
+                class="search-input"
+                placeholder="Search your shelf"
+                autocomplete="off"
+                aria-label="Search saved items"
+              />
+            </label>
+            <button
+              type="button"
+              id="toggle-filters"
+              class="icon-btn filters-toggle"
+              aria-label="Filters and sorting"
+              title="Filters and sorting"
+              aria-expanded="false"
+              aria-controls="more-filters"
+            >
+              <span class="material-symbols-outlined">tune</span>
+            </button>
+            <button type="button" id="pick-random" class="icon-btn" aria-label="Pick something for me" title="Pick something for me">
+              <span class="material-symbols-outlined">casino</span>
+            </button>
+            <button type="button" id="trakt-foryou" class="icon-btn" aria-label="Recommended for you on Trakt" title="Recommended for you on Trakt" hidden>
+              <span class="material-symbols-outlined">recommend</span>
+            </button>
+          </div>
+
+          <div class="filters chips" id="filters" role="group" aria-label="Type">
+            <button type="button" class="filter active" data-filter="all">All</button>
+            <button type="button" class="filter" data-filter="movie">Movies</button>
+            <button type="button" class="filter" data-filter="series">Series</button>
+            <button type="button" class="filter" data-filter="anime">Anime</button>
+          </div>
+
+          <div id="tabs-input-row" class="tabs-input-row" hidden>
+            <input
+              type="text"
+              id="tab-input"
+              class="tab-input"
+              placeholder="Paste a link or write a note"
+              autocomplete="off"
+              aria-label="Link or note to save"
+            />
+            <button type="button" id="tab-input-save" class="btn btn-tinted">Add</button>
+          </div>
+
+          <div id="more-filters" class="more-filters popover" hidden>
+            <div class="view-row">
+              <label class="popover-field">
+                <span>Show</span>
+                <select id="status-filter" class="view-select" aria-label="Status filter">
+                  <option value="all">All</option>
+                  <option value="pending">Not watched</option>
+                  <option value="todo">To watch</option>
+                  <option value="progress">In progress</option>
+                  <option value="done">Watched</option>
+                  <option value="dropped">Dropped</option>
+                </select>
+              </label>
+              <label class="popover-field">
+                <span>Sort by</span>
+                <select id="sort" class="view-select" aria-label="Sort">
+                  <option value="newest">Newest</option>
+                  <option value="oldest">Oldest</option>
+                  <option value="title">Title A–Z</option>
+                  <option value="year">Year</option>
+                  <option value="rating">Rating</option>
+                  <option value="myrating">My rating</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="view-row" id="organise-row" hidden>
+              <div class="popover-field">
+                <span>Tag</span>
+                <button type="button" id="tag-filter" class="view-select organise-select tag-button" aria-label="Filter by tag">
+                  <span class="tag-button-label">All tags</span>
+                  <span class="material-symbols-outlined">expand_more</span>
+                </button>
+              </div>
+              <label class="popover-field">
+                <span>List</span>
+                <select id="list-filter" class="view-select organise-select" aria-label="Filter by list"></select>
+              </label>
+            </div>
+
+            <button type="button" id="copy-items" class="popover-action" aria-label="Copy" title="Copy">
+              <span class="material-symbols-outlined">content_copy</span>
+              Copy titles to the clipboard
+            </button>
+          </div>
+        </header>
+
         <ul id="list" class="list"></ul>
 
         <div id="empty" class="empty-state" hidden>
-          <div class="empty-bg" aria-hidden="true">
-            <span class="material-symbols-outlined">auto_awesome</span>
-          </div>
           <div class="empty-content">
             <div class="empty-icon-wrap">
-              <span class="material-symbols-outlined" id="empty-icon">search</span>
+              <span class="material-symbols-outlined" id="empty-icon">bookmark_add</span>
             </div>
             <h2 id="empty-heading">Nothing saved yet</h2>
             <p id="empty-body">
               Open a supported page, then click <strong>Save page</strong> in the toolbar above.
             </p>
-            <div id="empty-hints" class="source-hints">
-              <div class="source-chip">
-                <span class="material-symbols-outlined">travel_explore</span>
-                Google Search
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">star</span>
-                IMDb
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">movie</span>
-                Letterboxd
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">animation</span>
-                MyAnimeList
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">show_chart</span>
-                Series Graph
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">local_florist</span>
-                Rotten Tomatoes
-              </div>
-              <div class="source-chip">
-                <span class="material-symbols-outlined">track_changes</span>
-                Trakt
-              </div>
-            </div>
+            <div id="empty-hints" class="source-hints"></div>
           </div>
         </div>
 
         <div id="filter-empty" class="filter-empty" hidden>
+          <span class="material-symbols-outlined filter-empty-icon" aria-hidden="true">search</span>
           <p>No items for this filter.</p>
         </div>
 
@@ -235,7 +165,7 @@
         <section id="online-results" class="online-results" aria-labelledby="online-title" hidden>
           <header class="online-head">
             <button type="button" id="online-back" class="online-back">
-              <span class="material-symbols-outlined">arrow_back</span>
+              <span class="material-symbols-outlined">chevron_left</span>
               My shelf
             </button>
             <h2 id="online-title" class="online-title"></h2>
@@ -243,566 +173,711 @@
           <div id="online-body" class="online-body" aria-live="polite"></div>
         </section>
       </main>
+
+      <div id="selection-bar" class="selection-bar" role="toolbar" aria-label="Selected items" hidden>
+        <button type="button" id="selection-clear" class="selection-clear" aria-label="Clear the selection" title="Clear the selection">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+        <span id="selection-count" class="selection-count">0 selected</span>
+        <button type="button" id="status-selected" class="icon-btn" aria-label="Set status of selected" title="Set status" hidden>
+          <span class="material-symbols-outlined">done_all</span>
+        </button>
+        <button type="button" id="copy-selected" class="icon-btn" aria-label="Copy selected" title="Copy">
+          <span class="material-symbols-outlined">content_copy</span>
+        </button>
+        <button type="button" id="sync-selected" class="icon-btn" aria-label="Sync selected to Keep" title="Send to Google Keep" hidden>
+          <span class="material-symbols-outlined">cloud_upload</span>
+        </button>
+        <button type="button" id="delete-selected" class="icon-btn icon-btn-danger" aria-label="Delete selected" title="Delete" hidden>
+          <span class="material-symbols-outlined">delete</span>
+        </button>
+      </div>
     </div>
 
     <div id="item-tooltip" class="item-tooltip" role="tooltip" hidden></div>
 
-    <div id="upcoming-view" class="view settings-view" hidden>
+    <div id="upcoming-view" class="view sub-view" hidden>
       <header class="top-bar">
-        <button type="button" id="close-upcoming" class="icon-btn" aria-label="Back">
-          <span class="material-symbols-outlined">arrow_back</span>
+        <button type="button" id="close-upcoming" class="icon-btn" aria-label="Back" hidden>
+          <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <h1 class="settings-title">Coming up</h1>
-        <span class="top-bar-spacer"></span>
+        <div id="upcoming-window" class="up-window"></div>
       </header>
-      <div id="upcoming-window" class="up-window"></div>
       <div id="upcoming-body" class="settings-body upcoming-body"></div>
       <footer id="upcoming-footer" class="up-footer" hidden></footer>
     </div>
 
-    <div id="stats-view" class="view settings-view" hidden>
+    <div id="stats-view" class="view sub-view" hidden>
       <header class="top-bar">
-        <button type="button" id="close-stats" class="icon-btn" aria-label="Back">
-          <span class="material-symbols-outlined">arrow_back</span>
+        <button type="button" id="close-stats" class="icon-btn" aria-label="Back" hidden>
+          <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <h1 class="settings-title">Stats</h1>
-        <span class="top-bar-spacer"></span>
       </header>
       <div id="stats-body" class="settings-body stats-body"></div>
     </div>
 
-    <div id="settings-view" class="view settings-view" hidden>
+    <div id="settings-view" class="view sub-view" hidden>
       <header class="top-bar">
-        <button type="button" id="close-settings" class="icon-btn" aria-label="Back">
-          <span class="material-symbols-outlined">arrow_back</span>
+        <button type="button" id="close-settings" class="icon-btn" aria-label="Back" hidden>
+          <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <h1 class="settings-title">Settings</h1>
-        <span class="top-bar-spacer"></span>
       </header>
 
       <div class="settings-body">
         <h2 class="s-group">Your shelf</h2>
-        <details class="s-card" id="card-general">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">tune</span>
-            <span class="s-card-title">Shelf &amp; views</span>
-            <span class="s-card-summary" id="general-summary">Media</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <div class="s-sub">Tabs on the shelf</div>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>Books</strong>
-                <span>Hidden, never deleted.</span>
-              </div>
-              <label class="switch" title="Show the Books tab">
-                <input type="checkbox" id="pref-show-books" aria-label="Show Books" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>Tabs</strong>
-                <span>Saved pages, links and notes. Hidden, never deleted.</span>
-              </div>
-              <label class="switch" title="Show the Tabs tab">
-                <input type="checkbox" id="pref-show-tabs" aria-label="Show Tabs" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="s-sub">When you open KeepShelf</div>
-            <div class="pref-select">
-              <label for="pref-start">
-                <strong>Start on</strong>
-              </label>
-              <select id="pref-start" class="view-select">
-                <option value="fresh">My default view</option>
-                <option value="remember">Where I left off</option>
-              </select>
-            </div>
-            <div class="pref-select">
-              <label for="pref-default-view">
-                <strong>Default view</strong>
-                <span>Watched and dropped items can stay out of the way.</span>
-              </label>
-              <select id="pref-default-view" class="view-select">
-                <option value="hide">Hide watched and dropped</option>
-                <option value="all">Show everything</option>
-              </select>
-            </div>
-            <div class="s-sub">When you finish something</div>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>Ask me to rate it</strong>
-                <span>A quick rating and review box. You can skip it.</span>
-              </div>
-              <label class="switch" title="Ask for a rating when I finish something">
-                <input type="checkbox" id="pref-ask-rating" aria-label="Ask for a rating when I finish something" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-          </div>
-        </details>
-        <details class="s-card" id="card-watch">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">play_circle</span>
-            <span class="s-card-title">Watch sites</span>
-            <span class="s-card-summary" id="watch-summary">None</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Add a site where you watch and each title gets a button that opens its page there. KeepShelf only builds
-              the link; it never visits the site.
-            </p>
-            <details class="s-more">
-              <summary>How it works</summary>
-              <div class="s-more-body">
-                <p>Paste the address of one title's page and say which title it is. KeepShelf works out how the site builds
-                its addresses and uses that for every other title.</p>
-                <p>If the site has an address style that works for both movies and series, use that one and you only need a
-                single page.</p>
-                <p>Sites that use ids need a TMDB id or an IMDb id for the title, so add your TMDB token (in the TMDB settings)
-                and fetch info for your shelf first, then pick a title that has info.</p>
-                <p>If a site's title addresses can't be worked out (some add random letters), paste a search results page
-                for one title instead, and each title gets a button that opens that site's search. Search for a title with
-                two or more words. For a title like "One Piece: Wan pîsu", search for the part before the colon,
-                "One Piece", and pick that title.</p>
-                <p>If the address is an episode page (such as …/one-piece-episode-1180), the link opens the next episode you
-                haven't watched, or episode 1 if you haven't started. Keep your episode progress up to date and the link
-                follows it.</p>
-              </div>
-            </details>
-            <div class="watch-example">
-              <span class="watch-example-label"><span class="watch-step">1</span>A title's page on the site, or a search for one title</span>
-              <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
-              <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
-            </div>
-            <details class="s-more">
-              <summary>Add a page for the other kind (movie or series)</summary>
-              <div class="s-more-body">
-                <div class="watch-example">
-                  <span class="watch-example-label"><span class="watch-step">2</span>A series if the first was a movie, or the other way round</span>
-                  <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
-                  <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
+        <div class="s-list">
+          <details class="s-card" id="card-appearance">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-indigo">contrast</span>
+              <span class="s-card-title">Appearance</span>
+              <span class="s-card-summary" id="appearance-summary">Automatic</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <div class="s-box s-box-form">
+                <div class="theme-choice" role="radiogroup" aria-label="Appearance">
+                  <label class="theme-option">
+                    <input type="radio" name="theme" value="system" />
+                    <span class="theme-swatch swatch-auto" aria-hidden="true"><span></span><span></span></span>
+                    <span class="theme-name">Automatic</span>
+                  </label>
+                  <label class="theme-option">
+                    <input type="radio" name="theme" value="light" />
+                    <span class="theme-swatch swatch-light" aria-hidden="true"><span></span><span></span></span>
+                    <span class="theme-name">Light</span>
+                  </label>
+                  <label class="theme-option">
+                    <input type="radio" name="theme" value="dark" />
+                    <span class="theme-swatch swatch-dark" aria-hidden="true"><span></span><span></span></span>
+                    <span class="theme-name">Dark</span>
+                  </label>
                 </div>
               </div>
-            </details>
-            <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
-            <ul id="watch-list" class="watch-list"></ul>
-            <div id="watch-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="watch-settings-status-text"></span>
-              </div>
+              <p class="s-fine">Automatic follows your computer's light or dark setting.</p>
             </div>
-          </div>
-        </details>
-        <details class="s-card" id="card-quick">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">bolt</span>
-            <span class="s-card-title">Quick save</span>
-            <span class="s-card-summary" id="quick-summary">Alt+Shift+S</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, or right-click a page, link or selected text and choose
-              “Save … to KeepShelf”. Change the shortcut at <span class="mono">chrome://extensions/shortcuts</span>.
-            </p>
-          </div>
-        </details>
-        <h2 class="s-group">Connections</h2>
-        <details class="s-card" id="card-tmdb">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">movie</span>
-            <span class="s-card-title">TMDB</span>
-            <span class="s-card-summary" id="tmdb-summary">Not set</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Adds genres, ratings, posters and episode counts, and lets you find titles to add. Get a free token at
-              <span class="mono">themoviedb.org/settings/api</span> and paste the <strong>API Read Access Token</strong>.
-              It stays in this browser.
-            </p>
-            <div class="field-input-row">
-              <input
-                type="password"
-                id="tmdb-token"
-                placeholder="API Read Access Token"
-                autocomplete="off"
-                spellcheck="false"
-              />
-              <button type="button" id="tmdb-test" class="btn btn-outline btn-sm">Test</button>
-              <button type="button" id="tmdb-save" class="btn btn-primary btn-sm">Save</button>
-            </div>
-            <span id="tmdb-token-status" class="field-status">Not set</span>
-            <div class="s-sub">Using it</div>
-            <button type="button" id="tmdb-enrich-all" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
-              Fetch info for my shelf
-            </button>
-            <div class="pref-select">
-              <label for="pref-search-online">
-                <strong>Search TMDB from the search box</strong>
-                <span>Words are sent to TMDB only when you search.</span>
-              </label>
-              <select id="pref-search-online" class="view-select">
-                <option value="row">Show a “Search TMDB” row</option>
-                <option value="auto">Also search by itself when nothing matches</option>
-                <option value="off">Off</option>
-              </select>
-            </div>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>Release reminders</strong>
-                <span>A notification when an episode or movie comes out. <button type="button" id="reminders-check" class="s-inline">Check now</button></span>
-              </div>
-              <label class="switch" title="Release reminders">
-                <input type="checkbox" id="pref-reminders" aria-label="Release reminders" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>New seasons of shows I've finished</strong>
-                <span>Announce them too, and list them on Coming up.</span>
-              </div>
-              <label class="switch" title="New seasons of shows I've finished">
-                <input type="checkbox" id="pref-new-seasons" aria-label="New seasons of shows I've finished" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div id="tmdb-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="tmdb-settings-status-text"></span>
-              </div>
-            </div>
-            <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
-          </div>
-        </details>
-        <details class="s-card" id="card-trakt">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">sync</span>
-            <span class="s-card-title">Trakt</span>
-            <span class="s-card-summary" id="trakt-summary">Not connected</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Sends what you watch, your ratings and (if you like) your To watch list to your Trakt account. Create a free app at
-              <span class="mono">developer.trakt.tv</span> → My Apps, then paste its <strong>Client ID</strong>. No client secret is needed.
-            </p>
-            <div class="field-input-row">
-              <input type="text" id="trakt-client-id" placeholder="Client ID" autocomplete="off" spellcheck="false" />
-              <button type="button" id="trakt-save" class="btn btn-primary btn-sm">Save</button>
-            </div>
-            <span id="trakt-client-status" class="field-status">Not set</span>
-            <div class="s-sub">Redirect URI</div>
-            <p class="s-fine">Add this exact address to your Trakt app's Redirect URIs.</p>
-            <div class="field-input-row">
-              <input type="text" id="trakt-redirect" readonly spellcheck="false" />
-              <button type="button" id="trakt-copy-redirect" class="btn btn-outline btn-sm">Copy</button>
-            </div>
-            <div class="s-sub">Account</div>
-            <button type="button" id="trakt-connect" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon" id="trakt-connect-icon">login</span>
-              <span id="trakt-connect-label">Connect to Trakt</span>
-            </button>
-            <button type="button" id="trakt-sync" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">cloud_upload</span>
-              <span id="trakt-sync-label">Send everything now</span>
-            </button>
-            <button type="button" id="trakt-preview" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">visibility</span>
-              <span id="trakt-preview-label">Preview what will be sent</span>
-            </button>
-            <details class="up-nodate" id="trakt-preview-box" hidden>
-              <summary id="trakt-preview-summary">Preview</summary>
-              <p class="s-fine" id="trakt-preview-totals"></p>
-              <ul class="trakt-problems" id="trakt-preview-list"></ul>
-            </details>
-            <button type="button" id="trakt-pull" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">cloud_download</span>
-              <span id="trakt-pull-label">Get from Trakt</span>
-            </button>
-            <details class="up-nodate" id="trakt-pull-box" hidden>
-              <summary id="trakt-pull-summary">From Trakt</summary>
-              <p class="s-fine" id="trakt-pull-totals"></p>
-              <ul class="trakt-problems" id="trakt-pull-list"></ul>
-              <div class="trakt-pull-actions">
-                <button type="button" id="trakt-pull-apply" class="btn btn-primary btn-sm">Apply to my shelf</button>
-                <button type="button" id="trakt-pull-cancel" class="btn btn-outline btn-sm">Cancel</button>
-              </div>
-            </details>
-            <p class="s-fine" id="trakt-last"></p>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>Send changes automatically</strong>
-                <span>Marking watched, episode progress and ratings go to Trakt as you make them.</span>
-              </div>
-              <label class="switch" title="Send changes automatically">
-                <input type="checkbox" id="pref-trakt-auto" aria-label="Send changes automatically" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="pref-row is-compact">
-              <div class="pref-text">
-                <strong>Sync my To watch list</strong>
-                <span>Adds them to your Trakt watchlist, and takes them off once you start watching.</span>
-              </div>
-              <label class="switch" title="Sync my To watch list">
-                <input type="checkbox" id="pref-trakt-watchlist" aria-label="Sync my To watch list" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="pref-select">
-              <label for="pref-trakt-pull">
-                <strong>Get changes from Trakt</strong>
-                <span>Brings what you mark on Trakt (in its app, say) onto your shelf by itself, with the same rules as Get from Trakt.</span>
-              </label>
-              <select id="pref-trakt-pull" class="view-select">
-                <option value="off">Off</option>
-                <option value="1h">Every hour</option>
-                <option value="6h">Every 6 hours</option>
-                <option value="24h">Once a day</option>
-              </select>
-            </div>
-            <details class="up-nodate" id="trakt-problems" hidden>
-              <summary id="trakt-problems-summary">Not matched on Trakt</summary>
-              <ul class="trakt-problems" id="trakt-problems-list"></ul>
-            </details>
-            <div id="trakt-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="trakt-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="trakt-settings-status-text"></span>
-              </div>
-            </div>
-            <p class="s-fine">
-              Only titles with TMDB info can be sent. Nothing is ever removed from your Trakt history. Your sign-in stays in this
-              browser; Disconnect signs it out on Trakt too. KeepShelf uses Trakt but is not endorsed or certified by Trakt.
-            </p>
-          </div>
-        </details>
-        <details class="s-card" id="card-bookinfo">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">menu_book</span>
-            <span class="s-card-title">Book info</span>
-            <span class="s-card-summary" id="bookinfo-summary">Off</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <div class="pref-row">
-              <div class="pref-text">
-                <strong>Fetch book details</strong>
-                <span>Page count, genres, cover and rating from Open Library. Titles and authors are sent there. No account needed.</span>
-              </div>
-              <label class="switch" title="Fetch book details from Open Library">
-                <input type="checkbox" id="pref-book-info" aria-label="Fetch book details from Open Library" />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <button type="button" id="bookinfo-enrich-all" class="btn btn-outline btn-wide">
-              <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
-              Fetch info for my books
-            </button>
-            <div id="bookinfo-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="bookinfo-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="bookinfo-settings-status-text"></span>
-              </div>
-            </div>
-            <p class="s-fine" id="bookinfo-notice"></p>
-          </div>
-        </details>
-        <details class="s-card" id="card-keep">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">cloud_sync</span>
-            <span class="s-card-title">Google Keep</span>
-            <span class="s-card-summary" id="keep-summary">Not set up</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">Add each new save to a Google Keep checklist. Paste the full link of the note, then turn it on.</p>
-            <div class="keep-row">
-              <div class="keep-row-head">
-                <span class="keep-row-title">Media <small>movies, series &amp; anime</small></span>
-                <label class="switch" title="Add new saves to this Keep list automatically">
-                  <input type="checkbox" id="keep-media-enabled" aria-label="Auto-add movies, series &amp; anime to Keep" />
-                  <span class="switch-track"></span>
-                </label>
-              </div>
-              <div class="field-input-row">
-                <input type="url" id="keep-media-url" placeholder="https://keep.google.com/#LIST/..." />
-                <button type="button" id="keep-test-media" class="btn btn-outline btn-sm">Test</button>
-                <button type="button" id="keep-save-media" class="btn btn-primary btn-sm">Save</button>
-              </div>
-              <span id="keep-media-status" class="field-status">Not linked</span>
-              <div id="media-settings-status" class="settings-toast" hidden>
-                <div class="settings-toast-content">
-                  <span id="media-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                  <span id="media-settings-status-text"></span>
+          </details>
+          <details class="s-card" id="card-general">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-gray">tune</span>
+              <span class="s-card-title">Shelf &amp; views</span>
+              <span class="s-card-summary" id="general-summary">Media</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <div class="s-sub">Tabs on the shelf</div>
+              <div class="s-box">
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>Books</strong>
+                    <span>Hidden, never deleted.</span>
+                  </div>
+                  <label class="switch" title="Show the Books tab">
+                    <input type="checkbox" id="pref-show-books" aria-label="Show Books" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>Tabs</strong>
+                    <span>Saved pages, links and notes. Hidden, never deleted.</span>
+                  </div>
+                  <label class="switch" title="Show the Tabs tab">
+                    <input type="checkbox" id="pref-show-tabs" aria-label="Show Tabs" />
+                    <span class="switch-track"></span>
+                  </label>
                 </div>
               </div>
-            </div>
-            <div class="keep-row">
-              <div class="keep-row-head">
-                <span class="keep-row-title">Books <small>books</small></span>
-                <label class="switch" title="Add new saves to this Keep list automatically">
-                  <input type="checkbox" id="keep-books-enabled" aria-label="Auto-add books to Keep" />
-                  <span class="switch-track"></span>
-                </label>
-              </div>
-              <div class="field-input-row">
-                <input type="url" id="keep-books-url" placeholder="https://keep.google.com/#LIST/..." />
-                <button type="button" id="keep-test-books" class="btn btn-outline btn-sm">Test</button>
-                <button type="button" id="keep-save-books" class="btn btn-primary btn-sm">Save</button>
-              </div>
-              <span id="keep-books-status" class="field-status">Not linked</span>
-              <div id="books-settings-status" class="settings-toast" hidden>
-                <div class="settings-toast-content">
-                  <span id="books-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                  <span id="books-settings-status-text"></span>
-                </div>
-              </div>
-            </div>
-            <div class="keep-row">
-              <div class="keep-row-head">
-                <span class="keep-row-title">Tabs <small>tabs, links &amp; notes</small></span>
-                <label class="switch" title="Add new saves to this Keep list automatically">
-                  <input type="checkbox" id="keep-tabs-enabled" aria-label="Auto-add tabs, links &amp; notes to Keep" />
-                  <span class="switch-track"></span>
-                </label>
-              </div>
-              <div class="field-input-row">
-                <input type="url" id="keep-tabs-url" placeholder="https://keep.google.com/#LIST/..." />
-                <button type="button" id="keep-test-tabs" class="btn btn-outline btn-sm">Test</button>
-                <button type="button" id="keep-save-tabs" class="btn btn-primary btn-sm">Save</button>
-              </div>
-              <span id="keep-tabs-status" class="field-status">Not linked</span>
-              <div id="tabs-settings-status" class="settings-toast" hidden>
-                <div class="settings-toast-content">
-                  <span id="tabs-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                  <span id="tabs-settings-status-text"></span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </details>
-        <h2 class="s-group">Your data</h2>
-        <details class="s-card" id="card-backup">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">backup</span>
-            <span class="s-card-title">Backup &amp; import</span>
-            <span class="s-card-summary" id="backup-summary">Export or import</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Your shelf lives only in this browser, so export a backup now and then. You can import a KeepShelf backup or a
-              Letterboxd or Goodreads CSV; items already on your shelf are skipped.
-            </p>
-            <div class="pref-row">
-              <div class="pref-text">
-                <strong>Include my settings</strong>
-                <span>Saves your TMDB token and Trakt app too, so keep the file private.</span>
-              </div>
-              <label class="switch" title="Include my settings in the backup">
-                <input type="checkbox" id="backup-include-settings" aria-label="Include my settings in the backup" checked />
-                <span class="switch-track"></span>
-              </label>
-            </div>
-            <div class="settings-button-row">
-              <button type="button" id="export-backup" class="btn btn-outline">
-                <span class="material-symbols-outlined btn-icon">download</span>
-                Export backup
-              </button>
-              <button type="button" id="import-file-btn" class="btn btn-outline">
-                <span class="material-symbols-outlined btn-icon">upload</span>
-                Import file…
-              </button>
-              <input type="file" id="import-file" accept=".json,.csv,application/json,text/csv" hidden />
-            </div>
-            <div class="settings-button-row">
-              <button type="button" id="export-letterboxd" class="btn btn-outline" title="Films only, as a watched file and a watchlist file">
-                <span class="material-symbols-outlined btn-icon">movie</span>
-                For Letterboxd
-              </button>
-              <button type="button" id="export-trakt" class="btn btn-outline" title="Films, series and anime in one file">
-                <span class="material-symbols-outlined btn-icon">tv</span>
-                For Trakt
-              </button>
-            </div>
-            <details class="s-more" id="paste-list">
-              <summary>Add titles from a pasted list</summary>
-              <div class="s-more-body">
-                <p>
-                  Paste lines like <span class="mono">Drishyam (2015) | 2h 43m | IMDb 8.2</span> from a Keep note or Copy
-                  all. A heading such as "Watched" switches the lines under it, and a ticked box means watched. Movies,
-                  series and anime (<span class="mono">(A)</span> marks anime).
-                </p>
-                <textarea
-                  id="paste-text"
-                  class="paste-text"
-                  rows="6"
-                  spellcheck="false"
-                  aria-label="Titles to add"
-                  placeholder="Drishyam (2015) | 2h 43m | IMDb 8.2&#10;Fargo (2014) | S05 | IMDb 8.8&#10;86 (2021) | S01 | IMDb 8.3 (A)"
-                ></textarea>
-                <label class="paste-kind">
-                  <span>These are</span>
-                  <select id="paste-status" class="view-select" aria-label="Are these watched?">
-                    <option value="plan">To watch</option>
-                    <option value="done">Already watched</option>
+
+              <div class="s-sub">When you open KeepShelf</div>
+              <div class="s-box">
+                <div class="pref-select">
+                  <label for="pref-start">
+                    <strong>Start on</strong>
+                  </label>
+                  <select id="pref-start" class="view-select">
+                    <option value="fresh">My default view</option>
+                    <option value="remember">Where I left off</option>
                   </select>
-                </label>
-                <p id="paste-summary" class="s-fine"></p>
-                <button type="button" id="paste-add" class="btn btn-primary btn-wide" disabled>Add to shelf</button>
+                </div>
+                <div class="pref-select">
+                  <label for="pref-default-view">
+                    <strong>Default view</strong>
+                    <span>Watched and dropped items can stay out of the way.</span>
+                  </label>
+                  <select id="pref-default-view" class="view-select">
+                    <option value="hide">Hide watched and dropped</option>
+                    <option value="all">Show everything</option>
+                  </select>
+                </div>
               </div>
-            </details>
-            <div class="pref-row">
-              <div class="pref-text">
-                <strong>Delete everything</strong>
-                <span>Can't be undone, so export a backup first. Google Keep is not affected.</span>
+
+              <div class="s-sub">When you finish something</div>
+              <div class="s-box">
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>Ask me to rate it</strong>
+                    <span>A quick rating and review box. You can skip it.</span>
+                  </div>
+                  <label class="switch" title="Ask for a rating when I finish something">
+                    <input type="checkbox" id="pref-ask-rating" aria-label="Ask for a rating when I finish something" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
               </div>
-              <button type="button" id="clear-all" class="btn btn-outline btn-sm danger-outline">Delete all</button>
             </div>
-            <div id="backup-settings-status" class="settings-toast" hidden>
-              <div class="settings-toast-content">
-                <span id="backup-settings-status-icon" class="material-symbols-outlined">check_circle</span>
-                <span id="backup-settings-status-text"></span>
+          </details>
+
+          <details class="s-card" id="card-watch">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-red">play_circle</span>
+              <span class="s-card-title">Watch sites</span>
+              <span class="s-card-summary" id="watch-summary">None</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <p class="s-hint">
+                Add a site where you watch and each title gets a button that opens its page there. KeepShelf only builds
+                the link; it never visits the site.
+              </p>
+              <ul id="watch-list" class="watch-list"></ul>
+              <div class="s-sub">Add a site</div>
+              <div class="s-box s-box-form">
+                <div class="watch-example">
+                  <span class="watch-example-label"><span class="watch-step">1</span>A title's page on the site, or a search for one title</span>
+                  <input type="url" id="watch-url-1" placeholder="https://…" autocomplete="off" spellcheck="false" />
+                  <select id="watch-item-1" class="view-select" aria-label="Which title is that page for?"></select>
+                </div>
+                <details class="s-more">
+                  <summary>Add a page for the other kind (movie or series)</summary>
+                  <div class="s-more-body">
+                    <div class="watch-example">
+                      <span class="watch-example-label"><span class="watch-step">2</span>A series if the first was a movie, or the other way round</span>
+                      <input type="url" id="watch-url-2" placeholder="https://…" autocomplete="off" spellcheck="false" />
+                      <select id="watch-item-2" class="view-select" aria-label="Which title is that page for?"></select>
+                    </div>
+                  </div>
+                </details>
+                <button type="button" id="watch-add" class="btn btn-primary btn-wide">Add this site</button>
+              </div>
+              <div id="watch-settings-status" class="settings-toast" hidden>
+                <div class="settings-toast-content">
+                  <span id="watch-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                  <span id="watch-settings-status-text"></span>
+                </div>
+              </div>
+              <details class="s-more">
+                <summary>How it works</summary>
+                <div class="s-more-body">
+                  <p>Paste the address of one title's page and say which title it is. KeepShelf works out how the site builds
+                  its addresses and uses that for every other title.</p>
+                  <p>If the site has an address style that works for both movies and series, use that one and you only need a
+                  single page.</p>
+                  <p>Sites that use ids need a TMDB id or an IMDb id for the title, so add your TMDB token (in the TMDB settings)
+                  and fetch info for your shelf first, then pick a title that has info.</p>
+                  <p>If a site's title addresses can't be worked out (some add random letters), paste a search results page
+                  for one title instead, and each title gets a button that opens that site's search. Search for a title with
+                  two or more words. For a title like "One Piece: Wan pîsu", search for the part before the colon,
+                  "One Piece", and pick that title.</p>
+                  <p>If the address is an episode page (such as …/one-piece-episode-1180), the link opens the next episode you
+                  haven't watched, or episode 1 if you haven't started. Keep your episode progress up to date and the link
+                  follows it.</p>
+                </div>
+              </details>
+            </div>
+          </details>
+
+          <details class="s-card" id="card-quick">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-orange">bolt</span>
+              <span class="s-card-title">Quick save</span>
+              <span class="s-card-summary" id="quick-summary">Alt+Shift+S</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <div class="s-box">
+                <p class="s-hint s-box-text">
+                  Press <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, or right-click a page, link or selected text and choose
+                  “Save … to KeepShelf”.
+                </p>
+              </div>
+              <p class="s-fine">Change the shortcut at <span class="mono">chrome://extensions/shortcuts</span>.</p>
+            </div>
+          </details>
+        </div>
+
+        <h2 class="s-group">Connections</h2>
+        <div class="s-list">
+          <details class="s-card" id="card-tmdb">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-teal">movie</span>
+              <span class="s-card-title">TMDB</span>
+              <span class="s-card-summary" id="tmdb-summary">Not set</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <p class="s-hint">
+                Adds genres, ratings, posters and episode counts, and lets you find titles to add. Get a free token at
+                <span class="mono">themoviedb.org/settings/api</span> and paste the <strong>API Read Access Token</strong>.
+                It stays in this browser.
+              </p>
+              <div class="s-sub">Token</div>
+              <div class="s-box s-box-form">
+                <div class="field-input-row">
+                  <input
+                    type="password"
+                    id="tmdb-token"
+                    placeholder="API Read Access Token"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="TMDB API Read Access Token"
+                  />
+                  <button type="button" id="tmdb-test" class="btn btn-outline btn-sm">Test</button>
+                  <button type="button" id="tmdb-save" class="btn btn-primary btn-sm">Save</button>
+                </div>
+                <span id="tmdb-token-status" class="field-status">Not set</span>
+              </div>
+
+              <div class="s-sub">Using it</div>
+              <div class="s-box">
+                <button type="button" id="tmdb-enrich-all" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
+                  Fetch info for my shelf
+                </button>
+                <div class="pref-select">
+                  <label for="pref-search-online">
+                    <strong>Search TMDB from the search box</strong>
+                    <span>Words are sent to TMDB only when you search.</span>
+                  </label>
+                  <select id="pref-search-online" class="view-select">
+                    <option value="row">Show a “Search TMDB” row</option>
+                    <option value="auto">Also search by itself when nothing matches</option>
+                    <option value="off">Off</option>
+                  </select>
+                </div>
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>Release reminders</strong>
+                    <span>A notification when an episode or movie comes out.</span>
+                  </div>
+                  <label class="switch" title="Release reminders">
+                    <input type="checkbox" id="pref-reminders" aria-label="Release reminders" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+                <button type="button" id="reminders-check" class="s-inline s-row-action">Check for new releases now</button>
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>New seasons of shows I've finished</strong>
+                    <span>Announce them too, and list them on Coming up.</span>
+                  </div>
+                  <label class="switch" title="New seasons of shows I've finished">
+                    <input type="checkbox" id="pref-new-seasons" aria-label="New seasons of shows I've finished" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+              </div>
+              <div id="tmdb-settings-status" class="settings-toast" hidden>
+                <div class="settings-toast-content">
+                  <span id="tmdb-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                  <span id="tmdb-settings-status-text"></span>
+                </div>
+              </div>
+              <p class="s-fine tmdb-notice" id="tmdb-notice"></p>
+            </div>
+          </details>
+
+          <details class="s-card" id="card-trakt">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-red">sync</span>
+              <span class="s-card-title">Trakt</span>
+              <span class="s-card-summary" id="trakt-summary">Not connected</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <p class="s-hint">
+                Sends what you watch, your ratings and (if you like) your To watch list to your Trakt account. Create a free app at
+                <span class="mono">developer.trakt.tv</span> → My Apps, then paste its <strong>Client ID</strong>. No client secret is needed.
+              </p>
+
+              <div class="s-sub">Account</div>
+              <div class="s-box s-box-form">
+                <div class="field-input-row">
+                  <input type="text" id="trakt-client-id" placeholder="Client ID" autocomplete="off" spellcheck="false" aria-label="Trakt Client ID" />
+                  <button type="button" id="trakt-save" class="btn btn-primary btn-sm">Save</button>
+                </div>
+                <span id="trakt-client-status" class="field-status">Not set</span>
+                <span class="field-label">Redirect URI: add this exact address to your Trakt app.</span>
+                <div class="field-input-row">
+                  <input type="text" id="trakt-redirect" readonly spellcheck="false" aria-label="Redirect URI" />
+                  <button type="button" id="trakt-copy-redirect" class="btn btn-outline btn-sm">Copy</button>
+                </div>
+              </div>
+              <div class="s-box">
+                <button type="button" id="trakt-connect" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon" id="trakt-connect-icon">login</span>
+                  <span id="trakt-connect-label">Connect to Trakt</span>
+                </button>
+              </div>
+
+              <div class="s-sub">Sync</div>
+              <div class="s-box">
+                <button type="button" id="trakt-sync" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">cloud_upload</span>
+                  <span id="trakt-sync-label">Send everything now</span>
+                </button>
+                <button type="button" id="trakt-preview" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">visibility</span>
+                  <span id="trakt-preview-label">Preview what will be sent</span>
+                </button>
+                <details class="up-nodate s-result" id="trakt-preview-box" hidden>
+                  <summary id="trakt-preview-summary">Preview</summary>
+                  <p class="s-fine" id="trakt-preview-totals"></p>
+                  <ul class="trakt-problems" id="trakt-preview-list"></ul>
+                </details>
+                <button type="button" id="trakt-pull" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">cloud_download</span>
+                  <span id="trakt-pull-label">Get from Trakt</span>
+                </button>
+                <details class="up-nodate s-result" id="trakt-pull-box" hidden>
+                  <summary id="trakt-pull-summary">From Trakt</summary>
+                  <p class="s-fine" id="trakt-pull-totals"></p>
+                  <ul class="trakt-problems" id="trakt-pull-list"></ul>
+                  <div class="trakt-pull-actions">
+                    <button type="button" id="trakt-pull-apply" class="btn btn-primary btn-sm">Apply to my shelf</button>
+                    <button type="button" id="trakt-pull-cancel" class="btn btn-outline btn-sm">Cancel</button>
+                  </div>
+                </details>
+              </div>
+              <p class="s-fine" id="trakt-last"></p>
+
+              <div class="s-sub">Automatic</div>
+              <div class="s-box">
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>Send changes automatically</strong>
+                    <span>Marking watched, episode progress and ratings go to Trakt as you make them.</span>
+                  </div>
+                  <label class="switch" title="Send changes automatically">
+                    <input type="checkbox" id="pref-trakt-auto" aria-label="Send changes automatically" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+                <div class="pref-row is-compact">
+                  <div class="pref-text">
+                    <strong>Sync my To watch list</strong>
+                    <span>Adds them to your Trakt watchlist, and takes them off once you start watching.</span>
+                  </div>
+                  <label class="switch" title="Sync my To watch list">
+                    <input type="checkbox" id="pref-trakt-watchlist" aria-label="Sync my To watch list" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+                <div class="pref-select">
+                  <label for="pref-trakt-pull">
+                    <strong>Get changes from Trakt</strong>
+                    <span>Brings what you mark on Trakt (in its app, say) onto your shelf by itself, with the same rules as Get from Trakt.</span>
+                  </label>
+                  <select id="pref-trakt-pull" class="view-select">
+                    <option value="off">Off</option>
+                    <option value="1h">Every hour</option>
+                    <option value="6h">Every 6 hours</option>
+                    <option value="24h">Once a day</option>
+                  </select>
+                </div>
+              </div>
+
+              <details class="up-nodate s-result" id="trakt-problems" hidden>
+                <summary id="trakt-problems-summary">Not matched on Trakt</summary>
+                <ul class="trakt-problems" id="trakt-problems-list"></ul>
+              </details>
+              <div id="trakt-settings-status" class="settings-toast" hidden>
+                <div class="settings-toast-content">
+                  <span id="trakt-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                  <span id="trakt-settings-status-text"></span>
+                </div>
+              </div>
+              <p class="s-fine">
+                Only titles with TMDB info can be sent. Nothing is ever removed from your Trakt history. Your sign-in stays in this
+                browser; Disconnect signs it out on Trakt too. KeepShelf uses Trakt but is not endorsed or certified by Trakt.
+              </p>
+            </div>
+          </details>
+
+          <details class="s-card" id="card-bookinfo">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-green">menu_book</span>
+              <span class="s-card-title">Book info</span>
+              <span class="s-card-summary" id="bookinfo-summary">Off</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <div class="s-box">
+                <div class="pref-row">
+                  <div class="pref-text">
+                    <strong>Fetch book details</strong>
+                    <span>Page count, genres, cover and rating from Open Library. Titles and authors are sent there. No account needed.</span>
+                  </div>
+                  <label class="switch" title="Fetch book details from Open Library">
+                    <input type="checkbox" id="pref-book-info" aria-label="Fetch book details from Open Library" />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+                <button type="button" id="bookinfo-enrich-all" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">auto_fix_high</span>
+                  Fetch info for my books
+                </button>
+              </div>
+              <div id="bookinfo-settings-status" class="settings-toast" hidden>
+                <div class="settings-toast-content">
+                  <span id="bookinfo-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                  <span id="bookinfo-settings-status-text"></span>
+                </div>
+              </div>
+              <p class="s-fine" id="bookinfo-notice"></p>
+            </div>
+          </details>
+
+          <details class="s-card" id="card-keep">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-yellow">cloud_sync</span>
+              <span class="s-card-title">Google Keep</span>
+              <span class="s-card-summary" id="keep-summary">Not set up</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <p class="s-hint">Add each new save to a Google Keep checklist. Paste the full link of the note, then turn it on.</p>
+              <div class="keep-row">
+                <div class="s-sub">Media</div>
+                <div class="s-box s-box-form">
+                  <div class="keep-row-head">
+                    <span class="keep-row-title">Add new saves <small>movies, series &amp; anime</small></span>
+                    <label class="switch" title="Add new saves to this Keep list automatically">
+                      <input type="checkbox" id="keep-media-enabled" aria-label="Auto-add movies, series &amp; anime to Keep" />
+                      <span class="switch-track"></span>
+                    </label>
+                  </div>
+                  <div class="field-input-row">
+                    <input type="url" id="keep-media-url" placeholder="https://keep.google.com/#LIST/..." aria-label="Keep list link for media" />
+                    <button type="button" id="keep-test-media" class="btn btn-outline btn-sm">Test</button>
+                    <button type="button" id="keep-save-media" class="btn btn-primary btn-sm">Save</button>
+                  </div>
+                  <span id="keep-media-status" class="field-status">Not linked</span>
+                </div>
+                <div id="media-settings-status" class="settings-toast" hidden>
+                  <div class="settings-toast-content">
+                    <span id="media-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                    <span id="media-settings-status-text"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="keep-row">
+                <div class="s-sub">Books</div>
+                <div class="s-box s-box-form">
+                  <div class="keep-row-head">
+                    <span class="keep-row-title">Add new saves <small>books</small></span>
+                    <label class="switch" title="Add new saves to this Keep list automatically">
+                      <input type="checkbox" id="keep-books-enabled" aria-label="Auto-add books to Keep" />
+                      <span class="switch-track"></span>
+                    </label>
+                  </div>
+                  <div class="field-input-row">
+                    <input type="url" id="keep-books-url" placeholder="https://keep.google.com/#LIST/..." aria-label="Keep list link for books" />
+                    <button type="button" id="keep-test-books" class="btn btn-outline btn-sm">Test</button>
+                    <button type="button" id="keep-save-books" class="btn btn-primary btn-sm">Save</button>
+                  </div>
+                  <span id="keep-books-status" class="field-status">Not linked</span>
+                </div>
+                <div id="books-settings-status" class="settings-toast" hidden>
+                  <div class="settings-toast-content">
+                    <span id="books-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                    <span id="books-settings-status-text"></span>
+                  </div>
+                </div>
+              </div>
+              <div class="keep-row">
+                <div class="s-sub">Tabs</div>
+                <div class="s-box s-box-form">
+                  <div class="keep-row-head">
+                    <span class="keep-row-title">Add new saves <small>tabs, links &amp; notes</small></span>
+                    <label class="switch" title="Add new saves to this Keep list automatically">
+                      <input type="checkbox" id="keep-tabs-enabled" aria-label="Auto-add tabs, links &amp; notes to Keep" />
+                      <span class="switch-track"></span>
+                    </label>
+                  </div>
+                  <div class="field-input-row">
+                    <input type="url" id="keep-tabs-url" placeholder="https://keep.google.com/#LIST/..." aria-label="Keep list link for tabs" />
+                    <button type="button" id="keep-test-tabs" class="btn btn-outline btn-sm">Test</button>
+                    <button type="button" id="keep-save-tabs" class="btn btn-primary btn-sm">Save</button>
+                  </div>
+                  <span id="keep-tabs-status" class="field-status">Not linked</span>
+                </div>
+                <div id="tabs-settings-status" class="settings-toast" hidden>
+                  <div class="settings-toast-content">
+                    <span id="tabs-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                    <span id="tabs-settings-status-text"></span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </details>
-        <details class="s-card" id="card-dups">
-          <summary>
-            <span class="material-symbols-outlined s-card-icon">content_copy</span>
-            <span class="s-card-title">Duplicates</span>
-            <span class="s-card-summary" id="dups-summary">Find near-matches</span>
-            <span class="material-symbols-outlined s-card-chevron">expand_more</span>
-          </summary>
-          <div class="s-card-body">
-            <p class="s-hint">
-              Finds titles saved twice under slightly different names, like “The Office (US)” and “Office”. Merging keeps the
-              one you choose and combines tags, ratings, reviews and progress.
-            </p>
-            <div class="settings-button-row">
-              <button type="button" id="find-duplicates" class="btn btn-outline">
-                <span class="material-symbols-outlined btn-icon">search</span>
-                Find duplicates
-              </button>
+          </details>
+        </div>
+
+        <h2 class="s-group">Your data</h2>
+        <div class="s-list">
+          <details class="s-card" id="card-backup">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-blue">backup</span>
+              <span class="s-card-title">Backup &amp; import</span>
+              <span class="s-card-summary" id="backup-summary">Export or import</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <p class="s-hint">
+                Your shelf lives only in this browser, so export a backup now and then. You can import a KeepShelf backup or a
+                Letterboxd or Goodreads CSV; items already on your shelf are skipped.
+              </p>
+              <div class="s-sub">Backup</div>
+              <div class="s-box">
+                <div class="pref-row">
+                  <div class="pref-text">
+                    <strong>Include my settings</strong>
+                    <span>Saves your TMDB token and Trakt app too, so keep the file private.</span>
+                  </div>
+                  <label class="switch" title="Include my settings in the backup">
+                    <input type="checkbox" id="backup-include-settings" aria-label="Include my settings in the backup" checked />
+                    <span class="switch-track"></span>
+                  </label>
+                </div>
+                <button type="button" id="export-backup" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">download</span>
+                  Export backup
+                </button>
+                <button type="button" id="import-file-btn" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">upload</span>
+                  Import file…
+                </button>
+                <input type="file" id="import-file" accept=".json,.csv,application/json,text/csv" hidden />
+              </div>
+
+              <div class="s-sub">Export for other apps</div>
+              <div class="s-box">
+                <button type="button" id="export-letterboxd" class="btn btn-outline btn-wide" title="Films only, as a watched file and a watchlist file">
+                  <span class="material-symbols-outlined btn-icon">movie</span>
+                  For Letterboxd
+                </button>
+                <button type="button" id="export-trakt" class="btn btn-outline btn-wide" title="Films, series and anime in one file">
+                  <span class="material-symbols-outlined btn-icon">tv</span>
+                  For Trakt
+                </button>
+              </div>
+
+              <div class="s-sub">Import</div>
+              <div class="s-box s-box-form">
+                <details class="s-more" id="paste-list">
+                  <summary>Add titles from a pasted list</summary>
+                  <div class="s-more-body">
+                    <p>
+                      Paste lines like <span class="mono">Drishyam (2015) | 2h 43m | IMDb 8.2</span> from a Keep note or Copy
+                      all. A heading such as "Watched" switches the lines under it, and a ticked box means watched. Movies,
+                      series and anime (<span class="mono">(A)</span> marks anime).
+                    </p>
+                    <textarea
+                      id="paste-text"
+                      class="paste-text"
+                      rows="6"
+                      spellcheck="false"
+                      aria-label="Titles to add"
+                      placeholder="Drishyam (2015) | 2h 43m | IMDb 8.2&#10;Fargo (2014) | S05 | IMDb 8.8&#10;86 (2021) | S01 | IMDb 8.3 (A)"
+                    ></textarea>
+                    <label class="paste-kind">
+                      <span>These are</span>
+                      <select id="paste-status" class="view-select" aria-label="Are these watched?">
+                        <option value="plan">To watch</option>
+                        <option value="done">Already watched</option>
+                      </select>
+                    </label>
+                    <p id="paste-summary" class="s-fine"></p>
+                    <button type="button" id="paste-add" class="btn btn-primary btn-wide" disabled>Add to shelf</button>
+                  </div>
+                </details>
+              </div>
+
+              <div id="backup-settings-status" class="settings-toast" hidden>
+                <div class="settings-toast-content">
+                  <span id="backup-settings-status-icon" class="material-symbols-outlined">check_circle</span>
+                  <span id="backup-settings-status-text"></span>
+                </div>
+              </div>
+
+              <div class="s-sub">Danger zone</div>
+              <div class="s-box">
+                <button type="button" id="clear-all" class="btn btn-outline btn-wide danger-outline">
+                  <span class="material-symbols-outlined btn-icon">delete</span>
+                  Delete everything
+                </button>
+              </div>
+              <p class="s-fine">Can't be undone, so export a backup first. Google Keep is not affected.</p>
             </div>
-            <div id="duplicates-result" class="dup-result"></div>
-          </div>
-        </details>
+          </details>
+
+          <details class="s-card" id="card-dups">
+            <summary>
+              <span class="material-symbols-outlined s-card-icon tile-indigo">content_copy</span>
+              <span class="s-card-title">Duplicates</span>
+              <span class="s-card-summary" id="dups-summary">Find near-matches</span>
+              <span class="material-symbols-outlined s-card-chevron">chevron_right</span>
+            </summary>
+            <div class="s-card-body">
+              <p class="s-hint">
+                Finds titles saved twice under slightly different names, like “The Office (US)” and “Office”. Merging keeps the
+                one you choose and combines tags, ratings, reviews and progress.
+              </p>
+              <div class="s-box">
+                <button type="button" id="find-duplicates" class="btn btn-outline btn-wide">
+                  <span class="material-symbols-outlined btn-icon">search</span>
+                  Find duplicates
+                </button>
+              </div>
+              <div id="duplicates-result" class="dup-result"></div>
+            </div>
+          </details>
+        </div>
       </div>
     </div>
 
-    <div id="status-dialog" class="confirm-dialog" hidden>
+    <nav id="tab-bar" class="tab-bar" aria-label="Sections">
+      <button type="button" id="open-shelf" class="tab-item" aria-current="page">
+        <span class="material-symbols-outlined">shelves</span>
+        <span class="tab-label">Shelf</span>
+      </button>
+      <button type="button" id="open-upcoming" class="tab-item">
+        <span class="material-symbols-outlined">calendar_month</span>
+        <span class="tab-label">Coming up</span>
+      </button>
+      <button type="button" id="open-stats" class="tab-item">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="tab-label">Stats</span>
+      </button>
+      <button type="button" id="open-settings" class="tab-item">
+        <span class="material-symbols-outlined">settings</span>
+        <span class="tab-label">Settings</span>
+      </button>
+    </nav>
+
+    <div id="status" class="toast" role="status" hidden>
+      <div class="toast-content">
+        <span class="material-symbols-outlined toast-icon">check_circle</span>
+        <span id="status-text"></span>
+      </div>
+      <button type="button" id="status-close" class="toast-close" aria-label="Dismiss">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+
+    <div id="status-dialog" class="confirm-dialog sheet" hidden>
       <div class="confirm-backdrop" data-status-dismiss></div>
       <div class="confirm-panel status-panel" role="dialog" aria-modal="true" aria-labelledby="status-dialog-title">
         <h2 id="status-dialog-title" class="confirm-title">Set 3 selected to</h2>
@@ -813,7 +888,7 @@
       </div>
     </div>
 
-    <div id="confirm-dialog" class="confirm-dialog" hidden>
+    <div id="confirm-dialog" class="confirm-dialog alert" hidden>
       <div class="confirm-backdrop" data-confirm-dismiss></div>
       <div
         class="confirm-panel"
@@ -840,9 +915,10 @@
       </div>
     </div>
 
-    <div id="pick-dialog" class="confirm-dialog" hidden>
+    <div id="pick-dialog" class="confirm-dialog sheet" hidden>
       <div class="confirm-backdrop" data-pick-dismiss></div>
       <div class="confirm-panel pick-panel" role="dialog" aria-modal="true" aria-labelledby="pick-heading">
+        <img id="pick-backdrop" class="sheet-backdrop" alt="" referrerpolicy="no-referrer" aria-hidden="true" hidden />
         <button type="button" id="pick-graph" class="icon-btn pick-graph" aria-label="Episode ratings" title="Episode ratings" hidden>
           <span class="material-symbols-outlined">grid_view</span>
         </button>
@@ -875,13 +951,13 @@
         <div id="pick-footer" class="pick-footer">
           <button type="button" id="pick-open" class="btn btn-outline btn-block pick-open" hidden>Open page</button>
           <button type="button" id="pick-edit" class="btn btn-outline btn-sm" hidden>Edit</button>
-          <button type="button" id="pick-again" class="btn btn-primary btn-sm"><span class="material-symbols-outlined btn-icon">casino</span>Pick another</button>
+          <button type="button" id="pick-again" class="btn btn-tinted btn-sm"><span class="material-symbols-outlined btn-icon">casino</span>Pick another</button>
           <button type="button" id="pick-close" class="btn btn-primary btn-sm" hidden>Close</button>
         </div>
         <section id="pick-ratings" class="pick-ratings" aria-labelledby="er-title" hidden>
           <header class="er-head">
             <button type="button" id="er-back" class="icon-btn" aria-label="Back to the card" title="Back">
-              <span class="material-symbols-outlined">arrow_back</span>
+              <span class="material-symbols-outlined">chevron_left</span>
             </button>
             <div id="er-poster" class="er-poster"></div>
             <div class="er-titles">
@@ -895,7 +971,7 @@
       </div>
     </div>
 
-    <div id="rate-dialog" class="confirm-dialog" hidden>
+    <div id="rate-dialog" class="confirm-dialog sheet" hidden>
       <div class="confirm-backdrop" data-rate-dismiss></div>
       <form id="rate-form" class="confirm-panel rate-panel" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="rate-title">
         <p class="rate-kicker" id="rate-kicker">Finished watching</p>
@@ -913,7 +989,7 @@
       </form>
     </div>
 
-    <div id="edit-dialog" class="confirm-dialog" hidden>
+    <div id="edit-dialog" class="confirm-dialog sheet" hidden>
       <div class="confirm-backdrop" data-edit-dismiss></div>
       <form
         id="edit-form"

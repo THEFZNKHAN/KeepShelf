@@ -85,7 +85,10 @@ KeepShelf/
 │   │   └── main.ts            # Answers getPageData by running the matching site parser on demand
 │   ├── popup/
 │   │   ├── popup.html         # Extension popup markup
-│   │   ├── popup.css          # Popup styles (design tokens in :root)
+│   │   ├── styles/            # Popup styles, one file per area, joined in name order into dist/popup.css
+│   │   │                      #   (00-tokens.css holds the colours, light and dark, and the @font-face rules)
+│   │   ├── fonts/             # Bundled .woff2 fonts: Geist, and the Material Symbols Rounded subset
+│   │   ├── icon-names.txt     # Every icon name the popup uses; the icon font is cut down to these
 │   │   ├── popup.ts           # Shelf UI, settings, tab/link/note input, undo toast
 │   │   ├── stats-view.ts      # Stats dashboard charts
 │   │   └── tag-picker.ts      # Scrollable tag filter dropdown
@@ -219,7 +222,7 @@ KeepShelf/
 | Bundler | esbuild — three IIFE bundles (`content.js`, `background.js`, `popup.js`) |
 | Test runner | Node.js built-in `node:test` + jsdom (no extra framework) |
 | Extension API | Chrome Manifest V3 |
-| Fonts | Inter + Material Symbols Outlined (loaded from Google Fonts in popup) |
+| Fonts | System font on macOS, bundled Geist elsewhere; icons from a bundled Material Symbols Rounded subset. Nothing loads from the network. |
 
 ---
 
@@ -227,7 +230,7 @@ KeepShelf/
 
 | Command | What it does |
 |---------|-------------|
-| `npm run build` | Compiles TypeScript via esbuild into `dist/`, copies `popup.html` and `popup.css` |
+| `npm run build` | Compiles TypeScript via esbuild into `dist/`, copies `popup.html`, joins `src/popup/styles/*.css` into `popup.css`, copies the fonts |
 | `npm run watch` | Same as build but re-runs on every file save |
 | `npm test` | Builds `dist-test/` bundles then runs all `tests/*.test.mjs` with `node --test` |
 | `npx tsc --noEmit` | Type-check only, no output (useful in CI or before committing) |
@@ -424,7 +427,8 @@ KeepShelf-vX.Y.Z.zip
 │   ├── content.js
 │   ├── popup.js
 │   ├── popup.html
-│   └── popup.css
+│   ├── popup.css
+│   └── fonts/
 ├── icons/
 │   ├── icon16.png
 │   ├── icon32.png
@@ -442,3 +446,23 @@ End users download this ZIP, extract it anywhere permanent, and load that folder
 `.github/workflows/release-manual-tag.yml` is the old process: it runs when someone pushes a `v*.*.*` tag by hand and
 requires the tag to equal the version already in `manifest.json` and `package.json`. It exists only as an emergency
 fallback if `release.yml` is broken. Do not use it otherwise, because mixing the two can create duplicate releases.
+
+## Popup design and icons
+
+The popup follows Apple's materials: plain grouped surfaces for content, frosted glass only for what floats over it
+(the shelf header, tab bar, sheets, popovers and toasts). The palette is "Obsidian & Champagne": warm graphite and
+pearl surfaces with one champagne-gold accent. Colours, radii and motion are tokens in
+`src/popup/styles/00-tokens.css`; use them rather than new literal values.
+
+Settings → Appearance picks Automatic, Light or Dark (`keepshelf.theme` in localStorage, included in backups). The
+choice is set as `data-theme` on `<html>` by `dist/theme.js`, a tiny script loaded in `<head>` so there is no flash of
+the wrong theme. The dark token values appear twice in `00-tokens.css` (system dark and forced dark); keep them in step.
+
+The icon font contains only the icons listed in `src/popup/icon-names.txt`. To use a new icon:
+
+1. Add its name (from [Material Symbols](https://fonts.google.com/icons)) to `icon-names.txt`.
+2. Run `node scripts/fetch-icon-font.mjs` to download the new subset into `src/popup/fonts/`.
+3. Commit both files. `tests/popup-icons.test.mjs` fails if the popup uses an icon that isn't in the list.
+
+`tests/popup-dom-contract.test.mjs` checks that every id `popup.ts` looks up is in `popup.html`, so a markup change
+can't blank the popup.

@@ -3,6 +3,7 @@ import { buildLetterboxdExport } from "../shared/letterboxd-export.js";
 import { buildTraktExport } from "../shared/trakt-export.js";
 import { buildBackup, parseImportFile, settingsFromBackupJson } from "../shared/import.js";
 import { PREF_CHOICES, collectSettings, describeSettings, type SettingsBackup } from "../shared/settings-backup.js";
+import { THEME_KEY, THEME_LABELS, applyTheme, normalizeTheme, readTheme } from "../shared/theme.js";
 import { BOOK_INFO_KEY } from "../shared/book-info-settings.js";
 import { NEW_SEASONS_KEY, REMINDERS_KEY } from "../shared/reminders-settings.js";
 import { TMDB_TOKEN_KEY } from "../shared/tmdb-settings.js";
@@ -192,7 +193,6 @@ const onlineResultsEl = document.getElementById("online-results")!;
 const onlineTitleEl = document.getElementById("online-title")!;
 const onlineBodyEl = document.getElementById("online-body")!;
 const onlineBackEl = document.getElementById("online-back") as HTMLButtonElement;
-const countEl = document.getElementById("count")!;
 const statusEl = document.getElementById("status")!;
 const statusTextEl = document.getElementById("status-text")!;
 const filtersEl = document.getElementById("filters")!;
@@ -245,6 +245,139 @@ const tagPicker = createTagPicker(tagFilterEl, (tag) => {
 });
 const listFilterEl = document.getElementById("list-filter") as HTMLSelectElement;
 const syncSelectedEl = document.getElementById("sync-selected") as HTMLButtonElement;
+const selectionBarEl = document.getElementById("selection-bar")!;
+const selectionCountEl = document.getElementById("selection-count")!;
+const tabBarEl = document.getElementById("tab-bar")!;
+const segThumbEl = shelfTabsEl.querySelector<HTMLElement>(".seg-thumb");
+const ambientImgs = Array.from(document.querySelectorAll<HTMLImageElement>("#ambient img"));
+const pickBackdropEl = document.getElementById("pick-backdrop") as HTMLImageElement;
+
+/* ── Look and feel: tab bar, segmented control, ambient posters ─────────── */
+
+type ViewName = "shelf" | "upcoming" | "stats" | "settings";
+
+function currentView(): ViewName {
+  if (!upcomingView.hidden) return "upcoming";
+  if (!statsView.hidden) return "stats";
+  if (!settingsView.hidden) return "settings";
+  return "shelf";
+}
+
+/** Marks the tab of the view on screen. Every open and close calls this, so the bar never disagrees with the view. */
+function syncTabBar(): void {
+  const view = currentView();
+  tabBarEl.querySelectorAll<HTMLButtonElement>(".tab-item").forEach((btn) => {
+    const isCurrent = btn.id === `open-${view}`;
+    if (isCurrent) btn.setAttribute("aria-current", "page");
+    else btn.removeAttribute("aria-current");
+  });
+  if (view === "shelf") positionSegmentThumb();
+}
+
+/** The tab bar's one way in: leave whatever view is open, then open the chosen one. */
+function showView(view: ViewName): void {
+  const from = currentView();
+  if (from === view) {
+    // Tapping the tab you are on goes back to its top, as in iOS: the shelf scrolls up, Settings leaves its page.
+    if (view === "shelf") mainEl.scrollTo({ top: 0, behavior: "smooth" });
+    if (view === "settings") settingsView.querySelectorAll<HTMLDetailsElement>("details.s-card[open]").forEach((d) => (d.open = false));
+    return;
+  }
+  if (from === "upcoming") closeUpcoming();
+  else if (from === "stats") closeStats();
+  else if (from === "settings") closeSettings();
+  if (view === "upcoming") openUpcoming();
+  else if (view === "stats") openStats();
+  else if (view === "settings") openSettings();
+  syncTabBar();
+}
+
+/** Slides the segmented control's thumb under the active shelf tab. */
+function positionSegmentThumb(): void {
+  if (!segThumbEl) return;
+  const active = shelfTabsEl.querySelector<HTMLElement>(".shelf-tab.active:not([hidden])");
+  if (!active || active.offsetWidth === 0) return;
+  segThumbEl.style.width = `${active.offsetWidth}px`;
+  segThumbEl.style.transform = `translateX(${active.offsetLeft}px)`;
+  // The first placement jumps; after that the thumb slides.
+  if (!segThumbEl.classList.contains("is-ready")) requestAnimationFrame(() => segThumbEl.classList.add("is-ready"));
+}
+
+const AMBIENT_POSTERS = 3;
+
+/** The blurred posters behind the glass come from the top of the list you are looking at. */
+function updateAmbient(items: SavedItem[]): void {
+  const urls: string[] = [];
+  for (const item of items.length ? items : allItems) {
+    const url = posterUrlOf(item);
+    if (url && !urls.includes(url)) urls.push(url);
+    if (urls.length === AMBIENT_POSTERS) break;
+  }
+  ambientImgs.forEach((img, i) => {
+    const url = urls[i];
+    if (!url) {
+      img.hidden = true;
+      return;
+    }
+    if (img.getAttribute("src") !== url) {
+      img.hidden = true;
+      img.onload = () => (img.hidden = false);
+      img.onerror = () => (img.hidden = true);
+      img.src = url;
+    }
+  });
+}
+
+/** The detail sheet shows that title's poster, blurred, behind its glass. */
+function setPickBackdrop(url: string | undefined): void {
+  if (!url) {
+    pickBackdropEl.hidden = true;
+    pickBackdropEl.removeAttribute("src");
+    return;
+  }
+  pickBackdropEl.onload = () => (pickBackdropEl.hidden = false);
+  pickBackdropEl.onerror = () => (pickBackdropEl.hidden = true);
+  if (pickBackdropEl.getAttribute("src") !== url) {
+    pickBackdropEl.hidden = true;
+    pickBackdropEl.src = url;
+  } else {
+    pickBackdropEl.hidden = false;
+  }
+}
+
+/* ── Appearance: Automatic, Light or Dark ── */
+
+const themeInputs = Array.from(document.querySelectorAll<HTMLInputElement>('input[name="theme"]'));
+const appearanceSummaryEl = document.getElementById("appearance-summary")!;
+
+/** Applies the stored theme and shows it as chosen in Settings. theme.js already applied it before the first paint. */
+function syncTheme(): void {
+  const theme = readTheme(localStorage);
+  applyTheme(document.documentElement, theme);
+  for (const input of themeInputs) input.checked = input.value === theme;
+  appearanceSummaryEl.textContent = THEME_LABELS[theme];
+}
+
+for (const input of themeInputs) {
+  input.addEventListener("change", () => {
+    if (!input.checked) return;
+    const theme = normalizeTheme(input.value);
+    try {
+      if (theme === "system") localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* it still applies for now, it just won't be remembered */
+    }
+    applyTheme(document.documentElement, theme);
+    appearanceSummaryEl.textContent = THEME_LABELS[theme];
+  });
+}
+
+syncTheme();
+
+void document.fonts?.ready.then(() => positionSegmentThumb());
+// The Save button's label changes with the shelf, which resizes the control: keep the thumb under its tab.
+new ResizeObserver(() => positionSegmentThumb()).observe(shelfTabsEl);
 const editDialogEl = document.getElementById("edit-dialog")!;
 const editFormEl = document.getElementById("edit-form") as HTMLFormElement;
 const editFieldsEl = document.getElementById("edit-fields")!;
@@ -591,6 +724,7 @@ function openSettings(): void {
   if (tabsStatusTimerRef.value) clearTimeout(tabsStatusTimerRef.value);
   appView.hidden = true;
   settingsView.hidden = false;
+  syncTabBar();
 }
 
 function openStats(): void {
@@ -600,12 +734,14 @@ function openStats(): void {
   });
   appView.hidden = true;
   statsView.hidden = false;
+  syncTabBar();
 }
 
 function closeStats(): void {
   hideItemTooltip();
   statsView.hidden = true;
   appView.hidden = false;
+  syncTabBar();
 }
 
 /* ── Coming up ───────────────────────────────────────────── */
@@ -840,6 +976,7 @@ async function checkUpcomingDates(): Promise<void> {
 function openUpcoming(): void {
   appView.hidden = true;
   upcomingView.hidden = false;
+  syncTabBar();
   upcomingNote = "";
   renderUpcoming(tmdbConfigured);
   if (!tmdbConfigured) return;
@@ -858,11 +995,13 @@ function openUpcoming(): void {
 function closeUpcoming(): void {
   upcomingView.hidden = true;
   appView.hidden = false;
+  syncTabBar();
 }
 
 function closeSettings(): void {
   settingsView.hidden = true;
   appView.hidden = false;
+  syncTabBar();
 }
 
 function updateEmptyState(): void {
@@ -939,8 +1078,12 @@ function updateEmptyState(): void {
   }
 }
 
+function posterUrlOf(item: SavedItem, coverSize: "S" | "M" = "S"): string | undefined {
+  return item.imageUrl ?? tmdbPosterUrl(item) ?? bookCoverUrl(item, coverSize);
+}
+
 function createLeadingEl(item: SavedItem, coverSize: "S" | "M" = "S"): HTMLElement {
-  const imageUrl = item.imageUrl ?? tmdbPosterUrl(item) ?? bookCoverUrl(item, coverSize);
+  const imageUrl = posterUrlOf(item, coverSize);
   if (!imageUrl) return createTypeIconEl(item.type);
   const img = document.createElement("img");
   img.className = "item-thumb";
@@ -1285,6 +1428,8 @@ function render(): void {
     if (el) el.textContent = n ? String(n) : "";
   }
   listEl.innerHTML = "";
+  updateAmbient(items);
+  positionSegmentThumb();
 
   filtersEl.hidden = activeTab !== "media";
   tabsInputRowEl.hidden = activeTab !== "tabs";
@@ -1351,6 +1496,7 @@ function render(): void {
     const checkbox = document.createElement("input");
     checkbox.type = "checkbox";
     checkbox.dataset.id = item.id;
+    checkbox.setAttribute("aria-label", `Select ${itemTitle(item)}`);
 
     body.append(...createItemLines(item));
 
@@ -1833,6 +1979,9 @@ function updateSelectionUi(): void {
   const selected = getSelectedIds().length;
   deleteSelectedEl.hidden = selected === 0;
   statusSelectedEl.hidden = selected === 0;
+  // While rows are ticked, the actions for them float over the tab bar.
+  selectionBarEl.hidden = selected === 0;
+  selectionCountEl.textContent = `${selected} selected`;
   // One copy button: the ticked rows when there are some, otherwise everything the list shows.
   const label = selected > 0 ? `Copy ${selected} selected` : "Copy everything shown";
   copyItemsEl.title = label;
@@ -3833,6 +3982,7 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
   pickTopEl.hidden = info;
   pickKickerEl.textContent = "How about this?";
   pickLeadingEl.replaceChildren(createLeadingEl(item, "M"));
+  setPickBackdrop(posterUrlOf(item, "M"));
   pickTitleEl.textContent = itemTitle(item);
   pickTitleEl.title = itemTitle(item);
   pickDetailEl.textContent = [factsText(item), genreParts(item).join("")].filter(Boolean).join("\n");
@@ -3913,14 +4063,18 @@ function showDetails(item: SavedItem, mode: DetailMode): void {
     ...watchLinks(item, watchSites).map((link) => {
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = info ? "btn btn-primary btn-sm" : "btn btn-outline btn-sm";
+      // Tinted, not solid: on the card, Close is the one strong button.
+      btn.className = info ? "btn btn-tinted btn-sm" : "btn btn-outline btn-sm";
       const label = `${link.search ? "Search" : "Watch"} on ${link.host}`;
       btn.title = label;
       // The icon says what it does, so the host is enough text on the compact card.
       const icon = document.createElement("span");
       icon.className = "material-symbols-outlined btn-icon";
       icon.textContent = link.search ? "search" : "play_circle";
-      btn.append(icon, document.createTextNode(link.host));
+      const host = document.createElement("span");
+      host.className = "btn-label";
+      host.textContent = link.host;
+      btn.append(icon, host);
       btn.setAttribute("aria-label", label);
       btn.addEventListener("click", () => void chrome.tabs.create({ url: link.url }));
       return btn;
@@ -4650,6 +4804,7 @@ async function applySettings(settings: SettingsBackup): Promise<void> {
   }
   await Promise.all([loadKeepSettings(), loadTmdbSettings(), loadReminderSettings(), loadBookInfoSettings(), loadWatchSites(), loadTraktSettings()]);
   renderPrefs();
+  syncTheme();
 }
 
 async function exportBackup(): Promise<void> {
@@ -4981,6 +5136,26 @@ toggleFiltersEl.addEventListener("click", () => {
   toggleFiltersEl.setAttribute("aria-expanded", String(!moreFiltersEl.hidden));
 });
 
+/** The filters popover floats over the list, so a click anywhere else (except the tag picker it opens) closes it. */
+function closeMoreFilters(): void {
+  if (moreFiltersEl.hidden) return;
+  moreFiltersEl.hidden = true;
+  toggleFiltersEl.setAttribute("aria-expanded", "false");
+}
+
+document.addEventListener("pointerdown", (e) => {
+  const target = e.target as HTMLElement;
+  if (moreFiltersEl.hidden || moreFiltersEl.contains(target) || toggleFiltersEl.contains(target)) return;
+  if (target.closest(".picker-panel")) return;
+  closeMoreFilters();
+});
+
+document.getElementById("copy-selected")!.addEventListener("click", () => copyItemsEl.click());
+document.getElementById("selection-clear")!.addEventListener("click", () => {
+  listEl.querySelectorAll<HTMLInputElement>('input[type="checkbox"]:checked').forEach((box) => (box.checked = false));
+  updateSelectionUi();
+});
+
 shelfTabsEl.addEventListener("click", (e) => {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".shelf-tab");
   if (!btn) return;
@@ -5023,6 +5198,7 @@ function applySections(): void {
     t.hidden = !visible[t.dataset.tab ?? ""];
   });
   shelfTabsEl.hidden = !showBooks && !showTabs;
+  positionSegmentThumb();
   if (!visible[activeTab]) {
     activeTab = "media";
     activeFilter = "all";
@@ -5038,6 +5214,7 @@ function applySections(): void {
 function syncShelfUi(): void {
   shelfTabsEl.querySelectorAll<HTMLElement>(".shelf-tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === activeTab));
   filtersEl.querySelectorAll<HTMLElement>(".filter").forEach((f) => f.classList.toggle("active", f.dataset.filter === activeFilter));
+  positionSegmentThumb();
 }
 
 document.getElementById("save-page")!.addEventListener("click", () => {
@@ -5191,7 +5368,9 @@ confirmDialogEl.querySelectorAll("[data-confirm-dismiss]").forEach((el) => {
 
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (!confirmDialogEl.hidden) closeConfirmDialog(false);
+  if (tagPicker.isOpen()) tagPicker.close();
+  else if (!moreFiltersEl.hidden) closeMoreFilters();
+  else if (!confirmDialogEl.hidden) closeConfirmDialog(false);
   else if (!editDialogEl.hidden) closeEditDialog();
   else if (!rateDialogEl.hidden) closeRateDialog();
   else if (!pickDialogEl.hidden && pickPanelEl.classList.contains("is-ratings")) {
@@ -5200,14 +5379,14 @@ document.addEventListener("keydown", (event) => {
   } else if (!pickDialogEl.hidden) closePick();
   else if (!upcomingView.hidden) closeUpcoming();
   else if (!statsView.hidden) closeStats();
-  else if (tagPicker.isOpen()) tagPicker.close();
 });
 
-document.getElementById("open-upcoming")!.addEventListener("click", openUpcoming);
+document.getElementById("open-shelf")!.addEventListener("click", () => showView("shelf"));
+document.getElementById("open-upcoming")!.addEventListener("click", () => showView("upcoming"));
 document.getElementById("close-upcoming")!.addEventListener("click", closeUpcoming);
-document.getElementById("open-stats")!.addEventListener("click", openStats);
+document.getElementById("open-stats")!.addEventListener("click", () => showView("stats"));
 document.getElementById("close-stats")!.addEventListener("click", closeStats);
-document.getElementById("open-settings")!.addEventListener("click", openSettings);
+document.getElementById("open-settings")!.addEventListener("click", () => showView("settings"));
 document.getElementById("close-settings")!.addEventListener("click", closeSettings);
 
 document.getElementById("status-close")!.addEventListener("click", () => {

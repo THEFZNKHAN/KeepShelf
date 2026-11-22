@@ -1,0 +1,502 @@
+/* ── Coming up, Stats and Settings: a large title over a scrolling body ── */
+
+.sub-view .top-bar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 16px var(--gutter) 10px;
+}
+
+.settings-title {
+  flex: 1;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 12px calc(var(--tabbar-space) + 8px);
+  overflow-y: auto;
+  /* No scrollbar: it would take width on one side only and push the lists off centre. */
+  scrollbar-width: none;
+}
+
+.settings-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Sections keep their height; the body scrolls instead of squeezing them. */
+.settings-body > * {
+  flex-shrink: 0;
+}
+
+.settings-hint {
+  padding: 24px 12px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--label-2);
+  text-align: center;
+}
+
+/* ── Coming up ── */
+
+.up-window {
+  flex-basis: 100%;
+}
+
+.upcoming-body .list {
+  margin: 0 0 4px;
+}
+
+/* Day headings stay in view while their rows scroll past, and say how far off the day is. */
+.up-group {
+  position: sticky;
+  top: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 16px 0 8px;
+  padding: 7px 14px;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  font-size: 13.5px;
+  line-height: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.up-group:first-child {
+  margin-top: 4px;
+}
+
+.up-group.is-soon {
+  color: var(--tint);
+}
+
+.up-away {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.up-label {
+  flex-shrink: 0;
+  max-width: 40%;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--tint);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.up-label.is-faint {
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.up-note {
+  min-width: 0;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--label-2);
+}
+
+.up-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 28px 16px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--label-2);
+}
+
+.up-empty strong {
+  font-size: 16px;
+  line-height: 21px;
+  color: var(--label);
+}
+
+/* Folded groups: new seasons, no date yet, streaming. Also the Trakt result boxes in Settings. */
+.up-nodate {
+  margin-top: 12px;
+}
+
+.up-nodate > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 4px 6px;
+  list-style: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.up-nodate > summary::-webkit-details-marker {
+  display: none;
+}
+
+.up-nodate > summary::before {
+  content: "chevron_right";
+  font-family: "KeepShelf Symbols";
+  font-size: 20px;
+  font-weight: normal;
+  line-height: 1;
+  color: var(--tint);
+  font-feature-settings: "liga";
+  transition: transform var(--mid) var(--ease);
+}
+
+.up-nodate[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.up-nodate .list {
+  margin: 4px 0 0;
+}
+
+.up-count {
+  margin-left: auto;
+  padding: 0 7px;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+
+.up-footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 16px calc(var(--tabbar-space) - 2px);
+  padding: 8px 0 2px;
+  border-top: var(--hairline);
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+/* With the footer below it, the list needs no room for the tab bar. */
+#upcoming-view:has(.up-footer:not([hidden])) .upcoming-body {
+  padding-bottom: 12px;
+}
+
+.up-check {
+  flex-shrink: 0;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--tint-soft);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tint);
+  transition:
+    filter var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.up-check:hover:not(:disabled) {
+  filter: brightness(0.96) saturate(1.2);
+}
+
+.up-check:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.up-check:disabled {
+  background: var(--fill);
+  color: var(--label-2);
+  cursor: default;
+}
+
+/* ── Stats ── */
+
+.stats-body {
+  gap: 12px;
+}
+
+/* The headline numbers: large tabular figures with small labels. */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--grouped);
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+
+.stat-tile + .stat-tile {
+  box-shadow: inset 0.5px 0 0 var(--separator);
+}
+
+.stat-tile {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 12px 12px 11px;
+}
+
+.stat-tile-label {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.stat-tile-value {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--r-lg);
+  background: var(--grouped);
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+
+.stats-progress-track {
+  flex: 1;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+}
+
+.stats-progress-fill {
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--success-dot);
+}
+
+.stats-progress-text {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-card {
+  padding: 4px 14px 14px;
+  border-radius: var(--r-lg);
+  background: var(--grouped);
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+
+.stats-card-title {
+  padding: 12px 0 0;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.stats-card-sub {
+  margin: 1px 0 12px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+.stats-card-title + .bar-list {
+  margin-top: 10px;
+}
+
+.col-chart {
+  display: flex;
+  gap: 6px;
+  height: 124px;
+}
+
+.col-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+  text-align: right;
+}
+
+.col-plot {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  padding-bottom: 16px;
+  border-bottom: var(--hairline);
+}
+
+.col-slot {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 0;
+  border-radius: 6px 6px 0 0;
+  outline: none;
+}
+
+.col-slot:hover,
+.col-slot:focus-visible {
+  background: var(--fill);
+}
+
+.col-bar {
+  width: 70%;
+  max-width: 22px;
+  border-radius: 5px 5px 2px 2px;
+  background: var(--tint-soft);
+}
+
+.col-bar.is-peak,
+.bar-fill.is-peak {
+  background: var(--tint);
+}
+
+.col-value {
+  position: absolute;
+  right: 0;
+  left: 0;
+  padding-bottom: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: none;
+}
+
+.col-label {
+  position: absolute;
+  right: 0;
+  bottom: -16px;
+  left: 0;
+  height: 16px;
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--label-2);
+  text-align: center;
+  pointer-events: none;
+}
+
+.bar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.bar-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px;
+  border-radius: 7px;
+  outline: none;
+}
+
+.bar-row:hover,
+.bar-row:focus-visible {
+  background: var(--fill);
+}
+
+.bar-label {
+  overflow: hidden;
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.bar-track {
+  height: 10px;
+}
+
+.bar-fill {
+  height: 100%;
+  min-width: 3px;
+  border-radius: var(--r-pill);
+  background: var(--tint-soft);
+}
+
+.bar-value {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.stats-table {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+.stats-table summary {
+  font-size: 12px;
+  color: var(--tint);
+  cursor: pointer;
+}
+
+.stats-table table {
+  width: 100%;
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.stats-table td {
+  padding: 4px 0;
+  border-bottom: var(--hairline);
+}
+
+.stats-table td:last-child {
+  text-align: right;
+}
+
+.stats-footnote {
+  margin: 0 4px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--label-2);
+}

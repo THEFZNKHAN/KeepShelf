@@ -1,0 +1,94 @@
+/* ── Settings opened in its own tab (popup.html?view=settings) ── */
+
+body.in-tab {
+  width: min(560px, calc(100vw - 32px));
+  height: calc(100vh - 48px);
+  margin: 24px auto;
+  overflow: hidden;
+  border-radius: 20px;
+  box-shadow: 0 0 0 0.5px var(--separator), var(--float-shadow);
+}
+
+body.in-tab .tab-bar {
+  display: none;
+}
+
+body.in-tab .settings-body {
+  padding-bottom: 24px;
+}
+
+/* ── Accessibility ── */
+
+/* Less motion: no slides or springs, just the change. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Less transparency or more contrast: solid surfaces instead of glass, and no poster wash. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .ambient,
+  .sheet-backdrop {
+    display: none;
+  }
+
+  .nav-bar,
+  .tab-bar,
+  .selection-bar,
+  .toast,
+  .popover,
+  .picker-panel,
+  .item-tooltip,
+  .er-tip,
+  .confirm-panel,
+  .up-group,
+  .s-card[open] > summary,
+  .list-item:hover .row-actions,
+  .list-item:focus-within .row-actions {
+    background: var(--grouped);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .nav-bar {
+    background: var(--canvas);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --separator: rgba(60, 60, 67, 0.45);
+    --label-2: rgba(60, 60, 67, 0.85);
+  }
+}
+
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --separator: rgba(160, 160, 168, 0.6);
+    --label-2: rgba(235, 235, 245, 0.85);
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root[data-theme="dark"] {
+    --separator: rgba(160, 160, 168, 0.6);
+    --label-2: rgba(235, 235, 245, 0.85);
+  }
+}
+
+/* Windows high contrast: let the system colours through. */
+@media (forced-colors: active) {
+  .seg-thumb {
+    background: Highlight;
+  }
+
+  .tab-item[aria-current="page"] {
+    outline: 2px solid Highlight;
+  }
+}

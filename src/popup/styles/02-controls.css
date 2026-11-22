@@ -1,0 +1,390 @@
+/* ── Controls: buttons, fields, selects, chips, switches ──── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    opacity var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--fill-strong);
+}
+
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-icon {
+  font-size: 18px !important;
+}
+
+.btn-primary {
+  background: var(--tint);
+  color: var(--on-tint);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--tint);
+  filter: brightness(1.08);
+}
+
+.btn-tinted {
+  background: var(--tint-soft);
+  color: var(--tint);
+}
+
+.btn-tinted:hover:not(:disabled) {
+  background: var(--tint-soft);
+  filter: brightness(0.97) saturate(1.2);
+}
+
+.btn-outline {
+  background: var(--fill);
+  color: var(--label);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: var(--danger);
+  filter: brightness(1.08);
+}
+
+.btn.btn-sm {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn.danger-outline {
+  color: var(--danger);
+}
+
+/* Round icon buttons in bars and toolbars. */
+.icon-btn {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--tint);
+  transition:
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.icon-btn:hover {
+  background: var(--fill);
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+.icon-btn .material-symbols-outlined {
+  font-size: 21px;
+}
+
+.icon-btn-danger {
+  color: var(--danger);
+}
+
+/* ── Text fields ── */
+
+input[type="text"],
+input[type="url"],
+input[type="password"],
+input[type="search"],
+input[type="number"],
+textarea {
+  min-width: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--field);
+  box-shadow: inset 0 0 0 0.5px var(--separator-strong);
+  color: var(--label);
+  font-size: 13px;
+  outline: none;
+  transition: box-shadow var(--fast) var(--ease);
+}
+
+input[type="text"],
+input[type="url"],
+input[type="password"],
+input[type="number"] {
+  height: 34px;
+  padding: 0 11px;
+}
+
+textarea {
+  padding: 8px 11px;
+  line-height: 18px;
+  resize: none;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+input:focus,
+textarea:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--tint), 0 0 0 3px var(--tint-ring);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--label-3);
+}
+
+input[readonly] {
+  color: var(--label-2);
+}
+
+/* ── Selects: a quiet pill with a chevron ── */
+
+select,
+.view-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 0;
+  height: 34px;
+  padding: 0 30px 0 11px;
+  border: 0;
+  border-radius: var(--r-md);
+  background-color: var(--fill);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='14' viewBox='0 0 10 14'%3E%3Cpath d='M2 5l3-3 3 3M2 9l3 3 3-3' fill='none' stroke='%238E8E93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  color: var(--label);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  outline: none;
+  transition:
+    background-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+select:hover,
+.view-select:hover {
+  background-color: var(--fill-strong);
+}
+
+select:focus-visible,
+.view-select:focus-visible {
+  box-shadow: 0 0 0 3px var(--tint-ring);
+}
+
+select option {
+  background: var(--grouped);
+  color: var(--label);
+}
+
+/* ── Chips: the type filter and Coming up's window ── */
+
+.filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filters::-webkit-scrollbar {
+  display: none;
+}
+
+.filter {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.filter:hover {
+  background: var(--fill-strong);
+}
+
+.filter:active {
+  transform: scale(0.96);
+}
+
+.filter.active {
+  background: var(--label);
+  color: var(--canvas);
+  font-weight: 600;
+}
+
+/* ── Switch: the iOS toggle ── */
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 44px;
+  height: 26px;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.switch-track {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--fill-strong);
+  transition: background var(--mid) var(--ease);
+}
+
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.15),
+    0 1px 1px rgba(0, 0, 0, 0.16);
+  transition: transform var(--mid) var(--ease);
+}
+
+.switch input:checked + .switch-track {
+  background: var(--switch-on);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(18px);
+}
+
+.switch input:active + .switch-track::after {
+  width: 26px;
+}
+
+.switch input:checked:active + .switch-track::after {
+  transform: translateX(14px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--tint);
+  outline-offset: 2px;
+}
+
+/* ── Small checkboxes and radios outside the shelf rows ── */
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--tint);
+}
+
+/* ── Tag chips on rows ── */
+
+.tag-chip {
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 17px;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.tag-chip:hover {
+  background: var(--tint-soft);
+  color: var(--tint);
+}
+
+/* ── Type badges ── */
+
+.type-badge {
+  flex-shrink: 0;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.type-badge.type-movie {
+  background: var(--type-movie-bg);
+  color: var(--type-movie);
+}
+
+.type-badge.type-series {
+  background: var(--type-series-bg);
+  color: var(--type-series);
+}
+
+.type-badge.type-anime {
+  background: var(--type-anime-bg);
+  color: var(--type-anime);
+}
+
+.type-badge.type-book {
+  background: var(--type-book-bg);
+  color: var(--type-book);
+}

@@ -1,0 +1,797 @@
+/* ── Floating tab bar ─────────────────────────────────────── */
+
+.tab-bar {
+  position: fixed;
+  right: 12px;
+  bottom: var(--tabbar-gap);
+  left: 12px;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  height: var(--tabbar-h);
+  padding: 4px;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-shadow), var(--float-shadow);
+}
+
+.tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--label-2);
+  transition:
+    color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.tab-item .material-symbols-outlined {
+  font-size: 23px;
+  transition: font-variation-settings var(--mid) var(--ease);
+}
+
+.tab-label {
+  font-size: 10.5px;
+  line-height: 13px;
+  font-weight: 600;
+  letter-spacing: 0.005em;
+}
+
+.tab-item:hover {
+  color: var(--label);
+}
+
+.tab-item:active {
+  transform: scale(0.94);
+}
+
+.tab-item[aria-current="page"] {
+  background: var(--fill);
+  color: var(--tint);
+}
+
+.tab-item[aria-current="page"] .material-symbols-outlined {
+  font-variation-settings: "FILL" 1, "wght" 500, "GRAD" 0, "opsz" 24;
+}
+
+.tab-item:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ── Selection bar: takes the tab bar's place while rows are ticked ── */
+
+body:has(#app-view:not([hidden]) #selection-bar:not([hidden])) .tab-bar {
+  visibility: hidden;
+}
+
+.selection-bar {
+  position: fixed;
+  right: 12px;
+  bottom: var(--tabbar-gap);
+  left: 12px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--tabbar-h);
+  padding: 0 8px 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-shadow), var(--float-shadow);
+  animation: bar-in var(--mid) var(--ease);
+}
+
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+}
+
+.selection-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--label);
+}
+
+.selection-clear .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.selection-count {
+  flex: 1;
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.selection-bar .icon-btn {
+  width: 40px;
+  height: 40px;
+}
+
+.selection-bar .icon-btn .material-symbols-outlined {
+  font-size: 22px;
+}
+
+/* ── Toast: a glass pill above the tab bar ── */
+
+.toast {
+  position: fixed;
+  bottom: calc(var(--tabbar-space) + 2px);
+  left: 50%;
+  z-index: 250;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 8px 8px 8px 12px;
+  border-radius: var(--r-xl);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-shadow), var(--float-shadow);
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 500;
+  transform: translateX(-50%);
+  animation: toast-in var(--slow) var(--ease);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px) scale(0.96);
+  }
+}
+
+/* Full-tab Settings has no tab bar under it. */
+body.in-tab .toast {
+  bottom: 20px;
+}
+
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toast-icon {
+  font-size: 20px !important;
+  color: var(--success-dot);
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 20;
+}
+
+.toast.error .toast-icon {
+  color: var(--danger);
+}
+
+.toast-action {
+  flex-shrink: 0;
+  margin-left: 4px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--tint-soft);
+  color: var(--tint);
+  font-weight: 600;
+}
+
+.toast-action:hover:not(:disabled) {
+  filter: brightness(0.96) saturate(1.2);
+}
+
+.toast-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.toast-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--label-2);
+}
+
+.toast-close .material-symbols-outlined {
+  font-size: 15px;
+}
+
+/* ── Hover tooltip on rows ──
+ * popup.ts measures this box: keep 16px lines, a 1px border and 8px top padding. */
+
+.item-tooltip {
+  position: fixed;
+  z-index: 200;
+  max-width: min(340px, calc(100vw - 24px));
+  padding: 8px 12px;
+  border: 1px solid var(--separator);
+  border-radius: var(--r-lg);
+  background: var(--glass-strong);
+  box-shadow: var(--float-shadow);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  white-space: pre-line;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.item-tooltip.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Dialogs: bottom sheets, and one centred alert ───────── */
+
+.confirm-dialog {
+  position: fixed;
+  inset: 0;
+  /* Above the hover tooltip (200), so a tooltip can never sit on top of a dialog. */
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+}
+
+.confirm-dialog.sheet {
+  align-items: flex-end;
+}
+
+.confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: fade-in var(--mid) var(--ease);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.confirm-panel {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 300px;
+  padding: 20px;
+  border-radius: var(--r-xl);
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  backdrop-filter: blur(36px) saturate(180%);
+  box-shadow: var(--glass-shadow), 0 20px 50px rgba(0, 0, 0, 0.28);
+  isolation: isolate;
+}
+
+.sheet .confirm-panel {
+  max-width: none;
+  max-height: calc(100vh - 16px);
+  padding: 22px 18px 16px;
+  border-radius: var(--r-sheet);
+  animation: sheet-in var(--slow) var(--ease);
+}
+
+/* A grabber, so the panel reads as a sheet. */
+.sheet .confirm-panel::before {
+  content: "";
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  width: 36px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--label-3);
+  transform: translateX(-50%);
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+.alert .confirm-panel {
+  text-align: center;
+  animation: alert-in var(--mid) var(--ease);
+}
+
+@keyframes alert-in {
+  from {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+.confirm-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.confirm-icon-wrap .material-symbols-outlined {
+  font-size: 24px;
+}
+
+.confirm-title {
+  margin-bottom: 6px;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.confirm-message {
+  margin-bottom: 18px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--label-2);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.confirm-actions .btn {
+  height: 38px;
+  padding: 0 18px;
+  font-size: 14px;
+}
+
+.alert .confirm-actions .btn,
+.sheet .confirm-actions .btn {
+  flex: 1;
+}
+
+/* ── Bulk status ── */
+
+.status-options {
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 14px;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--grouped);
+}
+
+.status-option.btn {
+  justify-content: flex-start;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--tint);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.status-option.btn + .status-option.btn {
+  box-shadow: inset 0 0.5px 0 var(--separator);
+}
+
+.status-option.btn:hover:not(:disabled) {
+  background: var(--grouped-hover);
+}
+
+/* ── Rate when finished ── */
+
+.rate-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.rate-panel:focus {
+  outline: none;
+}
+
+.rate-kicker {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.rate-panel .confirm-title {
+  margin: -8px 0 0;
+}
+
+.rate-scale {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+}
+
+.rate-btn {
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--fill);
+  color: var(--label);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.rate-btn:hover {
+  background: var(--fill-strong);
+}
+
+.rate-btn:active {
+  transform: scale(0.92);
+}
+
+.rate-btn.selected {
+  background: var(--tint);
+  color: var(--on-tint);
+}
+
+.rate-caption {
+  min-height: 18px;
+  margin-top: -4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.rate-panel .edit-field {
+  text-align: left;
+}
+
+/* ── Edit ── */
+
+.edit-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.edit-panel .confirm-title {
+  margin-bottom: 0;
+}
+
+/* The form scrolls on its own with Save and Cancel pinned below it. */
+.edit-fields {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  margin: 12px -4px 12px;
+  padding: 2px 4px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.edit-fields::-webkit-scrollbar {
+  display: none;
+}
+
+/* A soft fade while more of the form is hidden below. */
+.edit-fields.has-more {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.edit-field {
+  min-width: 0;
+}
+
+.edit-field input,
+.edit-field textarea,
+.edit-field select {
+  width: 100%;
+  min-width: 0;
+  font-weight: 400;
+}
+
+.edit-row {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-row .edit-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.edit-row .edit-field-wide {
+  flex: 1.7;
+}
+
+.edit-section {
+  margin-top: 6px;
+  padding-top: 12px;
+  border-top: var(--hairline);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--label);
+}
+
+.edit-hint {
+  margin-top: -4px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--label-2);
+}
+
+.edit-error {
+  margin: -4px 0 10px;
+  font-size: 12px;
+  color: var(--danger);
+}
+
+.edit-tmdb {
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--grouped);
+}
+
+.edit-tmdb-text {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+.edit-tmdb-overview {
+  max-height: 72px;
+  margin-top: 4px;
+  overflow-y: auto;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--label-2);
+}
+
+.edit-tmdb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+/* Seasons: number watched, the total, and a button that fills it in. */
+.season-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.season-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.season-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.season-cell {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 4px 0 9px;
+  border-radius: var(--r-md);
+  background: var(--field);
+  box-shadow: inset 0 0 0 0.5px var(--separator-strong);
+}
+
+.season-cell:focus-within {
+  box-shadow: inset 0 0 0 1px var(--tint), 0 0 0 3px var(--tint-ring);
+}
+
+.season-cell label {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label);
+}
+
+.season-name {
+  flex-shrink: 0;
+}
+
+.season-cell input,
+.season-cell input:focus {
+  width: 100%;
+  height: auto;
+  padding: 3px 2px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.season-cell input::-webkit-outer-spin-button,
+.season-cell input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.season-total {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--label-2);
+}
+
+.season-done {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--fill);
+  color: var(--tint);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.season-done:hover {
+  background: var(--tint-soft);
+}
+
+/* ── Tag picker (tag-picker.ts) ── */
+
+.picker-panel {
+  position: fixed;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--glass-strong);
+  box-shadow: var(--glass-shadow), var(--float-shadow);
+}
+
+.picker-search {
+  flex-shrink: 0;
+  height: 32px !important;
+  margin: 8px 8px 4px;
+  background: var(--fill) !important;
+  box-shadow: none !important;
+}
+
+.picker-search:focus {
+  box-shadow: 0 0 0 3px var(--tint-ring) !important;
+}
+
+.picker-list {
+  flex: 1;
+  min-height: 0;
+  padding: 4px;
+  list-style: none;
+  overflow-y: auto;
+  outline: none;
+  scrollbar-width: none;
+}
+
+.picker-list::-webkit-scrollbar {
+  display: none;
+}
+
+.picker-group {
+  padding: 8px 10px 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--label-2);
+}
+
+.picker-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.picker-option.active {
+  background: var(--tint);
+  color: var(--on-tint);
+}
+
+.picker-option.active .picker-count {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.picker-option[aria-selected="true"] {
+  font-weight: 600;
+}
+
+.picker-option[aria-selected="true"]::before {
+  content: "✓";
+  margin-right: -2px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.picker-option-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.picker-count {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+
+.picker-empty {
+  padding: 10px;
+  font-size: 12.5px;
+  color: var(--label-2);
+}

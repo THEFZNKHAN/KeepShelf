@@ -1,0 +1,222 @@
+/*
+ * KeepShelf design tokens: "Obsidian & Champagne".
+ *
+ * Warm graphite and pearl surfaces with one champagne-gold accent, and muted jewel tones for the type colours.
+ * Plain grouped surfaces for content, frosted glass only for things that float over it. No gradients.
+ *
+ * Theme: follows the system unless Settings → Appearance sets data-theme="light" or "dark" on <html>.
+ * The dark values appear twice (system dark, and forced dark); change both together.
+ */
+
+@font-face {
+  font-family: "Geist";
+  src: url("fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "KeepShelf Symbols";
+  src: url("fonts/MaterialSymbolsRounded-subset.woff2") format("woff2");
+  font-weight: 300 600;
+  font-style: normal;
+  font-display: block;
+}
+
+/* ── Light (pearl) ── */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --canvas: #f3f2ef;
+  --grouped: #ffffff;
+  --grouped-hover: #f8f7f4;
+  --grouped-active: #efede8;
+  --glass: rgba(249, 248, 245, 0.72);
+  --glass-strong: rgba(251, 250, 247, 0.86);
+  --glass-solid: rgba(252, 251, 249, 0.96);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --field: #ffffff;
+  --fill: rgba(120, 112, 98, 0.1);
+  --fill-strong: rgba(120, 112, 98, 0.18);
+  --seg-thumb: #ffffff;
+
+  /* Text */
+  --label: #1b1a17;
+  --label-2: rgba(42, 38, 32, 0.62);
+  --label-3: rgba(42, 38, 32, 0.3);
+  --on-tint: #fffdf7;
+
+  /* Lines */
+  --separator: rgba(42, 38, 32, 0.11);
+  --separator-strong: rgba(42, 38, 32, 0.22);
+
+  /* Accent: deep bronze in light, so it reads on white */
+  --tint: #8a682c;
+  --tint-soft: rgba(138, 104, 44, 0.11);
+  --tint-ring: rgba(138, 104, 44, 0.3);
+  --danger: #b9473b;
+  --danger-soft: rgba(185, 71, 59, 0.1);
+  --success: #2f7a59;
+  --success-dot: #3f9a72;
+  --success-soft: rgba(63, 154, 114, 0.12);
+  --switch-on: #8a682c;
+  --check-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%23fffdf7' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  /* Type colours: muted jewel tones, low-opacity fills only */
+  --type-movie: #9a6420;
+  --type-movie-bg: rgba(196, 138, 62, 0.14);
+  --type-series: #3b6890;
+  --type-series-bg: rgba(88, 136, 180, 0.13);
+  --type-anime: #9e4459;
+  --type-anime-bg: rgba(190, 98, 120, 0.12);
+  --type-book: #3a7558;
+  --type-book-bg: rgba(90, 152, 120, 0.14);
+
+  /* Settings icon tiles */
+  --tile-gray: #7f7a72;
+  --tile-red: #b5574b;
+  --tile-orange: #c08440;
+  --tile-yellow: #b39249;
+  --tile-green: #4f8f6e;
+  --tile-teal: #3f8285;
+  --tile-blue: #4a76a8;
+  --tile-indigo: #5f5a9e;
+
+  /* Depth */
+  --hairline: 0.5px solid var(--separator);
+  --glass-blur: blur(24px) saturate(160%);
+  --glass-shadow: inset 0 0.5px 0 var(--glass-edge), 0 0 0 0.5px var(--separator);
+  --float-shadow: 0 12px 32px rgba(40, 32, 20, 0.12), 0 1px 3px rgba(40, 32, 20, 0.06);
+
+  /* Shape */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-sheet: 22px;
+  --r-pill: 999px;
+  --gutter: 16px;
+
+  /* Bars */
+  --tabbar-h: 52px;
+  --tabbar-gap: 8px;
+  --tabbar-space: calc(var(--tabbar-h) + var(--tabbar-gap) * 2);
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --fast: 160ms;
+  --mid: 220ms;
+  --slow: 300ms;
+
+  /* Ambient poster layer */
+  --ambient-opacity: 0.42;
+
+  /* Episode ratings grid: popup.ts builds the columns from this. */
+  --er-cell-w: 34px;
+
+  /* Type */
+  --font: -apple-system, BlinkMacSystemFont, "Geist", "Segoe UI Variable Text", sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ── Dark (obsidian): system dark, unless Light is forced ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --canvas: #09090b;
+    --grouped: #151518;
+    --grouped-hover: #1b1b1f;
+    --grouped-active: #222227;
+    --glass: rgba(20, 20, 23, 0.66);
+    --glass-strong: rgba(25, 25, 29, 0.84);
+    --glass-solid: rgba(27, 27, 31, 0.96);
+    --glass-edge: rgba(255, 255, 255, 0.07);
+    --field: rgba(255, 255, 255, 0.06);
+    --fill: rgba(255, 255, 255, 0.07);
+    --fill-strong: rgba(255, 255, 255, 0.12);
+    --seg-thumb: #2c2c32;
+
+    --label: #f3efe7;
+    --label-2: rgba(243, 239, 231, 0.58);
+    --label-3: rgba(243, 239, 231, 0.28);
+    --on-tint: #17120a;
+
+    --separator: rgba(255, 255, 255, 0.08);
+    --separator-strong: rgba(255, 255, 255, 0.15);
+
+    --tint: #d8b26e;
+    --tint-soft: rgba(216, 178, 110, 0.15);
+    --tint-ring: rgba(216, 178, 110, 0.38);
+    --danger: #ec7b6b;
+    --danger-soft: rgba(236, 123, 107, 0.15);
+    --success: #7cc6a1;
+    --success-dot: #69bd93;
+    --success-soft: rgba(124, 198, 161, 0.14);
+    --switch-on: #d8b26e;
+    --check-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%2317120a' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+    --type-movie: #e2b072;
+    --type-movie-bg: rgba(226, 176, 114, 0.15);
+    --type-series: #93b9dc;
+    --type-series-bg: rgba(147, 185, 220, 0.14);
+    --type-anime: #e397a8;
+    --type-anime-bg: rgba(227, 151, 168, 0.14);
+    --type-book: #8fc8a8;
+    --type-book-bg: rgba(143, 200, 168, 0.14);
+
+    --float-shadow: 0 14px 36px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35);
+    --ambient-opacity: 0.34;
+  }
+}
+
+/* ── Dark, forced from Settings → Appearance (same values as above) ── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #09090b;
+  --grouped: #151518;
+  --grouped-hover: #1b1b1f;
+  --grouped-active: #222227;
+  --glass: rgba(20, 20, 23, 0.66);
+  --glass-strong: rgba(25, 25, 29, 0.84);
+  --glass-solid: rgba(27, 27, 31, 0.96);
+  --glass-edge: rgba(255, 255, 255, 0.07);
+  --field: rgba(255, 255, 255, 0.06);
+  --fill: rgba(255, 255, 255, 0.07);
+  --fill-strong: rgba(255, 255, 255, 0.12);
+  --seg-thumb: #2c2c32;
+
+  --label: #f3efe7;
+  --label-2: rgba(243, 239, 231, 0.58);
+  --label-3: rgba(243, 239, 231, 0.28);
+  --on-tint: #17120a;
+
+  --separator: rgba(255, 255, 255, 0.08);
+  --separator-strong: rgba(255, 255, 255, 0.15);
+
+  --tint: #d8b26e;
+  --tint-soft: rgba(216, 178, 110, 0.15);
+  --tint-ring: rgba(216, 178, 110, 0.38);
+  --danger: #ec7b6b;
+  --danger-soft: rgba(236, 123, 107, 0.15);
+  --success: #7cc6a1;
+  --success-dot: #69bd93;
+  --success-soft: rgba(124, 198, 161, 0.14);
+  --switch-on: #d8b26e;
+  --check-mark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2l2.3 2.3 4.7-5' fill='none' stroke='%2317120a' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  --type-movie: #e2b072;
+  --type-movie-bg: rgba(226, 176, 114, 0.15);
+  --type-series: #93b9dc;
+  --type-series-bg: rgba(147, 185, 220, 0.14);
+  --type-anime: #e397a8;
+  --type-anime-bg: rgba(227, 151, 168, 0.14);
+  --type-book: #8fc8a8;
+  --type-book-bg: rgba(143, 200, 168, 0.14);
+
+  --float-shadow: 0 14px 36px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --ambient-opacity: 0.34;
+}
