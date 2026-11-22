@@ -1,0 +1,948 @@
+/* ── Shelf: the scroller, its glass header, and the list ──── */
+
+/* One scroller for the whole shelf, so the list slides under the frosted header and the floating tab bar. */
+.main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: calc(var(--tabbar-space) + 4px);
+  scroll-padding-top: 140px;
+  /* No scrollbar: it would take width on one side only and push the list off centre. */
+  scrollbar-width: none;
+}
+
+.main::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px var(--gutter) 10px;
+  border-bottom: var(--hairline);
+}
+
+.nav-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.nav-title {
+  flex: 1;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* With Books or Tabs switched on, the segmented control is the title. */
+.nav-top:has(.shelf-tabs:not([hidden])) .nav-title {
+  display: none;
+}
+
+/* ── Segmented control ── */
+
+.segmented {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--fill);
+}
+
+.seg-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: 7px;
+  background: var(--seg-thumb);
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px rgba(0, 0, 0, 0.04);
+  pointer-events: none;
+}
+
+.seg-thumb.is-ready {
+  transition:
+    transform var(--slow) var(--ease),
+    width var(--slow) var(--ease);
+}
+
+.shelf-tab {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--label);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color var(--fast) var(--ease);
+}
+
+.shelf-tab.active {
+  font-weight: 600;
+}
+
+/* Before the script places the thumb (or without it), the active tab still reads as selected. */
+.segmented:not(:has(.seg-thumb.is-ready)) .shelf-tab.active {
+  background: var(--seg-thumb);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
+}
+
+.shelf-tab-count {
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+}
+
+.shelf-tab-count:empty {
+  display: none;
+}
+
+.btn-save {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 14px 0 10px;
+  font-size: 13px;
+}
+
+.btn-save .btn-icon {
+  font-size: 19px !important;
+  font-variation-settings: "FILL" 0, "wght" 600, "GRAD" 0, "opsz" 20;
+}
+
+/* ── Search row ── */
+
+.view-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  margin-right: 4px;
+}
+
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 9px;
+  transform: translateY(-50%);
+  font-size: 18px !important;
+  color: var(--label-2);
+  pointer-events: none;
+}
+
+.search-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px 0 33px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--fill);
+  box-shadow: none;
+  color: var(--label);
+  font-size: 14px;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--label-2);
+}
+
+.search-input:focus {
+  box-shadow: 0 0 0 3px var(--tint-ring);
+}
+
+.search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--label-3)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M5.5 5.5l5 5M10.5 5.5l-5 5' stroke='white' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E")
+    center / 16px no-repeat;
+  cursor: pointer;
+}
+
+.filters-toggle[aria-expanded="true"] {
+  background: var(--tint-soft);
+}
+
+/* A dot on the filter button while the list is narrowed or re-sorted. */
+.filters-toggle.has-dot::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--glass-strong);
+  border-radius: 50%;
+  background: var(--tint);
+}
+
+/* ── Tabs: paste a link or note ── */
+
+.tabs-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-input {
+  flex: 1;
+}
+
+.tabs-input-row .btn {
+  height: 34px;
+}
+
+/* ── Filters popover ── */
+
+.popover {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 12px;
+  z-index: 30;
+  width: 300px;
+  padding: 12px;
+  border-radius: var(--r-xl);
+  background: var(--glass-solid);
+  box-shadow: var(--glass-shadow), var(--float-shadow);
+  transform-origin: top right;
+  animation: pop-in var(--mid) var(--ease);
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(-4px);
+  }
+}
+
+.more-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.more-filters .view-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.popover-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.popover-field > span {
+  padding-left: 2px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+/* A field whose control is switched off (no lists yet) goes with it. */
+.popover-field:has(> [hidden]) {
+  display: none;
+}
+
+.popover-field .view-select {
+  width: 100%;
+  height: 32px;
+}
+
+.organise-select {
+  min-width: 0;
+}
+
+.tag-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  width: 100%;
+  padding: 0 8px 0 11px;
+  background-image: none;
+  text-align: left;
+}
+
+.tag-button-label {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tag-button .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--label-2);
+}
+
+.tag-button[aria-expanded="true"] {
+  box-shadow: 0 0 0 3px var(--tint-ring);
+}
+
+.popover-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 2px -4px -4px;
+  padding: 0 8px;
+  border: 0;
+  border-top: var(--hairline);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  background: transparent;
+  color: var(--tint);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.popover-action:hover {
+  background: var(--fill);
+}
+
+.popover-action .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* ── The list: an inset grouped table ── */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 10px 12px 0;
+  overflow: hidden;
+  border-radius: var(--r-lg);
+  background: var(--grouped);
+  list-style: none;
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+
+.list:empty {
+  display: none;
+}
+
+.list-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease);
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* Inset separators, starting after the poster. */
+.list-item + .list-item::before,
+.online-group + .list-item::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 60px;
+  height: 0.5px;
+  background: var(--separator);
+}
+
+.online-group + .list-item::before {
+  display: none;
+}
+
+.list-item:hover {
+  background: var(--grouped-hover);
+}
+
+.list-item:active {
+  background: var(--grouped-active);
+}
+
+.list-item:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--r-lg);
+}
+
+.list-item:has(> input[type="checkbox"]:checked) {
+  background: var(--tint-soft);
+}
+
+/* Poster */
+.item-thumb {
+  display: block;
+  flex-shrink: 0;
+  width: 36px;
+  height: 54px;
+  border-radius: var(--r-sm);
+  object-fit: cover;
+  background: var(--fill);
+  box-shadow: 0 0 0 0.5px var(--separator);
+}
+
+/* No poster: a quiet tile the same size, with the type's symbol. */
+.type-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 54px;
+  border-radius: var(--r-sm);
+  background: var(--fill);
+  color: var(--label-2);
+  font-size: 20px;
+  cursor: default;
+}
+
+.type-icon-img {
+  padding: 15px 6px;
+  object-fit: contain;
+}
+
+/* Tabs, links and notes have no poster: a smaller tile keeps those rows compact. */
+.list-item:not(:has(.item-thumb)) .type-icon {
+  height: 36px;
+}
+
+.list-item.done .item-thumb,
+.list-item.done .type-icon {
+  opacity: 0.5;
+}
+
+/* Text */
+.item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.item-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.item-title-row .item-title {
+  flex: 0 1 auto;
+}
+
+.list-item.done .item-title {
+  color: var(--label-2);
+  font-weight: 500;
+}
+
+.item-body-link .item-title {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: text-decoration-color var(--fast) var(--ease);
+}
+
+.list-item:hover .item-body-link .item-title {
+  text-decoration-color: var(--label-3);
+}
+
+.item-meta-text {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.item-facts {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+  color: var(--label-2);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.item-details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 5px;
+  min-width: 0;
+  margin-top: 1px;
+  font-size: 11.5px;
+  line-height: 17px;
+}
+
+.item-part {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.item-genres {
+  color: var(--label-2);
+}
+
+/* Your own data stands out from the facts about the title. */
+.item-personal {
+  font-weight: 600;
+  color: var(--label);
+}
+
+.item-dot {
+  color: var(--label-3);
+}
+
+.item-part-more {
+  font-size: 11px;
+  color: var(--label-2);
+}
+
+.item-details .tag-chip {
+  flex-shrink: 0;
+}
+
+.trakt-mark {
+  flex: none;
+  font-size: 16px;
+  color: var(--danger);
+}
+
+/* ── Row actions: they appear on hover or focus, and float over the end of the row ── */
+
+.row-actions {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  transform: translateY(-50%);
+  transition:
+    background var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.list-item:hover .row-actions,
+.list-item:focus-within .row-actions {
+  background: var(--glass-strong);
+  box-shadow: var(--glass-shadow), 0 2px 10px rgba(0, 0, 0, 0.08);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+.row-action {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--tint);
+  transition:
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.row-action .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.row-action.pinned,
+.list-item:hover .row-action,
+.list-item:focus-within .row-action {
+  display: inline-flex;
+}
+
+.row-action:hover {
+  background: var(--fill);
+}
+
+.row-action:active {
+  transform: scale(0.9);
+}
+
+.row-action.is-done {
+  color: var(--success-dot);
+}
+
+.row-action.is-done .material-symbols-outlined {
+  font-variation-settings: "FILL" 1, "wght" 400, "GRAD" 0, "opsz" 20;
+}
+
+.row-action.keep-problem {
+  color: var(--danger);
+}
+
+/* Room at the end of the text for the actions that always show. */
+.list-item:has(.row-action.pinned) .item-body {
+  padding-right: 30px;
+}
+
+.list-item:has(.row-action.pinned + .row-action.pinned) .item-body {
+  padding-right: 62px;
+}
+
+/* ── Selection: a round check on the poster's corner, shown on hover or while anything is ticked ── */
+
+.list-item > input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: absolute;
+  top: 50%;
+  left: 36px;
+  z-index: 2;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  transform: translateY(6px) scale(0.85);
+  cursor: pointer;
+  transition:
+    opacity var(--fast) var(--ease),
+    transform var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.list-item:hover > input[type="checkbox"],
+.list-item > input[type="checkbox"]:focus-visible,
+.list:has(> .list-item > input[type="checkbox"]:checked) .list-item > input[type="checkbox"] {
+  opacity: 1;
+  transform: translateY(6px) scale(1);
+}
+
+.list-item > input[type="checkbox"]:checked {
+  border-color: var(--on-tint);
+  background: var(--tint) var(--check-mark) center / 12px no-repeat;
+}
+
+/* ── Empty states ── */
+
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100% - 140px);
+  padding: 32px 28px;
+  text-align: center;
+}
+
+.empty-content {
+  max-width: 300px;
+  animation: row-in var(--slow) var(--ease) both;
+}
+
+.empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 18px;
+  background: var(--grouped);
+  box-shadow: 0 0 0 0.5px var(--separator), 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+.empty-icon-wrap .material-symbols-outlined {
+  font-size: 32px;
+  color: var(--tint);
+}
+
+.empty-content h2 {
+  margin-bottom: 6px;
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.empty-content p {
+  margin-bottom: 20px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--label-2);
+}
+
+.source-hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--grouped);
+  box-shadow: 0 0 0 0.5px var(--separator);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.source-chip .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.filter-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 200px;
+  padding: 24px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--label-2);
+}
+
+.filter-empty-icon {
+  font-size: 30px;
+  color: var(--label-3);
+}
+
+.filter-empty.is-compact {
+  min-height: 0;
+  padding: 28px 24px 4px;
+}
+
+.filter-empty.is-compact .filter-empty-icon {
+  display: none;
+}
+
+/* ── Search TMDB ── */
+
+.online-search {
+  padding: 10px 12px 0;
+}
+
+.online-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--r-lg);
+  background: var(--grouped);
+  box-shadow: 0 0 0 0.5px var(--separator);
+  text-align: left;
+  transition:
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.online-row:hover {
+  background: var(--grouped-hover);
+}
+
+.online-row:active {
+  transform: scale(0.98);
+}
+
+.online-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--tint);
+  font-size: 20px;
+  color: var(--on-tint);
+}
+
+.online-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.online-label {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.online-sub {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--label-2);
+}
+
+.online-chevron {
+  font-size: 20px;
+  color: var(--label-3);
+}
+
+.online-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 0 6px;
+}
+
+.online-back {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0;
+  height: 30px;
+  padding: 0 10px 0 2px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: none;
+  color: var(--tint);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.online-back:hover {
+  background: var(--fill);
+}
+
+.online-back .material-symbols-outlined {
+  font-size: 24px;
+}
+
+.online-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--label-2);
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.online-item {
+  align-items: flex-start;
+  cursor: default;
+}
+
+.online-item:hover {
+  background: transparent;
+}
+
+.online-overview {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--label-2);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.online-add,
+.online-done {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.online-add.btn {
+  background: var(--tint-soft);
+  color: var(--tint);
+}
+
+.online-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success);
+}
+
+.online-done .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.online-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 36px 24px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--label-2);
+}
+
+.online-group {
+  padding: 12px 12px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--label-2);
+  list-style: none;
+}

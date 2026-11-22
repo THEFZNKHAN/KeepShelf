@@ -1,5 +1,5 @@
 import * as esbuild from "esbuild";
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { copyFileSync, cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -33,6 +33,11 @@ const builds = [
     outfile: join(dist, "popup.js"),
     format: "iife",
   },
+  {
+    entryPoints: [join(root, "src/popup/theme-boot.ts")],
+    outfile: join(dist, "theme.js"),
+    format: "iife",
+  },
 ];
 
 async function run() {
@@ -53,8 +58,17 @@ async function run() {
   }
 
   copyFileSync(join(root, "src/popup/popup.html"), join(dist, "popup.html"));
-  const css = readFileSync(join(root, "src/popup/popup.css"), "utf8");
+  // The popup's styles live in numbered files, one per area, joined in order into one stylesheet.
+  const stylesDir = join(root, "src/popup/styles");
+  const css = readdirSync(stylesDir)
+    .filter((name) => name.endsWith(".css"))
+    .sort()
+    .map((name) => `/* ${name} */\n${readFileSync(join(stylesDir, name), "utf8")}`)
+    .join("\n");
   writeFileSync(join(dist, "popup.css"), css);
+  // Fonts ship with the extension, so the popup paints at once and works offline.
+  rmSync(join(dist, "fonts"), { recursive: true, force: true });
+  cpSync(join(root, "src/popup/fonts"), join(dist, "fonts"), { recursive: true });
   console.log("Build complete.");
 }
 

@@ -1,0 +1,429 @@
+/* ── The title sheet: an item's card, and the random pick ── */
+
+.pick-panel {
+  overflow-y: auto;
+  text-align: center;
+  scrollbar-width: none;
+}
+
+.pick-panel::-webkit-scrollbar {
+  display: none;
+}
+
+/* The title's own poster, blurred, behind the glass. */
+.sheet-backdrop {
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  z-index: -1;
+  width: 140%;
+  height: 90%;
+  object-fit: cover;
+  opacity: 0.38;
+  filter: blur(42px) saturate(1.8);
+  pointer-events: none;
+  animation: fade-in var(--slow) var(--ease);
+}
+
+.pick-kicker {
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+.pick-leading {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.pick-leading .item-thumb {
+  width: 76px;
+  height: 114px;
+  border-radius: 8px;
+  box-shadow: 0 0 0 0.5px var(--separator), 0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.pick-leading .type-icon {
+  width: 76px;
+  height: 114px;
+  border-radius: 8px;
+  font-size: 34px;
+}
+
+.pick-leading .type-icon-img {
+  padding: 36px 16px;
+}
+
+/* Poster beside the title and facts, then chips, text and buttons in one tight stack. */
+.pick-panel.is-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  /* The poster is taller than the text beside it; the spare height goes to the last row, not between the lines. */
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  gap: 10px 14px;
+  text-align: left;
+}
+
+.pick-panel.is-card > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+}
+
+.pick-panel.is-card .pick-leading {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: start;
+  justify-content: flex-start;
+  min-width: 40px;
+}
+
+.pick-panel.is-card .confirm-title {
+  grid-column: 2;
+  grid-row: 1;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 18px;
+  line-height: 23px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pick-panel.is-card .confirm-message {
+  grid-column: 2;
+  grid-row: 2;
+  font-size: 12.5px;
+  line-height: 17px;
+  font-variant-numeric: tabular-nums;
+  white-space: pre-line;
+}
+
+.pick-panel.is-card .pick-chips {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+}
+
+.pick-panel.is-card .pick-kicker {
+  text-align: left;
+}
+
+/* Keep the title clear of the graph button. */
+.pick-panel.is-card.has-graph .confirm-title {
+  padding-right: 32px;
+}
+
+/* The random suggestion: the kicker takes the first row, so poster and text start on the second. */
+.pick-panel.is-pick {
+  grid-template-rows: auto auto auto 1fr auto;
+}
+
+.pick-panel.is-pick .pick-top {
+  grid-row: 1;
+}
+
+.pick-panel.is-pick .pick-leading {
+  grid-row: 2 / span 3;
+}
+
+.pick-panel.is-pick .confirm-title {
+  grid-row: 2;
+}
+
+.pick-panel.is-pick .confirm-message {
+  grid-row: 3;
+}
+
+.pick-panel.is-pick .pick-chips {
+  grid-row: 4;
+}
+
+.pick-panel.is-pick .confirm-actions .btn {
+  flex: 1;
+  height: 42px;
+  font-size: 15px;
+}
+
+.pick-graph {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+  z-index: 2;
+  background: var(--fill);
+}
+
+.pick-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--fill);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--label);
+}
+
+.pick-chip .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.pick-chip-tag {
+  font-weight: 500;
+  color: var(--label-2);
+}
+
+/* "+ S2 E4": marks the next episode watched in one tap. */
+.pick-chip-action {
+  padding-left: 5px;
+  background: var(--tint);
+  color: var(--on-tint);
+  cursor: pointer;
+}
+
+.pick-chip-action:hover {
+  filter: brightness(1.08);
+}
+
+/* "More like this" and other chips you can press. */
+.pick-chip-link {
+  padding-left: 6px;
+  background: var(--tint-soft);
+  color: var(--tint);
+  cursor: pointer;
+}
+
+.pick-chip-link:hover {
+  filter: brightness(0.96) saturate(1.2);
+}
+
+.pick-chip-trakt {
+  padding-left: 6px;
+}
+
+.pick-chip-trakt.is-synced .material-symbols-outlined {
+  color: var(--success-dot);
+}
+
+.pick-chip-trakt.is-problem,
+.pick-chip-trakt.is-problem .material-symbols-outlined {
+  color: var(--danger);
+}
+
+.pick-chip-trakt.is-problem {
+  background: var(--danger-soft);
+}
+
+.pick-overview {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--label);
+  text-align: left;
+}
+
+.pick-panel.is-card .pick-overview {
+  font-size: 12.5px;
+  line-height: 18px;
+}
+
+/* Long text is cut to a few lines instead of scrolling inside the card. */
+.pick-panel.is-clamped .pick-overview,
+.pick-panel.is-clamped .pick-review {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+
+.pick-panel.is-clamped .pick-overview {
+  -webkit-line-clamp: 4;
+}
+
+.pick-panel.is-clamped .pick-review {
+  -webkit-line-clamp: 2;
+}
+
+.pick-more {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--tint);
+}
+
+.pick-panel.is-card > .pick-more {
+  margin-top: -6px;
+}
+
+.pick-review {
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--fill);
+  font-size: 12.5px;
+  font-style: italic;
+  line-height: 18px;
+  color: var(--label-2);
+}
+
+.pick-watch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.pick-watch .btn {
+  height: 38px;
+}
+
+.pick-watch.is-compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+.pick-watch.is-compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+/* An odd last button takes the whole row instead of leaving a hole. */
+.pick-watch.is-compact .btn:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.pick-watch.is-compact .btn {
+  justify-content: center;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.pick-watch .btn-icon {
+  font-size: 17px !important;
+}
+
+/* Long host names end in "…" instead of being cut off at the edge. */
+.btn-label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pick-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.pick-footer .btn.btn-sm {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.pick-open {
+  margin-top: 8px;
+}
+
+.pick-panel.is-card .pick-footer .pick-open {
+  width: auto;
+  margin: 0 auto 0 0;
+}
+
+/* The top of the suggestion: the heading, a filter button, and the filters when open. */
+.pick-top {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pick-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+}
+
+.pick-top .pick-kicker {
+  margin: 0;
+}
+
+.pick-filter-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fill);
+  color: var(--tint);
+}
+
+.pick-filter-toggle[aria-expanded="true"] {
+  background: var(--tint-soft);
+}
+
+.pick-filter-toggle .material-symbols-outlined {
+  font-size: 19px;
+}
+
+.pick-filter-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--r-pill);
+  background: var(--tint);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--on-tint);
+}
+
+.pick-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.pick-filters .view-select {
+  width: 100%;
+  height: 30px;
+  font-size: 12px;
+}
+
+.pick-clear {
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tint);
+}
